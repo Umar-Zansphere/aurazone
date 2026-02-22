@@ -1,0 +1,18 @@
+<p>Hi <%= user.fullName %>,</p>
+
+<p>Welcome to SoleMate! We're excited to have you on board. There's just one final step to get started.</p>
+
+<p>Please click the button below to verify your email address and activate your account:</p>
+
+<p style="text-align: center; margin: 30px 0;">
+    <a href="<%= verificationUrl %>" class="button">Verify My Email Address</a>
+</p>
+
+<p>This link will confirm that you own this email account and help us keep your profile secure.</p>
+
+<p>If you're having trouble with the button, you can copy and paste the following link into your browser:</p>
+<p><a href="<%= verificationUrl %>"><%= verificationUrl %></a></p>
+
+<p>If you did not sign up for an SoleMate account, please disregard this email.</p>
+
+<p>Thanks,<br>The SoleMate Team</p>

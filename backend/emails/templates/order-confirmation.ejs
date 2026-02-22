@@ -1,0 +1,69 @@
+<h2>Order Confirmation</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Thank you for your order! Your order has been successfully placed and is being processed.</p>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Order ID:</strong> <%= orderId %></p>
+    <p><strong>Order Date:</strong> <%= new Date(createdAt).toLocaleDateString() %></p>
+    <p><strong>Payment Method:</strong> <%= paymentMethod === 'RAZORPAY' ? 'Online Payment' : paymentMethod === 'COD' ? 'Cash on Delivery' : paymentMethod %></p>
+    <p><strong>Order Status:</strong> <%= status %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Shipping Address</h3>
+    <p><strong><%= addressLine1 %></strong></p>
+    <% if (addressLine2) { %>
+        <p><%= addressLine2 %></p>
+    <% } %>
+    <p><%= city %>, <%= state %> <%= postalCode %></p>
+    <p><%= country %></p>
+    <p><strong>Phone:</strong> <%= phone %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Summary</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Product</th>
+                <th style="text-align: center; padding: 10px;">Qty</th>
+                <th style="text-align: right; padding: 10px;">Price</th>
+                <th style="text-align: right; padding: 10px;">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% items.forEach(item => { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">
+                        <strong><%= item.productName %></strong><br/>
+                        <small>Color: <%= item.color %> | Size: <%= item.size %></small>
+                    </td>
+                    <td style="text-align: center; padding: 10px;"><%= item.quantity %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.price).toFixed(2) %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.subtotal).toFixed(2) %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+    <div style="text-align: right; margin-top: 15px; padding-top: 15px; border-top: 2px solid #ddd;">
+        <h3>Total Amount: ₹<%= parseFloat(totalAmount).toFixed(2) %></h3>
+    </div>
+</div>
+
+<% if (paymentMethod === 'COD') { %>
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+        <p><strong>Payment Note:</strong> This is a Cash on Delivery order. Please have the exact amount ready when our delivery agent arrives.</p>
+    </div>
+<% } %>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="<%= trackingUrl %>" style="background-color: #007bff; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Track Your Order</a>
+</div>
+
+<p>If you have any questions or concerns about your order, please don't hesitate to contact our customer support team.</p>
+
+<p style="color: #888888; font-size: 12px; margin-top: 20px;">
+    <strong>Note:</strong> This is an automated email. Please do not reply directly to this email.
+</p>

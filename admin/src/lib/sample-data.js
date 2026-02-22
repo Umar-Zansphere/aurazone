@@ -1,0 +1,55 @@
+export const fallbackDashboard = {
+  todayRevenue: 24500,
+  todayOrders: 12,
+  pendingOrders: 5,
+  revenueTimeseries: [
+    { date: "2026-02-15", revenue: 18200 },
+    { date: "2026-02-16", revenue: 22100 },
+    { date: "2026-02-17", revenue: 19300 },
+    { date: "2026-02-18", revenue: 24100 },
+    { date: "2026-02-19", revenue: 21200 },
+    { date: "2026-02-20", revenue: 23000 },
+    { date: "2026-02-21", revenue: 24500 },
+  ],
+  statusBreakdown: {
+    PENDING: 5,
+    PAID: 3,
+    SHIPPED: 8,
+    DELIVERED: 42,
+    CANCELLED: 2,
+  },
+  lowStockCount: 4,
+  topProduct: {
+    name: "Nike Air Max 90",
+    imageUrl: "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=640&auto=format&fit=crop",
+    unitsSold: 34,
+  },
+  activityFeed: [
+    {
+      type: "NEW_ORDER",
+      title: "New order #1234",
+      description: "₹2,500 — John Doe",
+      referenceId: "order-1",
+      createdAt: new Date().toISOString(),
+    },
+    {
+      type: "STATUS_CHANGE",
+      title: "Order #1230 shipped",
+      referenceId: "order-2",
+      createdAt: new Date(Date.now() - 1000 * 60 * 8).toISOString(),
+    },
+    {
+      type: "LOW_STOCK",
+      title: "Nike Air Max — only 3 left",
+      referenceId: "product-2",
+      createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+    },
+    {
+      type: "PAYMENT",
+      title: "Payment received for #1229",
+      description: "₹1,800 via Razorpay",
+      referenceId: "order-3",
+      createdAt: new Date(Date.now() - 1000 * 60 * 42).toISOString(),
+    },
+  ],
+};

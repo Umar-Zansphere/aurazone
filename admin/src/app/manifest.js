@@ -1,0 +1,30 @@
+export default function manifest() {
+  return {
+    name: "AuraZone Admin",
+    short_name: "AuraAdmin",
+    description: "Mobile-first admin dashboard for AuraZone",
+    start_url: "/",
+    display: "standalone",
+    background_color: "#FAFAF8",
+    theme_color: "#1B2A4A",
+    orientation: "portrait",
+    icons: [
+      {
+        src: "/icons/icon-192.svg",
+        sizes: "192x192",
+        type: "image/svg+xml",
+      },
+      {
+        src: "/icons/icon-512.svg",
+        sizes: "512x512",
+        type: "image/svg+xml",
+      },
+      {
+        src: "/icons/icon-512.svg",
+        sizes: "512x512",
+        type: "image/svg+xml",
+        purpose: "any maskable",
+      },
+    ],
+  };
+}

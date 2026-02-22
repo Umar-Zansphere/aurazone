@@ -1,0 +1,37 @@
+<p>Hi there,</p>
+
+<p>Your verification code for SoleMate is:</p>
+
+<div style="text-align: center; margin: 30px 0;">
+    <div
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px 40px; border-radius: 10px; display: inline-block; font-family: 'Courier New', monospace;">
+        <%= otp %>
+    </div>
+</div>
+
+<p style="text-align: center; color: #666; font-size: 14px;">This code will expire in <strong>10 minutes</strong></p>
+
+<% if (purpose==='SIGNUP' ) { %>
+    <p>You're almost there! Enter this code to complete your signup and start shopping for amazing shoes.</p>
+    <% } else if (purpose==='LOGIN' ) { %>
+        <p>Enter this code to securely log in to your SoleMate account.</p>
+        <% } else if (purpose==='VERIFICATION' ) { %>
+            <p>Enter this code to verify your phone number and secure your account.</p>
+            <% } else if (purpose==='ORDER_TRACKING' ) { %>
+                <p>Enter this code to track your order <strong>
+                        <%= orderNumber %>
+                    </strong>.</p>
+                <% } else { %>
+                    <p>Enter this code to complete your verification.</p>
+                    <% } %>
+
+                        <p
+                            style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; color: #999; font-size: 13px;">
+                            <strong>Security tip:</strong> Never share this code with anyone. SoleMate will never ask
+                            you for this code via phone or email.
+                        </p>
+
+                        <p>If you didn't request this code, please ignore this email or contact our support team if you
+                            have concerns.</p>
+
+                        <p>Thanks,<br>The SoleMate Team</p>

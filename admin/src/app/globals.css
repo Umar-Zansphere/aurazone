@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+:root {
+  --bg-app: #fafaf8;
+  --surface: #ffffff;
+  --accent: #1b2a4a;
+  --highlight: #c4785b;
+  --success: #5b8c5a;
+  --warning: #d4954a;
+  --error: #c45b5b;
+  --info: #5b7ba8;
+  --text-primary: #1a1a1a;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border: #e5e7eb;
+  --card-border: #f0f0ee;
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+@theme inline {
+  --font-sans: var(--font-inter);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-inter), sans-serif;
+  background: var(--bg-app);
+}
+
+.app-surface {
+  background:
+    radial-gradient(circle at 20% -10%, rgba(196, 120, 91, 0.08), transparent 40%),
+    radial-gradient(circle at 100% 0%, rgba(27, 42, 74, 0.05), transparent 45%),
+    var(--bg-app);
+}
+
+.mobile-shell {
+  min-height: 100dvh;
+  max-width: 520px;
+  margin-inline: auto;
+  padding-inline: 16px;
+  padding-top: 12px;
+  padding-bottom: 94px;
+}
+
+.card-surface {
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.app-button {
+  border-radius: 14px;
+}
+
+.app-chip {
+  border-radius: 999px;
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #ececeb;
+}
+
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+.pulse-soft {
+  animation: pulse-soft 1.6s infinite ease-in-out;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.brand-spinner {
+  animation: spin 0.9s linear infinite;
+}
+
+input,
+textarea,
+button,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+@media (max-width: 350px) {
+  .mobile-shell {
+    padding-inline: 12px;
+  }
+}
