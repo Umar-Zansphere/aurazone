@@ -25,20 +25,20 @@ export default function RevenueHero({ revenue = 0, timeseries = [], todayOrders 
   }, [value, revenue]);
 
   return (
-    <section className="card-surface relative overflow-hidden p-4">
+    <section className="card-surface card-hover relative overflow-hidden p-6 transition-all duration-300">
       <div className="absolute inset-0 opacity-60">
         <Sparkline data={timeseries} />
       </div>
       <div className="relative z-10">
-        <p className="text-xs uppercase tracking-[0.2em] text-[var(--text-secondary)]">Today Revenue</p>
-        <motion.p className="mt-1 text-[40px] font-bold leading-none text-[var(--accent)]">
+        <p className="text-xs uppercase tracking-[0.2em] font-medium text-[var(--text-secondary)]">Today Revenue</p>
+        <motion.p className="mt-2 text-[48px] font-bold leading-none text-[var(--accent)] drop-shadow-sm">
           {display}
         </motion.p>
-        <div className="mt-4 flex gap-2">
-          <span className="app-chip rounded-full bg-[var(--accent)] px-3 py-1 text-xs font-medium text-white">
+        <div className="mt-6 flex gap-3">
+          <span className="app-chip rounded-full bg-[var(--accent)] px-4 py-1.5 text-xs font-semibold text-white shadow-sm">
             {todayOrders} orders today
           </span>
-          <span className="app-chip rounded-full bg-[color:rgba(196,120,91,0.18)] px-3 py-1 text-xs font-medium text-[var(--highlight)]">
+          <span className="app-chip rounded-full bg-amber-100 px-4 py-1.5 text-xs font-semibold text-amber-700 shadow-sm">
             {pendingOrders} pending
           </span>
         </div>

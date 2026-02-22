@@ -50,11 +50,6 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-3 pb-6">
-      <header>
-        <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Trends</p>
-        <h1 className="text-[28px] font-semibold text-[var(--accent)]">Analytics</h1>
-      </header>
-
       <div className="hide-scrollbar flex gap-2 overflow-x-auto pb-1">
         {periods.map((item) => (
           <button
@@ -64,9 +59,8 @@ export default function AnalyticsPage() {
               setPeriod(item);
               if (item === "custom") setOpenCustom(true);
             }}
-            className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${
-              period === item ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
-            }`}
+            className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${period === item ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
+              }`}
           >
             {item.toUpperCase()}
           </button>

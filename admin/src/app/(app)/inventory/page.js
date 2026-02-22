@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, PackageOpen } from "lucide-react";
+import EmptyState from "@/components/ui/empty-state";
+import { useEmptyState } from "@/hooks/use-empty-state";
 import { apiFetch } from "@/lib/api";
 
 const chips = [
@@ -66,6 +68,8 @@ export default function InventoryPage() {
     return Object.values(acc);
   }, [rows]);
 
+  const listState = useEmptyState(loading, rows, null);
+
   const updateQty = async (variantId, nextQuantity) => {
     await apiFetch(`/admin/variants/${variantId}/inventory`, {
       method: "PUT",
@@ -76,13 +80,13 @@ export default function InventoryPage() {
       current.map((row) =>
         row.variantId === variantId
           ? {
-              ...row,
-              inventory: {
-                ...row.inventory,
-                quantity: nextQuantity,
-                available: Math.max(0, nextQuantity - (row.inventory?.reserved || 0)),
-              },
-            }
+            ...row,
+            inventory: {
+              ...row.inventory,
+              quantity: nextQuantity,
+              available: Math.max(0, nextQuantity - (row.inventory?.reserved || 0)),
+            },
+          }
           : row
       )
     );
@@ -91,9 +95,6 @@ export default function InventoryPage() {
   return (
     <div className="space-y-3 pb-6">
       <header>
-        <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Stock Control</p>
-        <h1 className="text-[28px] font-semibold text-[var(--accent)]">Inventory</h1>
-
         <div className="mt-3 flex h-11 items-center rounded-2xl border border-[var(--card-border)] bg-white px-3">
           <Search size={16} className="text-[var(--text-muted)]" />
           <input
@@ -110,11 +111,10 @@ export default function InventoryPage() {
               key={chip.value}
               type="button"
               onClick={() => setFilter(chip.value)}
-              className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${
-                filter === chip.value
-                  ? "bg-[var(--accent)] text-white"
-                  : "bg-zinc-100 text-[var(--text-secondary)]"
-              }`}
+              className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs ${filter === chip.value
+                ? "bg-[var(--accent)] text-white"
+                : "bg-zinc-100 text-[var(--text-secondary)]"
+                }`}
             >
               {chip.label}
             </button>
@@ -122,10 +122,18 @@ export default function InventoryPage() {
         </div>
       </header>
 
-      {loading ? (
+      {listState.isLoading ? (
         <div className="space-y-2">
           <div className="skeleton h-24 rounded-[20px]" />
           <div className="skeleton h-24 rounded-[20px]" />
+        </div>
+      ) : listState.showEmpty ? (
+        <div className="pt-8">
+          <EmptyState
+            title="No inventory records"
+            description={query || filter !== "all" ? "Try adjusting your search or filters." : "You do not have any inventory data."}
+            icon={PackageOpen}
+          />
         </div>
       ) : (
         <div className="space-y-2.5">

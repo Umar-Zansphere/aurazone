@@ -10,16 +10,17 @@ export default function BentoGrid({ statusBreakdown, lowStockCount, topProduct }
   const router = useRouter();
 
   return (
-    <section className="grid grid-cols-3 gap-3">
+    <section className="grid grid-cols-2 gap-4 md:grid-cols-4">
       <motion.button
         type="button"
         onClick={() => router.push("/orders?status=PENDING")}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-surface col-span-2 h-[170px] p-3 text-left"
+        className="card-surface card-hover col-span-2 h-[180px] p-4 text-left relative overflow-hidden group"
       >
-        <p className="text-xs font-medium text-[var(--text-secondary)]">Order Status Ring</p>
-        <div className="mt-2 h-[122px]">
+        <div className="absolute inset-0 bg-gradient-to-br from-transparent to-[color:rgba(27,42,74,0.02)] opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+        <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Order Status</p>
+        <div className="mt-3 h-[122px] w-full">
           <StatusRing dataMap={statusBreakdown} />
         </div>
       </motion.button>
@@ -30,14 +31,18 @@ export default function BentoGrid({ statusBreakdown, lowStockCount, topProduct }
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.04 }}
-        className="card-surface h-[170px] p-3 text-left"
+        className="card-surface card-hover col-span-1 h-[180px] p-4 text-left flex flex-col justify-between"
       >
         <div className="flex items-center justify-between">
-          <p className="text-xs font-medium text-[var(--text-secondary)]">Low Stock</p>
-          <AlertTriangle className="pulse-soft text-[var(--error)]" size={18} />
+          <p className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Low Stock</p>
+          <div className="rounded-full bg-red-50 p-1.5">
+            <AlertTriangle className="pulse-soft text-[var(--error)]" size={16} />
+          </div>
         </div>
-        <p className="mt-4 text-4xl font-bold text-[var(--error)]">{lowStockCount}</p>
-        <p className="mt-1 text-xs text-[var(--text-secondary)]">Variants below threshold</p>
+        <div>
+          <p className="mt-4 text-5xl font-extrabold text-[var(--error)] tracking-tight">{lowStockCount}</p>
+          <p className="mt-2 text-[11px] font-medium text-[var(--text-secondary)] leading-tight">Variants below threshold</p>
+        </div>
       </motion.button>
 
       <motion.button
@@ -46,24 +51,26 @@ export default function BentoGrid({ statusBreakdown, lowStockCount, topProduct }
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
-        className="card-surface h-[170px] overflow-hidden p-0 text-left"
+        className="card-surface card-hover col-span-1 h-[180px] overflow-hidden p-0 text-left flex flex-col"
       >
-        <div className="relative h-24 w-full">
+        <div className="relative h-28 w-full bg-zinc-50 border-b border-[var(--card-border)]">
           {topProduct?.imageUrl ? (
             <Image
               src={topProduct.imageUrl}
               alt={topProduct.name}
               fill
-              className="object-cover"
+              className="object-cover transition-transform duration-500 hover:scale-105"
               unoptimized
             />
           ) : (
-            <div className="h-full w-full bg-zinc-100" />
+            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100">
+              <Boxes size={24} className="text-zinc-300" />
+            </div>
           )}
         </div>
-        <div className="p-2.5">
-          <p className="line-clamp-1 text-xs font-semibold">{topProduct?.name || "Top Product"}</p>
-          <p className="text-[11px] text-[var(--text-secondary)]">{topProduct?.unitsSold || 0} sold this week</p>
+        <div className="flex flex-1 flex-col justify-center px-3 py-2 bg-white">
+          <p className="line-clamp-1 text-sm font-bold text-[var(--accent)]">{topProduct?.name || "Top Product"}</p>
+          <p className="text-[11px] font-medium text-[var(--highlight)]">{topProduct?.unitsSold || 0} sold this week</p>
         </div>
       </motion.button>
 
@@ -71,10 +78,10 @@ export default function BentoGrid({ statusBreakdown, lowStockCount, topProduct }
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.12 }}
-        className="card-surface col-span-2 h-[170px] p-2.5"
+        className="card-surface col-span-2 md:col-span-4 h-auto p-4"
       >
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Quick Actions</p>
-        <div className="grid grid-cols-2 gap-2">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">Quick Actions</p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
             { icon: PackagePlus, label: "Add Product", href: "/products/new" },
             { icon: ShoppingBag, label: "View Orders", href: "/orders" },
@@ -87,12 +94,12 @@ export default function BentoGrid({ statusBreakdown, lowStockCount, topProduct }
                 key={action.label}
                 type="button"
                 onClick={() => router.push(action.href)}
-                className="flex h-14 items-center gap-2 rounded-2xl border border-[var(--card-border)] px-2 text-left"
+                className="group flex h-14 items-center gap-3 rounded-[16px] border border-[var(--border)] bg-transparent px-3 text-left transition-all hover:border-[var(--accent)] hover:bg-slate-50 hover:shadow-sm"
               >
-                <span className="grid h-9 w-9 place-items-center rounded-2xl bg-[color:rgba(27,42,74,0.08)] text-[var(--accent)]">
+                <span className="grid h-8 w-8 place-items-center rounded-[10px] bg-[color:rgba(27,42,74,0.06)] text-[var(--accent)] transition-colors group-hover:bg-[var(--accent)] group-hover:text-white">
                   <Icon size={16} />
                 </span>
-                <span className="text-xs font-medium">{action.label}</span>
+                <span className="text-[13px] font-semibold text-[var(--text-primary)] transition-colors group-hover:text-[var(--accent)]">{action.label}</span>
               </button>
             );
           })}

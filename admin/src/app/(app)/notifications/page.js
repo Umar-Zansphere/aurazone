@@ -62,11 +62,6 @@ export default function NotificationsPage() {
       <PullIndicator pullDistance={pullDistance} refreshing={refreshing} />
 
       <header className="flex items-end justify-between">
-        <div>
-          <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Inbox</p>
-          <h1 className="text-[28px] font-semibold text-[var(--accent)]">Notifications</h1>
-        </div>
-
         <button
           type="button"
           onClick={markAllRead}

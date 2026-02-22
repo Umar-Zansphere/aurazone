@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/ui/bottom-sheet";
 import OrderCard, { getNextStatus } from "@/components/orders/order-card";
+import EmptyState from "@/components/ui/empty-state";
+import { useEmptyState } from "@/hooks/use-empty-state";
+import { PackageX } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 const filters = ["ALL", "PENDING", "PAID", "SHIPPED", "DELIVERED", "CANCELLED"];
@@ -115,9 +118,9 @@ export default function OrdersPage() {
       current.map((item) =>
         item.id === cancelOrder.id
           ? {
-              ...item,
-              status: "CANCELLED",
-            }
+            ...item,
+            status: "CANCELLED",
+          }
           : item
       )
     );
@@ -127,7 +130,7 @@ export default function OrdersPage() {
 
   const headerTitleClass = headerSmall ? "text-[22px]" : "text-[28px]";
 
-  const empty = !loading && orders.length === 0;
+  const listState = useEmptyState(loading, orders, null);
 
   const statusLabel = useMemo(() => {
     if (status === "ALL") return "All orders";
@@ -150,11 +153,10 @@ export default function OrdersPage() {
                 key={item}
                 type="button"
                 onClick={() => setStatus(item)}
-                className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${
-                  active
-                    ? "bg-[var(--accent)] text-white"
-                    : "bg-[color:rgba(243,244,246,0.95)] text-[var(--text-secondary)]"
-                }`}
+                className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${active
+                  ? "bg-[var(--accent)] text-white"
+                  : "bg-[color:rgba(243,244,246,0.95)] text-[var(--text-secondary)]"
+                  }`}
               >
                 {item === "ALL" ? "All" : item}
               </button>
@@ -199,8 +201,14 @@ export default function OrdersPage() {
           </div>
         ) : null}
 
-        {empty ? (
-          <div className="card-surface p-6 text-center text-sm text-[var(--text-secondary)]">No orders found.</div>
+        {listState.showEmpty ? (
+          <div className="pt-8">
+            <EmptyState
+              title="No orders found"
+              description={query ? "Try adjusting your search or filters." : "You do not have any orders matching this criteria."}
+              icon={PackageX}
+            />
+          </div>
         ) : null}
 
         <div ref={sentinelRef} />

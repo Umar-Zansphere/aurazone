@@ -53,22 +53,26 @@ export default function DashboardPage() {
       {loading && !data ? (
         <DashboardSkeleton />
       ) : (
-        <>
-          <RevenueHero
-            revenue={data?.todayRevenue || 0}
-            timeseries={data?.revenueTimeseries || []}
-            todayOrders={data?.todayOrders || 0}
-            pendingOrders={data?.pendingOrders || 0}
-          />
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="space-y-6 lg:col-span-2">
+            <RevenueHero
+              revenue={data?.todayRevenue || 0}
+              timeseries={data?.revenueTimeseries || []}
+              todayOrders={data?.todayOrders || 0}
+              pendingOrders={data?.pendingOrders || 0}
+            />
 
-          <BentoGrid
-            statusBreakdown={data?.statusBreakdown || {}}
-            lowStockCount={data?.lowStockCount || 0}
-            topProduct={data?.topProduct}
-          />
+            <BentoGrid
+              statusBreakdown={data?.statusBreakdown || {}}
+              lowStockCount={data?.lowStockCount || 0}
+              topProduct={data?.topProduct}
+            />
+          </div>
 
-          <ActivityFeed items={data?.activityFeed?.slice(0, 20) || []} />
-        </>
+          <div className="lg:col-span-1">
+            <ActivityFeed items={data?.activityFeed?.slice(0, 20) || []} />
+          </div>
+        </div>
       )}
     </div>
   );

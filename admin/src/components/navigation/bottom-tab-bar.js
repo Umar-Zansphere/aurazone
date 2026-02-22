@@ -31,7 +31,7 @@ export default function BottomTabBar() {
           opacity: hidden ? 0 : 1,
         }}
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
-        className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full max-w-[520px] px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]"
+        className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] md:hidden"
       >
         <div className="relative rounded-[28px] border border-[var(--card-border)] bg-white/95 px-2 pb-2 pt-3 shadow-xl backdrop-blur">
           <div className="grid grid-cols-5 items-end gap-1">
@@ -46,11 +46,10 @@ export default function BottomTabBar() {
                   className="flex flex-col items-center gap-1 rounded-2xl py-1"
                 >
                   <span
-                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${
-                      active
+                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${active
                         ? "bg-[var(--accent)] text-white"
                         : "bg-transparent text-[var(--text-secondary)]"
-                    }`}
+                      }`}
                   >
                     <Icon size={18} fill={active ? "currentColor" : "none"} />
                   </span>
@@ -84,11 +83,10 @@ export default function BottomTabBar() {
                   className="flex flex-col items-center gap-1 rounded-2xl py-1"
                 >
                   <span
-                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${
-                      active
+                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${active
                         ? "bg-[var(--accent)] text-white"
                         : "bg-transparent text-[var(--text-secondary)]"
-                    }`}
+                      }`}
                   >
                     <Icon size={18} fill={active ? "currentColor" : "none"} />
                   </span>

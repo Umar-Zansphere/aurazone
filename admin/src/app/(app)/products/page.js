@@ -87,42 +87,6 @@ export default function ProductsPage() {
 
   return (
     <div className="pb-6">
-      <header className="sticky top-0 z-20 bg-[var(--bg-app)]/95 pb-3 pt-1 backdrop-blur">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Catalog</p>
-            <h1 className="text-[28px] font-semibold text-[var(--accent)]">Products</h1>
-          </div>
-          <button
-            type="button"
-            onClick={() => router.push("/products/new")}
-            className="app-button grid h-11 w-11 place-items-center rounded-2xl bg-[var(--highlight)] text-white"
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-
-        <div className="mt-3 flex gap-2">
-          <div className="flex h-11 flex-1 items-center rounded-2xl border border-[var(--card-border)] bg-white px-3">
-            <Search size={16} className="text-[var(--text-muted)]" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search products"
-              className="ml-2 w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => setFilterOpen(true)}
-            className="app-button inline-flex h-11 items-center gap-1 rounded-2xl border border-[var(--card-border)] bg-white px-3 text-sm"
-          >
-            <Filter size={14} />
-            {selectedSort.label}
-          </button>
-        </div>
-      </header>
-
       {loading ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="skeleton h-56 rounded-[20px]" />
@@ -131,9 +95,9 @@ export default function ProductsPage() {
           <div className="skeleton h-56 rounded-[20px]" />
         </div>
       ) : (
-        <div className="columns-2 gap-3 [column-fill:_balance]">
+        <div className="columns-2">
           {products.map((product) => (
-            <div key={product.id} className="mb-3 break-inside-avoid">
+            <div key={product.id} className="mb-3">
               <ProductCard
                 product={product}
                 onOpen={(item) => router.push(`/products/${item.id}`)}
@@ -152,9 +116,8 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, category: "" }))}
-                className={`app-chip rounded-full px-3 py-1.5 text-xs ${
-                  !filters.category ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
-                }`}
+                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.category ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
+                  }`}
               >
                 All
               </button>
@@ -163,11 +126,10 @@ export default function ProductsPage() {
                   key={category}
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, category }))}
-                  className={`app-chip rounded-full px-3 py-1.5 text-xs ${
-                    filters.category === category
-                      ? "bg-[var(--accent)] text-white"
-                      : "bg-zinc-100 text-[var(--text-secondary)]"
-                  }`}
+                  className={`app-chip rounded-full px-3 py-1.5 text-xs ${filters.category === category
+                    ? "bg-[var(--accent)] text-white"
+                    : "bg-zinc-100 text-[var(--text-secondary)]"
+                    }`}
                 >
                   {category}
                 </button>
@@ -181,9 +143,8 @@ export default function ProductsPage() {
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, gender: "" }))}
-                className={`app-chip rounded-full px-3 py-1.5 text-xs ${
-                  !filters.gender ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
-                }`}
+                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.gender ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
+                  }`}
               >
                 All
               </button>
@@ -192,11 +153,10 @@ export default function ProductsPage() {
                   key={gender}
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, gender }))}
-                  className={`app-chip rounded-full px-3 py-1.5 text-xs ${
-                    filters.gender === gender
-                      ? "bg-[var(--accent)] text-white"
-                      : "bg-zinc-100 text-[var(--text-secondary)]"
-                  }`}
+                  className={`app-chip rounded-full px-3 py-1.5 text-xs ${filters.gender === gender
+                    ? "bg-[var(--accent)] text-white"
+                    : "bg-zinc-100 text-[var(--text-secondary)]"
+                    }`}
                 >
                   {gender}
                 </button>
@@ -231,11 +191,10 @@ export default function ProductsPage() {
                   key={option.value}
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, sort: option.value }))}
-                  className={`w-full rounded-2xl border px-3 py-3 text-left text-sm ${
-                    filters.sort === option.value
-                      ? "border-[var(--accent)] bg-[color:rgba(27,42,74,0.05)]"
-                      : "border-[var(--card-border)]"
-                  }`}
+                  className={`w-full rounded-2xl border px-3 py-3 text-left text-sm ${filters.sort === option.value
+                    ? "border-[var(--accent)] bg-[color:rgba(27,42,74,0.05)]"
+                    : "border-[var(--card-border)]"
+                    }`}
                 >
                   {option.label}
                 </button>
