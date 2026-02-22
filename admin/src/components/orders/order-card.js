@@ -19,11 +19,11 @@ export default function OrderCard({ order, onOpen, onNextStatus, onCancel }) {
 
   return (
     <motion.div className="relative">
-      <div className="absolute inset-0 flex overflow-hidden rounded-[20px]">
-        <div className="flex flex-1 items-center justify-start rounded-[20px] bg-[color:rgba(91,140,90,0.2)] px-4 text-sm font-semibold text-[var(--success)]">
+      <div className="absolute inset-0 flex overflow-hidden rounded-[18px]">
+        <div className="flex flex-1 items-center justify-start rounded-[18px] bg-[color:rgba(47,107,79,0.12)] px-4 text-sm font-semibold text-[var(--success)]">
           Mark {getNextStatus(order.status) || "Done"}
         </div>
-        <div className="flex flex-1 items-center justify-end rounded-[20px] bg-[color:rgba(196,91,91,0.2)] px-4 text-sm font-semibold text-[var(--error)]">
+        <div className="flex flex-1 items-center justify-end rounded-[18px] bg-[color:rgba(155,44,44,0.1)] px-4 text-sm font-semibold text-[var(--error)]">
           Cancel
         </div>
       </div>
@@ -50,7 +50,7 @@ export default function OrderCard({ order, onOpen, onNextStatus, onCancel }) {
             <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{order.customer?.fullName || "Customer"}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold text-[var(--accent)]">{formatCurrencyINR(order.totalAmount)}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{formatCurrencyINR(order.totalAmount)}</p>
             <p className="text-xs text-[var(--text-muted)]">{formatRelativeTime(order.createdAt)}</p>
           </div>
         </div>
@@ -58,7 +58,7 @@ export default function OrderCard({ order, onOpen, onNextStatus, onCancel }) {
         <div className="mt-3 flex items-center justify-between">
           <span
             className="app-chip rounded-full px-2.5 py-1 text-[11px] font-semibold text-white"
-            style={{ background: statusTone[order.status] || "#9CA3AF" }}
+            style={{ background: statusTone[order.status] || "#9a9a9a" }}
           >
             {order.status}
           </span>

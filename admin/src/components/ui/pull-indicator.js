@@ -12,7 +12,7 @@ export default function PullIndicator({ pullDistance = 0, refreshing = false }) 
       transition={{ type: "spring", stiffness: 300, damping: 24 }}
     >
       {(opacity > 0 || refreshing) && (
-        <div className="mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow">
+        <div className="mt-2 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm">
           <div className="brand-spinner h-4 w-4 rounded-full border-2 border-[var(--highlight)] border-t-transparent" />
         </div>
       )}

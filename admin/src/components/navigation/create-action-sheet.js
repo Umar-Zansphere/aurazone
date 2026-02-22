@@ -14,8 +14,8 @@ const actions = [
   },
   {
     id: "broadcast",
-    label: "New Order Broadcast",
-    description: "Send a broadcast notification",
+    label: "New Broadcast",
+    description: "Send a push notification",
     icon: Megaphone,
     href: "/notifications?compose=1",
   },
@@ -33,7 +33,7 @@ export default function CreateActionSheet({ open, onClose }) {
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Create" snap="half">
-      <div className="space-y-3 px-1 pb-2">
+      <div className="space-y-2.5 pb-2">
         {actions.map((action) => {
           const Icon = action.icon;
 
@@ -45,10 +45,10 @@ export default function CreateActionSheet({ open, onClose }) {
                 onClose();
                 router.push(action.href);
               }}
-              className="flex w-full items-center gap-3 rounded-2xl border border-[var(--card-border)] bg-white px-3 py-3 text-left"
+              className="flex w-full items-center gap-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-left transition-colors hover:bg-[var(--surface-hover)]"
             >
-              <span className="grid h-11 w-11 place-items-center rounded-2xl bg-[color:rgba(27,42,74,0.08)] text-[var(--accent)]">
-                <Icon size={20} />
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[var(--highlight-soft)] text-[var(--highlight)]">
+                <Icon size={18} />
               </span>
               <span className="block">
                 <span className="block text-sm font-semibold text-[var(--text-primary)]">{action.label}</span>

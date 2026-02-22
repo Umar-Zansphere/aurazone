@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import RevenueHero from "@/components/dashboard/revenue-hero";
 import BentoGrid from "@/components/dashboard/bento-grid";
 import ActivityFeed from "@/components/dashboard/activity-feed";
 import PullIndicator from "@/components/ui/pull-indicator";
+import EmptyState from "@/components/ui/empty-state";
 import { useDashboardStore } from "@/stores/use-dashboard-store";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { useEmptyState } from "@/hooks/use-empty-state";
+import { LayoutDashboard, RefreshCw } from "lucide-react";
 
 function DashboardSkeleton() {
   return (
@@ -28,12 +31,18 @@ export default function DashboardPage() {
   const data = useDashboardStore((state) => state.data);
   const loading = useDashboardStore((state) => state.loading);
   const fetchDashboard = useDashboardStore((state) => state.fetchDashboard);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    fetchDashboard();
+    fetchDashboard().catch((err) => setError(err));
   }, [fetchDashboard]);
 
-  const { bind, pullDistance, refreshing } = usePullToRefresh(() => fetchDashboard({ refresh: true }));
+  const { bind, pullDistance, refreshing } = usePullToRefresh(() => {
+    setError(null);
+    return fetchDashboard({ refresh: true }).catch((err) => setError(err));
+  });
+
+  const state = useEmptyState(loading, data, error);
 
   return (
     <div {...bind} className="space-y-3 pb-6">
@@ -45,16 +54,30 @@ export default function DashboardPage() {
         className="mb-1 flex items-end justify-between"
       >
         <div>
-          <p className="text-xs uppercase tracking-[0.12em] text-[var(--text-muted)]">Overview</p>
-          <h1 className="text-[28px] font-semibold leading-tight text-[var(--accent)]">Home</h1>
+          <p className="page-label">Overview</p>
+          <h1 className="page-title">Home</h1>
         </div>
       </motion.header>
 
-      {loading && !data ? (
+      {state.isLoading ? (
         <DashboardSkeleton />
+      ) : state.showError ? (
+        <EmptyState
+          title="Failed to load dashboard"
+          description="Something went wrong while fetching data. Pull down to try again."
+          icon={RefreshCw}
+          variant="error"
+          action={{ label: "Retry", onClick: () => { setError(null); fetchDashboard(); } }}
+        />
+      ) : state.showEmpty ? (
+        <EmptyState
+          title="No dashboard data"
+          description="Your dashboard will populate once you start receiving orders."
+          icon={LayoutDashboard}
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
             <RevenueHero
               revenue={data?.todayRevenue || 0}
               timeseries={data?.revenueTimeseries || []}

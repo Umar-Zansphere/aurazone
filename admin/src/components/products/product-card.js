@@ -17,9 +17,9 @@ const getPriceRange = (variants = []) => {
 
 const getStockState = (variants = []) => {
   const total = variants.reduce((sum, variant) => sum + (variant.inventory?.quantity || 0), 0);
-  if (total <= 0) return { label: "Out", color: "#C45B5B" };
-  if (total < 10) return { label: "Low", color: "#D4954A" };
-  return { label: "In", color: "#5B8C5A" };
+  if (total <= 0) return { label: "Out", color: "#9b2c2c" };
+  if (total < 10) return { label: "Low", color: "#b7791f" };
+  return { label: "In", color: "#2f6b4f" };
 };
 
 export default function ProductCard({ product, onOpen, onLongPress }) {
@@ -56,10 +56,14 @@ export default function ProductCard({ product, onOpen, onLongPress }) {
       }}
       className="card-surface overflow-hidden text-left"
     >
-      <div className="relative h-36 w-full bg-zinc-100">
+      <div className="relative h-36 w-full bg-[var(--bg-app)]">
         {primaryImage?.url ? (
           <Image src={primaryImage.url} alt={product.name} fill className="object-cover" unoptimized />
-        ) : null}
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <span className="text-2xl text-[var(--text-muted)]">📦</span>
+          </div>
+        )}
 
         <div className="absolute left-2 top-2 flex gap-1">
           {product.isActive ? (
@@ -76,11 +80,11 @@ export default function ProductCard({ product, onOpen, onLongPress }) {
       </div>
 
       <div className="space-y-1 p-2.5">
-        <p className="line-clamp-1 text-sm font-semibold">{product.name}</p>
+        <p className="line-clamp-1 text-sm font-semibold text-[var(--text-primary)]">{product.name}</p>
         <p className="line-clamp-1 text-[11px] text-[var(--text-secondary)]">{product.brand}</p>
-        <p className="text-xs font-medium text-[var(--accent)]">{getPriceRange(product.variants)}</p>
+        <p className="text-xs font-medium text-[var(--text-primary)]">{getPriceRange(product.variants)}</p>
 
-        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-[var(--text-secondary)]">
+        <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
           <span className="h-2 w-2 rounded-full" style={{ background: stock.color }} />
           {stock.label} stock
         </div>

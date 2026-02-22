@@ -33,7 +33,7 @@ export default function BottomTabBar() {
         transition={{ type: "spring", stiffness: 260, damping: 28 }}
         className="fixed inset-x-0 bottom-0 z-40 mx-auto w-full px-4 pb-[calc(env(safe-area-inset-bottom)+12px)] md:hidden"
       >
-        <div className="relative rounded-[28px] border border-[var(--card-border)] bg-white/95 px-2 pb-2 pt-3 shadow-xl backdrop-blur">
+        <div className="relative rounded-[24px] border border-[var(--card-border)] bg-white/95 px-2 pb-2 pt-3 shadow-lg backdrop-blur">
           <div className="grid grid-cols-5 items-end gap-1">
             {tabs.slice(0, 2).map((tab) => {
               const Icon = tab.icon;
@@ -46,14 +46,14 @@ export default function BottomTabBar() {
                   className="flex flex-col items-center gap-1 rounded-2xl py-1"
                 >
                   <span
-                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${active
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-transparent text-[var(--text-secondary)]"
+                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs transition-colors ${active
+                      ? "bg-[var(--accent)] text-white"
+                      : "bg-transparent text-[var(--text-secondary)]"
                       }`}
                   >
-                    <Icon size={18} fill={active ? "currentColor" : "none"} />
+                    <Icon size={17} fill={active ? "currentColor" : "none"} />
                   </span>
-                  <span className={`text-[11px] ${active ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
+                  <span className={`text-[10px] font-medium ${active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>
                     {tab.label}
                   </span>
                 </Link>
@@ -65,10 +65,10 @@ export default function BottomTabBar() {
                 type="button"
                 whileTap={{ scale: 0.92 }}
                 onClick={() => setCreateOpen(true)}
-                className="-mt-8 grid h-16 w-16 place-items-center rounded-[22px] border-4 border-[var(--bg-app)] bg-[var(--highlight)] text-white shadow-lg"
+                className="-mt-7 grid h-14 w-14 place-items-center rounded-[20px] border-4 border-[var(--bg-app)] bg-[var(--accent)] text-white shadow-md"
                 aria-label="Create"
               >
-                <Plus size={24} />
+                <Plus size={22} />
               </motion.button>
             </div>
 
@@ -83,14 +83,14 @@ export default function BottomTabBar() {
                   className="flex flex-col items-center gap-1 rounded-2xl py-1"
                 >
                   <span
-                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs ${active
-                        ? "bg-[var(--accent)] text-white"
-                        : "bg-transparent text-[var(--text-secondary)]"
+                    className={`grid h-8 min-w-8 place-items-center rounded-full px-2 text-xs transition-colors ${active
+                      ? "bg-[var(--accent)] text-white"
+                      : "bg-transparent text-[var(--text-secondary)]"
                       }`}
                   >
-                    <Icon size={18} fill={active ? "currentColor" : "none"} />
+                    <Icon size={17} fill={active ? "currentColor" : "none"} />
                   </span>
-                  <span className={`text-[11px] ${active ? "text-[var(--accent)]" : "text-[var(--text-muted)]"}`}>
+                  <span className={`text-[10px] font-medium ${active ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>
                     {tab.label}
                   </span>
                 </Link>

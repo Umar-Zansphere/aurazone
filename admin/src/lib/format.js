@@ -40,17 +40,17 @@ export const formatRelativeTime = (dateInput) => {
 };
 
 export const statusTone = {
-  PENDING: "var(--error)",
-  PAID: "var(--info)",
-  SHIPPED: "var(--warning)",
-  DELIVERED: "var(--success)",
-  CANCELLED: "#9ca3af",
+  PENDING: "#b7791f",
+  PAID: "#3b6b8c",
+  SHIPPED: "#a18a68",
+  DELIVERED: "#2f6b4f",
+  CANCELLED: "#9a9a9a",
 };
 
 export const shipmentTone = {
-  PENDING: "var(--warning)",
-  SHIPPED: "var(--info)",
-  DELIVERED: "var(--success)",
-  RETURNED: "var(--error)",
-  LOST: "var(--error)",
+  PENDING: "#b7791f",
+  SHIPPED: "#3b6b8c",
+  DELIVERED: "#2f6b4f",
+  RETURNED: "#9b2c2c",
+  LOST: "#9b2c2c",
 };

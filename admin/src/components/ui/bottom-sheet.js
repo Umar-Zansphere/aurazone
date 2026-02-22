@@ -22,7 +22,7 @@ export default function BottomSheet({
         <>
           <motion.button
             type="button"
-            className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[3px]"
+            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[3px]"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -42,11 +42,13 @@ export default function BottomSheet({
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
             transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[520px] rounded-t-[28px] border border-[var(--card-border)] bg-white px-4 pb-8 pt-2 shadow-2xl"
+            className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[520px] rounded-t-[24px] border border-[var(--card-border)] bg-white px-5 pb-8 pt-2 shadow-2xl"
             style={{ maxHeight }}
           >
-            <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-zinc-300" />
-            {title ? <h2 className="px-1 pb-3 text-base font-semibold">{title}</h2> : null}
+            <div className="mx-auto mb-3 h-1 w-9 rounded-full bg-[var(--border-strong)]" />
+            {title ? (
+              <h2 className="px-0.5 pb-3 text-base font-semibold text-[var(--text-primary)]">{title}</h2>
+            ) : null}
             <div className="hide-scrollbar overflow-y-auto" style={{ maxHeight: `calc(${maxHeight} - 56px)` }}>
               {children}
             </div>

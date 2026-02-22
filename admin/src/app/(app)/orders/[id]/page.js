@@ -1,384 +1,384 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Copy,
-  EllipsisVertical,
-  ExternalLink,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  CreditCard,
   MapPin,
+  PackageCheck,
+  PackageSearch,
   Truck,
-  UserCircle2,
+  X,
 } from "lucide-react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import BottomSheet from "@/components/ui/bottom-sheet";
+import EmptyState from "@/components/ui/empty-state";
 import { apiFetch } from "@/lib/api";
-import { formatCurrencyINR, formatRelativeTime, statusTone } from "@/lib/format";
+import { formatCurrencyINR, formatRelativeTime, statusTone, shipmentTone } from "@/lib/format";
 
-const primaryActionByStatus = {
-  PENDING: "Mark as Paid",
-  PAID: "Mark as Shipped",
-  SHIPPED: "Mark as Delivered",
-};
+const statusSteps = [
+  { key: "PENDING", label: "Placed", icon: Clock },
+  { key: "PAID", label: "Paid", icon: CreditCard },
+  { key: "SHIPPED", label: "Shipped", icon: Truck },
+  { key: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
+];
 
 export default function OrderDetailPage() {
-  const params = useParams();
+  const { id } = useParams();
   const router = useRouter();
 
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [shipmentOpen, setShipmentOpen] = useState(false);
-  const [shipmentForm, setShipmentForm] = useState({
-    courierName: "",
-    trackingNumber: "",
-    trackingUrl: "",
-    status: "SHIPPED",
-  });
-
-  const orderId = params.id;
+  const [error, setError] = useState(null);
+  const [actionError, setActionError] = useState(null);
+  const [shipmentSheet, setShipmentSheet] = useState(false);
+  const [shipmentDraft, setShipmentDraft] = useState({ provider: "", trackingNumber: "", trackingUrl: "" });
 
   const loadOrder = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = await apiFetch(`/admin/orders/${orderId}`);
+      const data = await apiFetch(`/admin/orders/${id}`);
       setOrder(data);
-      if (data.shipment) {
-        setShipmentForm({
-          courierName: data.shipment.courierName || "",
-          trackingNumber: data.shipment.trackingNumber || "",
-          trackingUrl: data.shipment.trackingUrl || "",
-          status: data.shipment.status || "SHIPPED",
-        });
-      }
-    } catch {
+    } catch (err) {
       setOrder(null);
+      setError(err);
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [id]);
 
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
 
-  const timeline = order?.statusTimeline || [];
-
-  const applyPrimaryAction = async () => {
-    if (!order) return;
-
-    if (order.status === "PENDING") {
-      await apiFetch(`/admin/orders/${order.id}/payment-status`, {
+  const updateOrderStatus = async (status) => {
+    setActionError(null);
+    try {
+      const data = await apiFetch(`/admin/orders/${order.id}/status`, {
         method: "PUT",
-        body: JSON.stringify({ paymentStatus: "SUCCESS" }),
+        body: JSON.stringify({ status }),
       });
-    } else if (order.status === "PAID") {
-      setShipmentOpen(true);
-      return;
-    } else if (order.status === "SHIPPED") {
-      await apiFetch(`/admin/orders/${order.id}/status`, {
-        method: "PUT",
-        body: JSON.stringify({ status: "DELIVERED" }),
-      });
+      setOrder(data.order || { ...order, status });
+    } catch {
+      setActionError("Failed to update order status.");
     }
-
-    await loadOrder();
   };
 
-  const saveShipment = async () => {
-    if (!order) return;
-
-    await apiFetch(`/admin/orders/${order.id}/shipment`, {
-      method: "PUT",
-      body: JSON.stringify(shipmentForm),
-    });
-
-    setShipmentOpen(false);
-    await loadOrder();
+  const addShipment = async () => {
+    setActionError(null);
+    try {
+      await apiFetch(`/admin/orders/${order.id}/shipment`, {
+        method: "POST",
+        body: JSON.stringify(shipmentDraft),
+      });
+      setShipmentSheet(false);
+      setShipmentDraft({ provider: "", trackingNumber: "", trackingUrl: "" });
+      await loadOrder();
+    } catch {
+      setActionError("Failed to create shipment.");
+    }
   };
 
   const cancelOrder = async () => {
-    if (!order) return;
-
-    await apiFetch(`/admin/orders/${order.id}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status: "CANCELLED" }),
-    });
-
-    setMenuOpen(false);
-    await loadOrder();
+    await updateOrderStatus("CANCELLED");
   };
-
-  const copyText = async (text) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      // no-op
-    }
-  };
-
-  const primaryAction = useMemo(() => {
-    if (!order) return null;
-    return primaryActionByStatus[order.status] || null;
-  }, [order]);
 
   if (loading) {
     return (
-      <div className="space-y-3 pb-24">
-        <div className="skeleton h-14 rounded-2xl" />
-        <div className="skeleton h-28 rounded-[20px]" />
-        <div className="skeleton h-48 rounded-[20px]" />
-        <div className="skeleton h-40 rounded-[20px]" />
+      <div className="space-y-3">
+        <div className="skeleton h-12 rounded-[18px]" />
+        <div className="skeleton h-48 rounded-[18px]" />
+        <div className="skeleton h-48 rounded-[18px]" />
       </div>
     );
   }
 
-  if (!order) {
+  if (error || !order) {
     return (
-      <div className="card-surface p-6 text-center text-sm text-[var(--text-secondary)]">
-        Order not found.
+      <div className="pt-6">
+        <EmptyState
+          title="Order not found"
+          description="This order could not be loaded."
+          icon={AlertCircle}
+          variant="error"
+          action={{ label: "Back to Orders", onClick: () => router.replace("/orders") }}
+        />
       </div>
     );
   }
+
+  const readyForShipping = order.status === "PAID" && !order.shipment;
+  const readyForDelivery = order.status === "SHIPPED";
+  const isCancelled = order.status === "CANCELLED";
+  const currentStepIndex = statusSteps.findIndex((step) => step.key === order.status);
 
   return (
-    <div className="space-y-3 pb-24">
-      <header className="sticky top-0 z-20 rounded-2xl bg-[var(--bg-app)]/95 pb-1 pt-1 backdrop-blur">
+    <div className="space-y-3 pb-10">
+      {actionError && (
+        <div className="error-banner">
+          <AlertCircle size={16} />
+          {actionError}
+          <button type="button" onClick={() => setActionError(null)} className="ml-auto text-xs underline">Dismiss</button>
+        </div>
+      )}
+
+      <header className="sticky top-0 z-20 bg-[var(--bg-app)]/95 pb-2 pt-1 backdrop-blur">
         <div className="card-surface flex items-center justify-between p-2.5">
           <button
             type="button"
             onClick={() => router.back()}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--card-border)]"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--border)] transition-colors hover:bg-[var(--surface-hover)]"
           >
             <ArrowLeft size={16} />
           </button>
-          <div className="text-center">
-            <p className="text-xs text-[var(--text-secondary)]">Order</p>
-            <p className="text-sm font-semibold">#{order.orderNumber}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setMenuOpen(true)}
-            className="grid h-9 w-9 place-items-center rounded-xl border border-[var(--card-border)]"
-          >
-            <EllipsisVertical size={16} />
-          </button>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between px-1">
+          <h1 className="text-sm font-semibold text-[var(--text-primary)]">Order #{order.orderNumber}</h1>
           <span
-            className="app-chip rounded-full px-2.5 py-1 text-[11px] font-semibold text-white"
-            style={{ background: statusTone[order.status] || "#9CA3AF" }}
+            className="app-chip rounded-full px-2.5 py-1 text-[10px] font-semibold text-white"
+            style={{ background: statusTone[order.status] || "#9a9a9a" }}
           >
             {order.status}
           </span>
-          <span className="text-xs text-[var(--text-muted)]">Created {formatRelativeTime(order.createdAt)}</span>
         </div>
       </header>
 
-      <section className="card-surface p-3">
-        <p className="text-xs font-medium text-[var(--text-secondary)]">Status Timeline</p>
-        <div className="mt-2 space-y-2">
-          {timeline.map((step, index) => {
-            const active = step.status === order.status;
+      <section className="card-surface p-4">
+        <p className="section-title mb-3">Status Timeline</p>
+        <div className="flex items-start justify-between">
+          {statusSteps.map((step, idx) => {
+            const Icon = step.icon;
+            const done = currentStepIndex >= idx && !isCancelled;
+            const current = currentStepIndex === idx;
+
             return (
-              <div key={`${step.status}-${step.timestamp}`} className="flex gap-2.5">
-                <div className="flex flex-col items-center">
-                  <span
-                    className={`mt-1 h-3.5 w-3.5 rounded-full ${active ? "pulse-soft" : ""}`}
-                    style={{ background: statusTone[step.status] || "#CBD5E1" }}
-                  />
-                  {index < timeline.length - 1 ? <span className="mt-1 h-8 w-px bg-[var(--border)]" /> : null}
-                </div>
-                <div className="pb-2">
-                  <p className="text-sm font-medium">{step.status}</p>
-                  <p className="text-xs text-[var(--text-secondary)]">{new Date(step.timestamp).toLocaleString()}</p>
-                </div>
+              <div key={step.key} className="flex flex-1 flex-col items-center text-center">
+                <motion.div
+                  animate={{ scale: current ? 1.1 : 1 }}
+                  className={`relative z-10 grid h-10 w-10 place-items-center rounded-full px-0 py-0 ${done
+                    ? "bg-[var(--accent)] text-white"
+                    : "border border-[var(--border)] bg-white text-[var(--text-muted)]"
+                    }`}
+                >
+                  <Icon size={16} />
+                </motion.div>
+                <span className={`mt-1 text-[11px] font-medium ${done ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>
+                  {step.label}
+                </span>
               </div>
             );
           })}
         </div>
+
+        {isCancelled ? (
+          <div className="mt-3 rounded-xl bg-[color:rgba(155,44,44,0.06)] p-2 text-center text-sm font-semibold text-[var(--error)]">
+            <X size={14} className="inline" /> Order Cancelled
+          </div>
+        ) : null}
       </section>
 
-      <section className="card-surface p-3">
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Customer</p>
-        <div className="flex items-start gap-3">
-          <UserCircle2 className="text-[var(--accent)]" size={34} />
+      <section className="card-surface p-4">
+        <p className="section-title mb-3">Customer</p>
+        <div className="flex items-center gap-3 rounded-[14px] border border-[var(--border)] p-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--highlight-soft)]">
+            <span className="text-xs font-bold text-[var(--highlight)]">
+              {(order.customer?.fullName || "C")[0]}
+            </span>
+          </div>
           <div>
-            <p className="text-sm font-semibold">{order.customer?.fullName || "Customer"}</p>
-            <p className="text-xs text-[var(--text-secondary)]">{order.customer?.email || "-"}</p>
-            <button
-              type="button"
-              onClick={() => copyText(order.customer?.phone)}
-              className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--accent)]"
-            >
-              {order.customer?.phone || "No phone"}
-              {order.customer?.phone ? <Copy size={12} /> : null}
-            </button>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{order.customer?.fullName || "N/A"}</p>
+            <p className="text-xs text-[var(--text-secondary)]">{order.customer?.email || "N/A"}</p>
+            <p className="text-xs text-[var(--text-muted)]">{order.customer?.phone || ""}</p>
           </div>
         </div>
       </section>
 
-      <section className="card-surface p-3">
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Items</p>
-        <div className="hide-scrollbar flex snap-x gap-2 overflow-x-auto pb-1">
-          {order.items.map((item) => (
-            <div key={item.id} className="min-w-[220px] snap-start rounded-2xl border border-[var(--card-border)] p-2.5">
-              <p className="line-clamp-1 text-sm font-semibold">{item.productName}</p>
-              <div className="mt-1 flex gap-1">
-                <span className="app-chip rounded-full bg-zinc-100 px-2 py-0.5 text-[10px]">{item.size}</span>
-                <span className="app-chip rounded-full bg-zinc-100 px-2 py-0.5 text-[10px]">{item.color}</span>
+      <section className="card-surface p-4">
+        <p className="section-title mb-3">Items</p>
+        <div className="space-y-2">
+          {(order.items || []).map((item, idx) => (
+            <div key={item.id || idx} className="flex items-center gap-3 rounded-[14px] border border-[var(--border)] p-2.5">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-[var(--bg-app)]">
+                {item.imageUrl ? (
+                  <Image src={item.imageUrl} alt={item.productName} fill className="object-cover" unoptimized />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-lg">👟</span>
+                )}
               </div>
-              <p className="mt-2 text-xs text-[var(--text-secondary)]">
-                {item.quantity} × {formatCurrencyINR(item.price)}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{item.productName}</p>
+                <p className="text-[11px] text-[var(--text-secondary)]">{item.color} / {item.size} · qty {item.quantity}</p>
+              </div>
+              <span className="shrink-0 text-sm font-semibold text-[var(--text-primary)]">
+                {formatCurrencyINR(item.price * item.quantity)}
+              </span>
             </div>
           ))}
         </div>
+
+        <hr className="section-divider my-3" />
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-[var(--text-secondary)]">Total</span>
+          <span className="text-base font-bold text-[var(--text-primary)]">{formatCurrencyINR(order.totalAmount)}</span>
+        </div>
       </section>
 
-      <section className="card-surface p-3">
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Delivery Address</p>
-        <div className="flex items-start gap-2">
-          <MapPin size={16} className="mt-0.5 text-[var(--highlight)]" />
-          <p className="text-sm text-[var(--text-primary)]">
-            {order.orderAddress?.addressLine1}, {order.orderAddress?.city}, {order.orderAddress?.state} {order.orderAddress?.postalCode}, {order.orderAddress?.country}
+      {order.address ? (
+        <section className="card-surface p-4">
+          <p className="section-title mb-3">
+            <MapPin size={12} className="inline" /> Delivery Address
           </p>
-        </div>
-      </section>
+          <div className="text-sm text-[var(--text-primary)]">
+            <p className="font-semibold">{order.address.fullName}</p>
+            <p className="text-[var(--text-secondary)]">{order.address.line1}</p>
+            {order.address.line2 ? <p className="text-[var(--text-secondary)]">{order.address.line2}</p> : null}
+            <p className="text-[var(--text-secondary)]">
+              {order.address.city}, {order.address.state} {order.address.zip}
+            </p>
+          </div>
+        </section>
+      ) : null}
 
-      <section className="card-surface p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-medium text-[var(--text-secondary)]">Shipment</p>
-          {!order.shipment ? (
-            <button
-              type="button"
-              onClick={() => setShipmentOpen(true)}
-              className="text-xs font-medium text-[var(--accent)]"
-            >
-              Add Shipment
-            </button>
-          ) : null}
-        </div>
-
-        {order.shipment ? (
-          <div className="space-y-1 text-sm">
-            <p>{order.shipment.courierName || "Courier not set"}</p>
-            <button
-              type="button"
-              onClick={() => copyText(order.shipment.trackingNumber)}
-              className="inline-flex items-center gap-1 text-xs text-[var(--text-secondary)]"
-            >
-              {order.shipment.trackingNumber || "No tracking number"}
-              {order.shipment.trackingNumber ? <Copy size={12} /> : null}
-            </button>
-            {order.shipment.trackingUrl ? (
-              <a href={order.shipment.trackingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-[var(--accent)]">
-                Open tracking
-                <ExternalLink size={12} />
-              </a>
+      {order.payment ? (
+        <section className="card-surface p-4">
+          <p className="section-title mb-3">Payment</p>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <span className="text-[var(--text-secondary)]">Method</span>
+              <p className="font-semibold text-[var(--text-primary)]">{order.paymentMethod}</p>
+            </div>
+            <div>
+              <span className="text-[var(--text-secondary)]">Status</span>
+              <p className="font-semibold" style={{ color: order.payment.status === "PAID" ? "var(--success)" : "var(--warning)" }}>
+                {order.payment.status}
+              </p>
+            </div>
+            {order.payment.transactionId ? (
+              <div className="col-span-2">
+                <span className="text-[var(--text-secondary)]">Transaction</span>
+                <p className="font-mono text-xs text-[var(--text-primary)]">{order.payment.transactionId}</p>
+              </div>
             ) : null}
           </div>
-        ) : (
-          <p className="text-sm text-[var(--text-secondary)]">No shipment added yet.</p>
-        )}
-      </section>
+        </section>
+      ) : null}
 
-      <section className="card-surface p-3">
-        <p className="mb-2 text-xs font-medium text-[var(--text-secondary)]">Payment</p>
-        <div className="text-sm">
-          <p>
-            {order.paymentMethod} · {order.paymentStatus}
+      {order.shipment ? (
+        <section className="card-surface p-4">
+          <p className="section-title mb-3">
+            <Truck size={12} className="inline" /> Shipment
           </p>
-          <p className="mt-1 font-semibold text-[var(--accent)]">{formatCurrencyINR(order.totalAmount)}</p>
+          <div className="space-y-1 text-sm">
+            <p className="text-[var(--text-primary)]">
+              <span className="text-[var(--text-secondary)]">Provider:</span>{" "}
+              <span className="font-semibold">{order.shipment.provider}</span>
+            </p>
+            <p className="text-[var(--text-primary)]">
+              <span className="text-[var(--text-secondary)]">Tracking:</span>{" "}
+              <span className="font-mono text-xs">{order.shipment.trackingNumber}</span>
+            </p>
+            <p>
+              <span
+                className="app-chip rounded-full px-2 py-0.5 text-[10px] font-semibold text-white"
+                style={{ background: shipmentTone[order.shipment.status] || "#9a9a9a" }}
+              >
+                {order.shipment.status}
+              </span>
+            </p>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="card-surface p-4">
+        <p className="section-title mb-3">Meta</p>
+        <div className="grid grid-cols-2 gap-2 text-xs text-[var(--text-secondary)]">
+          <span>Created</span>
+          <span className="text-right">{formatRelativeTime(order.createdAt)}</span>
+          <span>Updated</span>
+          <span className="text-right">{formatRelativeTime(order.updatedAt)}</span>
         </div>
       </section>
 
-      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+92px)] z-30 mx-auto w-full max-w-[520px] px-4">
-        <div className="card-surface flex items-center gap-2 p-2">
-          {primaryAction ? (
+      {!isCancelled ? (
+        <footer className="sticky bottom-0 z-20 bg-[var(--bg-app)]/95 pb-3 pt-2 backdrop-blur">
+          <div className="flex gap-2">
+            {readyForShipping ? (
+              <button
+                type="button"
+                onClick={() => setShipmentSheet(true)}
+                className="app-button app-button-primary flex h-11 flex-1 items-center justify-center gap-2 text-sm"
+              >
+                <PackageCheck size={15} /> Add Shipment
+              </button>
+            ) : readyForDelivery ? (
+              <button
+                type="button"
+                onClick={() => updateOrderStatus("DELIVERED")}
+                className="app-button flex h-11 flex-1 items-center justify-center gap-2 rounded-[14px] bg-[var(--success)] text-sm font-semibold text-white"
+              >
+                <CheckCircle2 size={15} /> Mark Delivered
+              </button>
+            ) : order.status === "PENDING" ? (
+              <button
+                type="button"
+                onClick={() => updateOrderStatus("PAID")}
+                className="app-button app-button-primary flex h-11 flex-1 items-center justify-center gap-2 text-sm"
+              >
+                <CreditCard size={15} /> Mark Paid
+              </button>
+            ) : null}
+
             <button
               type="button"
-              onClick={applyPrimaryAction}
-              className="app-button h-11 flex-1 rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white"
+              onClick={cancelOrder}
+              className="app-button app-button-danger flex h-11 items-center justify-center gap-2 px-4 text-sm"
             >
-              {primaryAction}
+              <X size={15} /> Cancel
             </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={cancelOrder}
-            className="h-11 rounded-2xl px-3 text-xs font-semibold text-[var(--error)]"
-          >
-            Cancel Order
-          </button>
-        </div>
-      </div>
+          </div>
+        </footer>
+      ) : null}
 
-      <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} title="Order Actions" snap="half">
-        <div className="space-y-2">
+      <BottomSheet open={shipmentSheet} onClose={() => setShipmentSheet(false)} title="Shipment Details" snap="half">
+        <div className="space-y-3">
+          <div>
+            <label className="form-label">Provider</label>
+            <input
+              value={shipmentDraft.provider}
+              onChange={(event) => setShipmentDraft((prev) => ({ ...prev, provider: event.target.value }))}
+              placeholder="e.g. Delhivery"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Tracking Number</label>
+            <input
+              value={shipmentDraft.trackingNumber}
+              onChange={(event) => setShipmentDraft((prev) => ({ ...prev, trackingNumber: event.target.value }))}
+              placeholder="Tracking ID"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Tracking URL (optional)</label>
+            <input
+              value={shipmentDraft.trackingUrl}
+              onChange={(event) => setShipmentDraft((prev) => ({ ...prev, trackingUrl: event.target.value }))}
+              placeholder="https://track.delhivery.com/..."
+              className="form-input"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => {
-              setMenuOpen(false);
-              setShipmentOpen(true);
-            }}
-            className="w-full rounded-2xl border border-[var(--card-border)] px-3 py-3 text-left text-sm"
+            onClick={addShipment}
+            className="app-button app-button-primary h-11 w-full text-sm"
           >
-            <span className="inline-flex items-center gap-2">
-              <Truck size={15} /> Add / Update Shipment
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={cancelOrder}
-            className="w-full rounded-2xl border border-[color:rgba(196,91,91,0.4)] px-3 py-3 text-left text-sm text-[var(--error)]"
-          >
-            Mark as Cancelled
-          </button>
-        </div>
-      </BottomSheet>
-
-      <BottomSheet open={shipmentOpen} onClose={() => setShipmentOpen(false)} title="Shipment" snap="half">
-        <div className="space-y-2">
-          <input
-            value={shipmentForm.courierName}
-            onChange={(event) => setShipmentForm((prev) => ({ ...prev, courierName: event.target.value }))}
-            placeholder="Courier name"
-            className="h-11 w-full rounded-2xl border border-[var(--card-border)] px-3 text-sm outline-none"
-          />
-          <input
-            value={shipmentForm.trackingNumber}
-            onChange={(event) => setShipmentForm((prev) => ({ ...prev, trackingNumber: event.target.value }))}
-            placeholder="Tracking number"
-            className="h-11 w-full rounded-2xl border border-[var(--card-border)] px-3 text-sm outline-none"
-          />
-          <input
-            value={shipmentForm.trackingUrl}
-            onChange={(event) => setShipmentForm((prev) => ({ ...prev, trackingUrl: event.target.value }))}
-            placeholder="Tracking URL"
-            className="h-11 w-full rounded-2xl border border-[var(--card-border)] px-3 text-sm outline-none"
-          />
-          <select
-            value={shipmentForm.status}
-            onChange={(event) => setShipmentForm((prev) => ({ ...prev, status: event.target.value }))}
-            className="h-11 w-full rounded-2xl border border-[var(--card-border)] px-3 text-sm outline-none"
-          >
-            <option value="PENDING">PENDING</option>
-            <option value="SHIPPED">SHIPPED</option>
-            <option value="DELIVERED">DELIVERED</option>
-            <option value="RETURNED">RETURNED</option>
-            <option value="LOST">LOST</option>
-          </select>
-
-          <button
-            type="button"
-            onClick={saveShipment}
-            className="app-button mt-2 h-11 w-full rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white"
-          >
-            Save Shipment
+            Create Shipment & Mark Shipped
           </button>
         </div>
       </BottomSheet>

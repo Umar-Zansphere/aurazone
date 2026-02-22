@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Filter, Plus, Search, Star, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Filter, Plus, Search, Star, ToggleLeft, ToggleRight, Trash2, PackageX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import BottomSheet from "@/components/ui/bottom-sheet";
 import ProductCard from "@/components/products/product-card";
+import EmptyState from "@/components/ui/empty-state";
+import { useEmptyState } from "@/hooks/use-empty-state";
 import { apiFetch } from "@/lib/api";
 
 const categories = ["RUNNING", "CASUAL", "FORMAL", "SNEAKERS"];
@@ -20,6 +22,7 @@ export default function ProductsPage() {
 
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
   const [menuProduct, setMenuProduct] = useState(null);
@@ -34,6 +37,7 @@ export default function ProductsPage() {
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const data = await apiFetch("/admin/products", {
         params: {
@@ -48,7 +52,8 @@ export default function ProductsPage() {
       });
 
       setProducts(data.products || []);
-    } catch {
+    } catch (err) {
+      setError(err);
       setProducts([]);
     } finally {
       setLoading(false);
@@ -59,45 +64,104 @@ export default function ProductsPage() {
     loadProducts();
   }, [loadProducts]);
 
-  const selectedSort = useMemo(
-    () => sortOptions.find((item) => item.value === filters.sort) || sortOptions[0],
-    [filters.sort]
-  );
-
   const patchProduct = async (product, payload) => {
-    await apiFetch(`/admin/products/${product.id}`, {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
+    try {
+      await apiFetch(`/admin/products/${product.id}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
 
-    setProducts((current) =>
-      current.map((item) => (item.id === product.id ? { ...item, ...payload } : item))
-    );
+      setProducts((current) =>
+        current.map((item) => (item.id === product.id ? { ...item, ...payload } : item))
+      );
+    } catch {
+      // silent
+    }
     setMenuProduct(null);
   };
 
   const deleteProduct = async (product) => {
-    await apiFetch(`/admin/products/${product.id}`, {
-      method: "DELETE",
-    });
+    try {
+      await apiFetch(`/admin/products/${product.id}`, {
+        method: "DELETE",
+      });
 
-    setProducts((current) => current.filter((item) => item.id !== product.id));
+      setProducts((current) => current.filter((item) => item.id !== product.id));
+    } catch {
+      // silent
+    }
     setMenuProduct(null);
   };
 
+  const listState = useEmptyState(loading, products, error);
+
   return (
     <div className="pb-6">
-      {loading ? (
+      <header className="mb-4">
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="page-label">Catalog</p>
+            <h1 className="page-title">Products</h1>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setFilterOpen(true)}
+              className="app-button app-button-secondary flex h-9 items-center gap-1.5 px-3 text-xs"
+            >
+              <Filter size={14} /> Filter
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push("/products/new")}
+              className="app-button app-button-primary flex h-9 items-center gap-1.5 px-3 text-xs"
+            >
+              <Plus size={14} /> Add
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-3 flex h-11 items-center rounded-[14px] border border-[var(--border)] bg-white px-3 transition-all focus-within:border-[var(--highlight)] focus-within:ring-2 focus-within:ring-[var(--highlight-soft)]">
+          <Search size={15} className="text-[var(--text-muted)]" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search products..."
+            className="ml-2 w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)]"
+          />
+        </div>
+      </header>
+
+      {listState.isLoading ? (
         <div className="grid grid-cols-2 gap-3">
           <div className="skeleton h-56 rounded-[20px]" />
           <div className="skeleton h-64 rounded-[20px]" />
           <div className="skeleton h-64 rounded-[20px]" />
           <div className="skeleton h-56 rounded-[20px]" />
         </div>
+      ) : listState.showError ? (
+        <div className="pt-4">
+          <EmptyState
+            title="Failed to load products"
+            description="Something went wrong. Please try again."
+            icon={PackageX}
+            variant="error"
+            action={{ label: "Retry", onClick: loadProducts }}
+          />
+        </div>
+      ) : listState.showEmpty ? (
+        <div className="pt-4">
+          <EmptyState
+            title="No products found"
+            description={search ? "Try adjusting your search or filters." : "Add your first product to get started."}
+            icon={PackageX}
+            action={!search ? { label: "Add Product", onClick: () => router.push("/products/new") } : undefined}
+          />
+        </div>
       ) : (
-        <div className="columns-2">
+        <div className="columns-2 gap-3">
           {products.map((product) => (
-            <div key={product.id} className="mb-3">
+            <div key={product.id} className="mb-3 break-inside-avoid">
               <ProductCard
                 product={product}
                 onOpen={(item) => router.push(`/products/${item.id}`)}
@@ -109,14 +173,14 @@ export default function ProductsPage() {
       )}
 
       <BottomSheet open={filterOpen} onClose={() => setFilterOpen(false)} title="Filter Products" snap="full">
-        <div className="space-y-5 px-1 pb-3">
+        <div className="space-y-5 pb-3">
           <div>
-            <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">Category</p>
+            <p className="form-label">Category</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, category: "" }))}
-                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.category ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
+                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.category ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-app)] text-[var(--text-secondary)]"
                   }`}
               >
                 All
@@ -128,7 +192,7 @@ export default function ProductsPage() {
                   onClick={() => setFilters((prev) => ({ ...prev, category }))}
                   className={`app-chip rounded-full px-3 py-1.5 text-xs ${filters.category === category
                     ? "bg-[var(--accent)] text-white"
-                    : "bg-zinc-100 text-[var(--text-secondary)]"
+                    : "bg-[var(--bg-app)] text-[var(--text-secondary)]"
                     }`}
                 >
                   {category}
@@ -138,12 +202,12 @@ export default function ProductsPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">Gender</p>
+            <p className="form-label">Gender</p>
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setFilters((prev) => ({ ...prev, gender: "" }))}
-                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.gender ? "bg-[var(--accent)] text-white" : "bg-zinc-100 text-[var(--text-secondary)]"
+                className={`app-chip rounded-full px-3 py-1.5 text-xs ${!filters.gender ? "bg-[var(--accent)] text-white" : "bg-[var(--bg-app)] text-[var(--text-secondary)]"
                   }`}
               >
                 All
@@ -155,7 +219,7 @@ export default function ProductsPage() {
                   onClick={() => setFilters((prev) => ({ ...prev, gender }))}
                   className={`app-chip rounded-full px-3 py-1.5 text-xs ${filters.gender === gender
                     ? "bg-[var(--accent)] text-white"
-                    : "bg-zinc-100 text-[var(--text-secondary)]"
+                    : "bg-[var(--bg-app)] text-[var(--text-secondary)]"
                     }`}
                 >
                   {gender}
@@ -168,32 +232,36 @@ export default function ProductsPage() {
             <button
               type="button"
               onClick={() => setFilters((prev) => ({ ...prev, isActive: prev.isActive === "true" ? "" : "true" }))}
-              className="flex w-full items-center justify-between rounded-2xl border border-[var(--card-border)] px-3 py-3 text-sm"
+              className="flex w-full items-center justify-between rounded-[14px] border border-[var(--border)] px-3 py-3 text-sm transition-colors hover:bg-[var(--surface-hover)]"
             >
               Active only
-              {filters.isActive === "true" ? <ToggleRight className="text-[var(--accent)]" /> : <ToggleLeft />}
+              <span className={`toggle-track`} data-active={String(filters.isActive === "true")}>
+                <span className="toggle-thumb" />
+              </span>
             </button>
             <button
               type="button"
               onClick={() => setFilters((prev) => ({ ...prev, isFeatured: prev.isFeatured === "true" ? "" : "true" }))}
-              className="flex w-full items-center justify-between rounded-2xl border border-[var(--card-border)] px-3 py-3 text-sm"
+              className="flex w-full items-center justify-between rounded-[14px] border border-[var(--border)] px-3 py-3 text-sm transition-colors hover:bg-[var(--surface-hover)]"
             >
               Featured only
-              {filters.isFeatured === "true" ? <ToggleRight className="text-[var(--accent)]" /> : <ToggleLeft />}
+              <span className={`toggle-track`} data-active={String(filters.isFeatured === "true")}>
+                <span className="toggle-thumb" />
+              </span>
             </button>
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-semibold text-[var(--text-secondary)]">Sort</p>
+            <p className="form-label">Sort</p>
             <div className="space-y-2">
               {sortOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setFilters((prev) => ({ ...prev, sort: option.value }))}
-                  className={`w-full rounded-2xl border px-3 py-3 text-left text-sm ${filters.sort === option.value
-                    ? "border-[var(--accent)] bg-[color:rgba(27,42,74,0.05)]"
-                    : "border-[var(--card-border)]"
+                  className={`w-full rounded-[14px] border px-3 py-3 text-left text-sm transition-colors ${filters.sort === option.value
+                    ? "border-[var(--highlight)] bg-[var(--highlight-soft)]"
+                    : "border-[var(--border)] hover:bg-[var(--surface-hover)]"
                     }`}
                 >
                   {option.label}
@@ -205,7 +273,7 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => setFilterOpen(false)}
-            className="app-button h-11 w-full rounded-2xl bg-[var(--accent)] text-sm font-semibold text-white"
+            className="app-button app-button-primary h-11 w-full text-sm"
           >
             Apply Filters
           </button>
@@ -220,14 +288,14 @@ export default function ProductsPage() {
               if (!menuProduct) return;
               router.push(`/products/${menuProduct.id}`);
             }}
-            className="w-full rounded-2xl border border-[var(--card-border)] px-3 py-3 text-left text-sm"
+            className="w-full rounded-[14px] border border-[var(--border)] px-3 py-3 text-left text-sm transition-colors hover:bg-[var(--surface-hover)]"
           >
             Edit Product
           </button>
           <button
             type="button"
             onClick={() => menuProduct && patchProduct(menuProduct, { isActive: !menuProduct.isActive })}
-            className="flex w-full items-center gap-2 rounded-2xl border border-[var(--card-border)] px-3 py-3 text-left text-sm"
+            className="flex w-full items-center gap-2 rounded-[14px] border border-[var(--border)] px-3 py-3 text-left text-sm transition-colors hover:bg-[var(--surface-hover)]"
           >
             <ToggleRight size={16} />
             Toggle Active
@@ -235,7 +303,7 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => menuProduct && patchProduct(menuProduct, { isFeatured: !menuProduct.isFeatured })}
-            className="flex w-full items-center gap-2 rounded-2xl border border-[var(--card-border)] px-3 py-3 text-left text-sm"
+            className="flex w-full items-center gap-2 rounded-[14px] border border-[var(--border)] px-3 py-3 text-left text-sm transition-colors hover:bg-[var(--surface-hover)]"
           >
             <Star size={16} />
             Toggle Featured
@@ -243,7 +311,7 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => menuProduct && deleteProduct(menuProduct)}
-            className="flex w-full items-center gap-2 rounded-2xl border border-[color:rgba(196,91,91,0.4)] px-3 py-3 text-left text-sm text-[var(--error)]"
+            className="app-button-danger flex w-full items-center gap-2 rounded-[14px] px-3 py-3 text-left text-sm"
           >
             <Trash2 size={16} />
             Delete

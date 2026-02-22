@@ -1,19 +1,18 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { Search, PackageX, RefreshCw } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import BottomSheet from "@/components/ui/bottom-sheet";
 import OrderCard, { getNextStatus } from "@/components/orders/order-card";
 import EmptyState from "@/components/ui/empty-state";
 import { useEmptyState } from "@/hooks/use-empty-state";
-import { PackageX } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 
 const filters = ["ALL", "PENDING", "PAID", "SHIPPED", "DELIVERED", "CANCELLED"];
 
-export default function OrdersPage() {
+function OrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -26,6 +25,7 @@ export default function OrdersPage() {
   const [pagination, setPagination] = useState({ total: 0, skip: 0, take: 20, pages: 0 });
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState(null);
   const [cancelOrder, setCancelOrder] = useState(null);
   const sentinelRef = useRef(null);
 
@@ -38,6 +38,7 @@ export default function OrdersPage() {
         setLoadingMore(true);
       } else {
         setLoading(true);
+        setError(null);
       }
 
       try {
@@ -52,9 +53,10 @@ export default function OrdersPage() {
 
         setOrders((current) => (append ? [...current, ...data.orders] : data.orders));
         setPagination(data.pagination);
-      } catch {
+      } catch (err) {
         if (!append) {
           setOrders([]);
+          setError(err);
         }
       } finally {
         setLoading(false);
@@ -98,39 +100,44 @@ export default function OrdersPage() {
     const nextStatus = getNextStatus(order.status);
     if (!nextStatus) return;
 
-    await apiFetch(`/admin/orders/${order.id}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status: nextStatus }),
-    });
+    try {
+      await apiFetch(`/admin/orders/${order.id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status: nextStatus }),
+      });
 
-    setOrders((current) => current.map((item) => (item.id === order.id ? { ...item, status: nextStatus } : item)));
+      setOrders((current) => current.map((item) => (item.id === order.id ? { ...item, status: nextStatus } : item)));
+    } catch {
+      // silent
+    }
   };
 
   const confirmCancel = async () => {
     if (!cancelOrder) return;
 
-    await apiFetch(`/admin/orders/${cancelOrder.id}/status`, {
-      method: "PUT",
-      body: JSON.stringify({ status: "CANCELLED" }),
-    });
+    try {
+      await apiFetch(`/admin/orders/${cancelOrder.id}/status`, {
+        method: "PUT",
+        body: JSON.stringify({ status: "CANCELLED" }),
+      });
 
-    setOrders((current) =>
-      current.map((item) =>
-        item.id === cancelOrder.id
-          ? {
-            ...item,
-            status: "CANCELLED",
-          }
-          : item
-      )
-    );
+      setOrders((current) =>
+        current.map((item) =>
+          item.id === cancelOrder.id
+            ? { ...item, status: "CANCELLED" }
+            : item
+        )
+      );
+    } catch {
+      // silent
+    }
 
     setCancelOrder(null);
   };
 
   const headerTitleClass = headerSmall ? "text-[22px]" : "text-[28px]";
 
-  const listState = useEmptyState(loading, orders, null);
+  const listState = useEmptyState(loading, orders, error);
 
   const statusLabel = useMemo(() => {
     if (status === "ALL") return "All orders";
@@ -140,12 +147,12 @@ export default function OrdersPage() {
   return (
     <div className="pb-6">
       <motion.header layout className="sticky top-0 z-20 mb-3 bg-[var(--bg-app)] pb-2 pt-1">
-        <p className="text-xs uppercase tracking-[0.14em] text-[var(--text-muted)]">Orders</p>
-        <h1 className={`font-semibold leading-tight text-[var(--accent)] transition-all ${headerTitleClass}`}>
+        <p className="page-label">Orders</p>
+        <h1 className={`font-bold leading-tight tracking-tight text-[var(--text-primary)] transition-all ${headerTitleClass}`}>
           {statusLabel}
         </h1>
 
-        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
+        <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1 hide-scrollbar">
           {filters.map((item) => {
             const active = item === status;
             return (
@@ -153,9 +160,9 @@ export default function OrdersPage() {
                 key={item}
                 type="button"
                 onClick={() => setStatus(item)}
-                className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium ${active
+                className={`app-chip whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${active
                   ? "bg-[var(--accent)] text-white"
-                  : "bg-[color:rgba(243,244,246,0.95)] text-[var(--text-secondary)]"
+                  : "bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)]"
                   }`}
               >
                 {item === "ALL" ? "All" : item}
@@ -167,9 +174,9 @@ export default function OrdersPage() {
         <div className="mt-2">
           <motion.div
             layout
-            className="flex h-11 items-center rounded-2xl border border-[var(--card-border)] bg-white px-3"
+            className="flex h-11 items-center rounded-[14px] border border-[var(--border)] bg-white px-3 transition-all focus-within:border-[var(--highlight)] focus-within:ring-2 focus-within:ring-[var(--highlight-soft)]"
           >
-            <Search size={16} className="text-[var(--text-muted)]" />
+            <Search size={15} className="text-[var(--text-muted)]" />
             <input
               value={query}
               onFocus={() => setSearchOpen(true)}
@@ -195,14 +202,26 @@ export default function OrdersPage() {
 
         {loading ? (
           <div className="space-y-2">
-            <div className="skeleton h-24 rounded-[20px]" />
-            <div className="skeleton h-24 rounded-[20px]" />
-            <div className="skeleton h-24 rounded-[20px]" />
+            <div className="skeleton h-24 rounded-[18px]" />
+            <div className="skeleton h-24 rounded-[18px]" />
+            <div className="skeleton h-24 rounded-[18px]" />
+          </div>
+        ) : null}
+
+        {listState.showError ? (
+          <div className="pt-6">
+            <EmptyState
+              title="Failed to load orders"
+              description="Something went wrong. Please try again."
+              icon={RefreshCw}
+              variant="error"
+              action={{ label: "Retry", onClick: () => loadOrders() }}
+            />
           </div>
         ) : null}
 
         {listState.showEmpty ? (
-          <div className="pt-8">
+          <div className="pt-6">
             <EmptyState
               title="No orders found"
               description={query ? "Try adjusting your search or filters." : "You do not have any orders matching this criteria."}
@@ -217,26 +236,34 @@ export default function OrdersPage() {
       </div>
 
       <BottomSheet open={Boolean(cancelOrder)} onClose={() => setCancelOrder(null)} title="Cancel order" snap="half">
-        <p className="px-1 text-sm text-[var(--text-secondary)]">
+        <p className="text-sm text-[var(--text-secondary)]">
           This order will be marked as cancelled. You can still view it in history.
         </p>
         <div className="mt-4 flex gap-2">
           <button
             type="button"
             onClick={() => setCancelOrder(null)}
-            className="app-button h-11 flex-1 rounded-2xl border border-[var(--card-border)] text-sm"
+            className="app-button app-button-secondary h-11 flex-1 text-sm"
           >
             Keep
           </button>
           <button
             type="button"
             onClick={confirmCancel}
-            className="app-button h-11 flex-1 rounded-2xl bg-[var(--error)] text-sm font-semibold text-white"
+            className="app-button h-11 flex-1 rounded-[14px] bg-[var(--error)] text-sm font-semibold text-white"
           >
             Cancel Order
           </button>
         </div>
       </BottomSheet>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<div className="space-y-2"><div className="skeleton h-24 rounded-[18px]" /><div className="skeleton h-24 rounded-[18px]" /><div className="skeleton h-24 rounded-[18px]" /></div>}>
+      <OrdersContent />
+    </Suspense>
   );
 }
