@@ -5,11 +5,24 @@ const { uploadInMemory } = require('../services/s3.services');
 const {
   getDashboard,
   listOrders,
+  listOrderLogs,
   getOrderById,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  listPayments,
+  listPaymentLogs,
+  getPaymentById,
+  createPaymentForOrder,
+  updatePaymentById,
+  deletePaymentById,
   updateOrderShipment,
   deleteOrder,
+  listShipments,
+  listShipmentLogs,
+  getShipmentById,
+  createShipmentForOrder,
+  updateShipmentById,
+  deleteShipmentById,
   listProducts,
   getProductById,
   updateProduct,
@@ -18,7 +31,9 @@ const {
   updateVariant,
   deleteVariant,
   getInventory,
+  listInventoryLogs,
   getInventoryByVariantId,
+  adjustVariantInventory,
   updateVariantInventory,
   createVariantImage,
   updateImage,
@@ -42,11 +57,27 @@ router.use(verifyAdmin);
 router.get('/dashboard', getDashboard);
 
 router.get('/orders', listOrders);
+router.get('/orders/logs', listOrderLogs);
+router.get('/orders/:orderId/logs', listOrderLogs);
+router.post('/orders/:orderId/payments', createPaymentForOrder);
+router.post('/orders/:orderId/shipments', createShipmentForOrder);
 router.get('/orders/:orderId', getOrderById);
 router.put('/orders/:orderId/status', updateOrderStatus);
 router.put('/orders/:orderId/payment-status', updateOrderPaymentStatus);
 router.put('/orders/:orderId/shipment', updateOrderShipment);
 router.delete('/orders/:orderId', deleteOrder);
+router.get('/payments', listPayments);
+router.get('/payments/logs', listPaymentLogs);
+router.get('/payments/:paymentId/logs', listPaymentLogs);
+router.get('/payments/:paymentId', getPaymentById);
+router.put('/payments/:paymentId', updatePaymentById);
+router.delete('/payments/:paymentId', deletePaymentById);
+router.get('/shipments', listShipments);
+router.get('/shipments/logs', listShipmentLogs);
+router.get('/shipments/:shipmentId/logs', listShipmentLogs);
+router.get('/shipments/:shipmentId', getShipmentById);
+router.put('/shipments/:shipmentId', updateShipmentById);
+router.delete('/shipments/:shipmentId', deleteShipmentById);
 
 router.get('/products', listProducts);
 router.post('/products', uploadInMemory.any(), createProduct);
@@ -58,8 +89,10 @@ router.post('/products/:productId/variants', createVariant);
 router.put('/variants/:variantId', updateVariant);
 router.delete('/variants/:variantId', deleteVariant);
 router.get('/inventory', getInventory);
+router.get('/inventory/logs', listInventoryLogs);
 router.get('/inventory/:variantId', getInventoryByVariantId);
 router.put('/variants/:variantId/inventory', updateVariantInventory);
+router.post('/variants/:variantId/inventory/adjust', adjustVariantInventory);
 router.post('/variants/:variantId/images', uploadInMemory.single('image'), createVariantImage);
 
 router.put('/images/:imageId', updateImage);

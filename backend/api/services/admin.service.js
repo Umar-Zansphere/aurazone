@@ -2,10 +2,14 @@ const prisma = require('../../config/prisma');
 const { createError } = require('../../utils/error');
 const { uploadBufferToS3 } = require('../services/s3.services');
 const { validateAndOptimizeImage } = require('../../utils/imageProcessor');
+const { randomUUID } = require('node:crypto');
 
 const ORDER_STATUSES = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const PAYMENT_STATUSES = ['PENDING', 'SUCCESS', 'FAILED'];
+const PAYMENT_GATEWAYS = ['RAZORPAY', 'COD'];
 const SHIPMENT_STATUSES = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'LOST'];
+const INVENTORY_LOG_TYPES = ['HOLD', 'RELEASE', 'SOLD', 'MANUAL', 'RESTOCK', 'RETURN'];
+const INVENTORY_ADJUST_OPERATIONS = ['SET', 'RESTOCK', 'REDUCE', 'HOLD', 'RELEASE', 'RETURN'];
 const PRODUCT_CATEGORIES = ['RUNNING', 'CASUAL', 'FORMAL', 'SNEAKERS'];
 const PRODUCT_GENDERS = ['MEN', 'WOMEN', 'UNISEX', 'KIDS'];
 
@@ -159,7 +163,7 @@ const buildOrderStatusTimeline = (order, shipment) => {
   if (order.status === 'CANCELLED') {
     timeline.push({
       status: 'CANCELLED',
-      timestamp: order.createdAt,
+      timestamp: order.deletedAt || order.createdAt,
     });
   }
 
@@ -235,6 +239,138 @@ const parseVariantsInput = (value) => {
   throw new Error('variants must be a JSON array');
 };
 
+const parseJsonInput = (value, fieldName = 'value') => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      throw createError(400, `${fieldName} must be valid JSON`);
+    }
+  }
+
+  if (typeof value === 'object' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+
+  throw createError(400, `${fieldName} must be valid JSON`);
+};
+
+const parseDateTimeInput = (value, fieldName) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === '') {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw createError(400, `${fieldName} must be a valid date`);
+  }
+
+  return parsed;
+};
+
+const parseNullableTextInput = (value) => {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  const normalized = String(value).trim();
+  return normalized || null;
+};
+
+const parseIdempotencyKey = (req) => {
+  const headerRaw = typeof req.get === 'function' ? req.get('Idempotency-Key') : req.headers?.['idempotency-key'];
+  const header = Array.isArray(headerRaw) ? headerRaw[0] : headerRaw;
+  const parsedHeader = parseNullableTextInput(header);
+
+  if (parsedHeader !== undefined) {
+    return parsedHeader;
+  }
+
+  return parseNullableTextInput(req.body?.idempotencyKey);
+};
+
+const areAmountsEqual = (left, right) => {
+  const a = Number(left);
+  const b = Number(right);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.0001;
+};
+
+const assertPaymentReferences = ({
+  gateway,
+  status,
+  gatewayOrderId,
+  gatewayPaymentId,
+  externalReference,
+  context,
+}) => {
+  const hasGatewayOrderId = Boolean(gatewayOrderId);
+  const hasGatewayPaymentId = Boolean(gatewayPaymentId);
+  const hasExternalReference = Boolean(externalReference);
+  const target = context || 'payment';
+
+  if (gateway === 'RAZORPAY') {
+    if (status === 'SUCCESS') {
+      if (!hasGatewayOrderId) {
+        throw createError(400, `${target}: gatewayOrderId is required for RAZORPAY SUCCESS payments`);
+      }
+
+      if (!hasGatewayPaymentId) {
+        throw createError(400, `${target}: gatewayPaymentId is required for RAZORPAY SUCCESS payments`);
+      }
+    } else if (!hasGatewayOrderId && !hasGatewayPaymentId && !hasExternalReference) {
+      throw createError(400, `${target}: provide at least one external reference (gatewayOrderId, gatewayPaymentId, or externalReference)`);
+    }
+  }
+};
+
+const assertIdempotentPaymentPayload = (existingPayment, expectedPayload) => {
+  const mismatchedFields = [];
+
+  if (existingPayment.gateway !== expectedPayload.gateway) {
+    mismatchedFields.push('gateway');
+  }
+  if ((existingPayment.gatewayOrderId || null) !== (expectedPayload.gatewayOrderId || null)) {
+    mismatchedFields.push('gatewayOrderId');
+  }
+  if ((existingPayment.gatewayPaymentId || null) !== (expectedPayload.gatewayPaymentId || null)) {
+    mismatchedFields.push('gatewayPaymentId');
+  }
+  if ((existingPayment.externalReference || null) !== (expectedPayload.externalReference || null)) {
+    mismatchedFields.push('externalReference');
+  }
+  if (!areAmountsEqual(existingPayment.amount, expectedPayload.amount)) {
+    mismatchedFields.push('amount');
+  }
+  if (existingPayment.status !== expectedPayload.status) {
+    mismatchedFields.push('status');
+  }
+
+  if (mismatchedFields.length > 0) {
+    throw createError(409, `idempotencyKey already exists with different values (${mismatchedFields.join(', ')})`);
+  }
+};
+
 const INR_FORMATTER = new Intl.NumberFormat('en-IN', {
   style: 'currency',
   currency: 'INR',
@@ -253,6 +389,236 @@ const ensureEnumValue = (value, allowed, fieldName) => {
   }
 
   return normalized;
+};
+
+const parseDateFilter = (startDate, endDate, fieldName = 'date range') => {
+  if (!startDate && !endDate) {
+    return undefined;
+  }
+
+  const parsedStart = startDate
+    ? new Date(`${startDate}T00:00:00.000Z`)
+    : new Date('1970-01-01T00:00:00.000Z');
+  const parsedEnd = endDate
+    ? new Date(`${endDate}T23:59:59.999Z`)
+    : new Date();
+
+  if (Number.isNaN(parsedStart.getTime()) || Number.isNaN(parsedEnd.getTime())) {
+    throw createError(400, `Invalid ${fieldName}. Expected YYYY-MM-DD`);
+  }
+
+  if (parsedStart > parsedEnd) {
+    throw createError(400, `${fieldName} start date must be before end date`);
+  }
+
+  return {
+    gte: parsedStart,
+    lte: parsedEnd,
+  };
+};
+
+const getAdminActor = (req) => ({
+  adminId: req.user?.id || null,
+  performedBy: req.user?.id || 'admin',
+});
+
+const ensureLockedInventoryRowTx = async (tx, variantId) => {
+  const existingInventory = await tx.inventory.findUnique({
+    where: { variantId },
+    select: { id: true },
+  });
+
+  if (!existingInventory) {
+    try {
+      await tx.inventory.create({
+        data: {
+          variantId,
+          quantity: 0,
+          reserved: 0,
+        },
+      });
+    } catch (error) {
+      if (error?.code !== 'P2002') {
+        throw error;
+      }
+    }
+  }
+
+  const rows = await tx.$queryRaw`
+    SELECT "id", "quantity", "reserved"
+    FROM "Inventory"
+    WHERE "variantId" = ${variantId}
+    FOR UPDATE
+  `;
+
+  const row = rows?.[0];
+
+  if (!row) {
+    throw createError(500, 'Inventory row could not be locked');
+  }
+
+  return {
+    id: row.id,
+    quantity: Number(row.quantity),
+    reserved: Number(row.reserved),
+  };
+};
+
+const createOrderLogTx = async (tx, {
+  orderId,
+  orderNumber,
+  adminId,
+  action,
+  fromStatus,
+  toStatus,
+  fromPaymentStatus,
+  toPaymentStatus,
+  note,
+  metadata,
+}) => {
+  return tx.orderLog.create({
+    data: {
+      orderId: orderId || null,
+      orderNumberSnapshot: orderNumber || null,
+      adminId: adminId || null,
+      action,
+      ...(fromStatus !== undefined ? { fromStatus } : {}),
+      ...(toStatus !== undefined ? { toStatus } : {}),
+      ...(fromPaymentStatus !== undefined ? { fromPaymentStatus } : {}),
+      ...(toPaymentStatus !== undefined ? { toPaymentStatus } : {}),
+      ...(note !== undefined ? { note } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
+    },
+  });
+};
+
+const createShipmentLogTx = async (tx, {
+  orderId,
+  orderNumber,
+  shipmentId,
+  adminId,
+  action,
+  fromStatus,
+  toStatus,
+  courierName,
+  trackingNumber,
+  trackingUrl,
+  note,
+  metadata,
+}) => {
+  return tx.shipmentLog.create({
+    data: {
+      orderId: orderId || null,
+      orderNumberSnapshot: orderNumber || null,
+      shipmentId: shipmentId || null,
+      adminId: adminId || null,
+      action,
+      ...(fromStatus !== undefined ? { fromStatus } : {}),
+      ...(toStatus !== undefined ? { toStatus } : {}),
+      ...(courierName !== undefined ? { courierName } : {}),
+      ...(trackingNumber !== undefined ? { trackingNumber } : {}),
+      ...(trackingUrl !== undefined ? { trackingUrl } : {}),
+      ...(note !== undefined ? { note } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
+    },
+  });
+};
+
+const createPaymentLogTx = async (tx, {
+  paymentId,
+  orderId,
+  orderNumber,
+  adminId,
+  action,
+  fromStatus,
+  toStatus,
+  amount,
+  note,
+  metadata,
+}) => {
+  return tx.paymentLog.create({
+    data: {
+      paymentId: paymentId || null,
+      orderId: orderId || null,
+      orderNumberSnapshot: orderNumber || null,
+      adminId: adminId || null,
+      action,
+      ...(fromStatus !== undefined ? { fromStatus } : {}),
+      ...(toStatus !== undefined ? { toStatus } : {}),
+      ...(amount !== undefined ? { amount } : {}),
+      ...(note !== undefined ? { note } : {}),
+      ...(metadata !== undefined ? { metadata } : {}),
+    },
+  });
+};
+
+const deriveOrderPaymentStatus = (paymentStatuses) => {
+  const counts = paymentStatuses.reduce((acc, status) => {
+    acc[status] = (acc[status] || 0) + 1;
+    return acc;
+  }, {});
+
+  if (counts.SUCCESS > 0) {
+    return 'SUCCESS';
+  }
+  if (counts.PENDING > 0) {
+    return 'PENDING';
+  }
+  if (counts.FAILED > 0) {
+    return 'FAILED';
+  }
+
+  return 'PENDING';
+};
+
+const syncOrderPaymentStateTx = async (tx, orderId) => {
+  const order = await tx.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      paymentStatus: true,
+    },
+  });
+
+  if (!order) {
+    throw createError(404, 'Order not found');
+  }
+
+  const paymentRows = await tx.payment.findMany({
+    where: {
+      orderId,
+      deletedAt: null,
+    },
+    select: { status: true },
+  });
+
+  const nextPaymentStatus = deriveOrderPaymentStatus(paymentRows.map((entry) => entry.status));
+  const nextOrderStatus = (nextPaymentStatus === 'SUCCESS' && order.status === 'PENDING')
+    ? 'PAID'
+    : (nextPaymentStatus !== 'SUCCESS' && order.status === 'PAID')
+      ? 'PENDING'
+      : order.status;
+
+  if (order.paymentStatus !== nextPaymentStatus || order.status !== nextOrderStatus) {
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        paymentStatus: nextPaymentStatus,
+        ...(nextOrderStatus !== order.status ? { status: nextOrderStatus } : {}),
+      },
+    });
+  }
+
+  return {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    fromPaymentStatus: order.paymentStatus,
+    toPaymentStatus: nextPaymentStatus,
+    fromStatus: order.status,
+    toStatus: nextOrderStatus,
+  };
 };
 
 const formatImage = (image) => ({
@@ -340,6 +706,9 @@ const formatOrderSummary = (order) => {
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
     totalAmount: toNumber(order.totalAmount),
+    isDeleted: Boolean(order.deletedAt),
+    deletedAt: order.deletedAt ? order.deletedAt.toISOString() : null,
+    deleteReason: order.deleteReason || null,
     createdAt: order.createdAt.toISOString(),
     customer,
     itemsCount: (order.items || []).reduce((acc, item) => acc + item.quantity, 0),
@@ -371,6 +740,9 @@ const formatFullOrder = (order) => {
     razorpayOrderId: order.razorpayOrderId,
     razorpayPaymentId: order.razorpayPaymentId,
     totalAmount: toNumber(order.totalAmount),
+    isDeleted: Boolean(order.deletedAt),
+    deletedAt: order.deletedAt ? order.deletedAt.toISOString() : null,
+    deleteReason: order.deleteReason || null,
     createdAt: order.createdAt.toISOString(),
     customer: {
       id: order.user?.id || null,
@@ -419,14 +791,155 @@ const formatFullOrder = (order) => {
     payments: (order.payments || []).map((payment) => ({
       id: payment.id,
       gateway: payment.gateway,
-      gatewayPaymentId: payment.gatewayPaymentId,
+      gatewayOrderId: payment.gatewayOrderId || null,
+      gatewayPaymentId: payment.gatewayPaymentId || null,
+      externalReference: payment.externalReference || null,
       amount: toNumber(payment.amount),
       status: payment.status,
       paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+      note: payment.note || null,
+      metadata: payment.metadata || null,
+      isDeleted: Boolean(payment.deletedAt),
+      deletedAt: payment.deletedAt ? payment.deletedAt.toISOString() : null,
+      deleteReason: payment.deleteReason || null,
+      createdAt: payment.createdAt ? payment.createdAt.toISOString() : null,
+      updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : null,
     })),
     statusTimeline: buildOrderStatusTimeline(order, latestShipment),
   };
 };
+
+const formatPayment = (payment, includeOrder = false) => ({
+  id: payment.id,
+  orderId: payment.orderId,
+  gateway: payment.gateway,
+  gatewayOrderId: payment.gatewayOrderId || null,
+  gatewayPaymentId: payment.gatewayPaymentId || null,
+  externalReference: payment.externalReference || null,
+  amount: toNumber(payment.amount),
+  status: payment.status,
+  paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+  note: payment.note || null,
+  metadata: payment.metadata || null,
+  idempotencyKey: payment.idempotencyKey || null,
+  isDeleted: Boolean(payment.deletedAt),
+  deletedAt: payment.deletedAt ? payment.deletedAt.toISOString() : null,
+  deleteReason: payment.deleteReason || null,
+  createdAt: payment.createdAt ? payment.createdAt.toISOString() : null,
+  updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : null,
+  ...(includeOrder
+    ? {
+        order: payment.order
+          ? {
+              id: payment.order.id,
+              orderNumber: payment.order.orderNumber,
+              status: payment.order.status,
+              paymentStatus: payment.order.paymentStatus,
+              totalAmount: toNumber(payment.order.totalAmount),
+              createdAt: payment.order.createdAt.toISOString(),
+              customer: {
+                id: payment.order.user?.id || null,
+                fullName: payment.order.user?.fullName || payment.order.orderAddress?.name || null,
+                email: payment.order.user?.email || payment.order.orderAddress?.email || null,
+                phone: payment.order.user?.phone || payment.order.orderAddress?.phone || null,
+              },
+            }
+          : null,
+      }
+    : {}),
+});
+
+const formatShipment = (shipment, includeOrder = false) => ({
+  id: shipment.id,
+  orderId: shipment.orderId,
+  courierName: shipment.courierName,
+  trackingNumber: shipment.trackingNumber,
+  trackingUrl: shipment.trackingUrl,
+  status: shipment.status,
+  shippedAt: shipment.shippedAt ? shipment.shippedAt.toISOString() : null,
+  isDeleted: Boolean(shipment.deletedAt),
+  deletedAt: shipment.deletedAt ? shipment.deletedAt.toISOString() : null,
+  deleteReason: shipment.deleteReason || null,
+  createdAt: shipment.createdAt ? shipment.createdAt.toISOString() : null,
+  ...(includeOrder
+    ? {
+        order: shipment.order
+          ? {
+              id: shipment.order.id,
+              orderNumber: shipment.order.orderNumber,
+              status: shipment.order.status,
+              paymentStatus: shipment.order.paymentStatus,
+              createdAt: shipment.order.createdAt.toISOString(),
+            }
+          : null,
+      }
+    : {}),
+});
+
+const formatOrderLog = (log) => ({
+  id: log.id,
+  orderId: log.orderId,
+  orderNumber: log.order?.orderNumber || log.orderNumberSnapshot || null,
+  action: log.action,
+  fromStatus: log.fromStatus,
+  toStatus: log.toStatus,
+  fromPaymentStatus: log.fromPaymentStatus,
+  toPaymentStatus: log.toPaymentStatus,
+  note: log.note,
+  metadata: log.metadata,
+  createdAt: log.createdAt.toISOString(),
+  admin: log.admin
+    ? {
+        id: log.admin.id,
+        fullName: log.admin.fullName,
+        email: log.admin.email,
+      }
+    : null,
+});
+
+const formatShipmentLog = (log) => ({
+  id: log.id,
+  orderId: log.orderId,
+  orderNumber: log.order?.orderNumber || log.orderNumberSnapshot || null,
+  shipmentId: log.shipmentId,
+  action: log.action,
+  fromStatus: log.fromStatus,
+  toStatus: log.toStatus,
+  courierName: log.courierName,
+  trackingNumber: log.trackingNumber,
+  trackingUrl: log.trackingUrl,
+  note: log.note,
+  metadata: log.metadata,
+  createdAt: log.createdAt.toISOString(),
+  admin: log.admin
+    ? {
+        id: log.admin.id,
+        fullName: log.admin.fullName,
+        email: log.admin.email,
+      }
+    : null,
+});
+
+const formatPaymentLog = (log) => ({
+  id: log.id,
+  paymentId: log.paymentId,
+  orderId: log.orderId,
+  orderNumber: log.order?.orderNumber || log.orderNumberSnapshot || null,
+  action: log.action,
+  fromStatus: log.fromStatus,
+  toStatus: log.toStatus,
+  amount: toNumber(log.amount),
+  note: log.note,
+  metadata: log.metadata,
+  createdAt: log.createdAt.toISOString(),
+  admin: log.admin
+    ? {
+        id: log.admin.id,
+        fullName: log.admin.fullName,
+        email: log.admin.email,
+      }
+    : null,
+});
 
 const getDashboard = async (req, res) => {
   const todayStart = startOfUtcDay(new Date());
@@ -448,6 +961,7 @@ const getDashboard = async (req, res) => {
   ] = await prisma.$transaction([
     prisma.order.aggregate({
       where: {
+        deletedAt: null,
         createdAt: { gte: todayStart, lte: todayEnd },
         paymentStatus: 'SUCCESS',
       },
@@ -455,12 +969,19 @@ const getDashboard = async (req, res) => {
     }),
     prisma.order.count({
       where: {
+        deletedAt: null,
         createdAt: { gte: todayStart, lte: todayEnd },
       },
     }),
-    prisma.order.count({ where: { status: 'PENDING' } }),
+    prisma.order.count({
+      where: {
+        deletedAt: null,
+        status: 'PENDING',
+      },
+    }),
     prisma.order.findMany({
       where: {
+        deletedAt: null,
         createdAt: { gte: seriesStart, lte: todayEnd },
         paymentStatus: 'SUCCESS',
       },
@@ -471,6 +992,9 @@ const getDashboard = async (req, res) => {
     }),
     prisma.order.groupBy({
       by: ['status'],
+      where: {
+        deletedAt: null,
+      },
       _count: { status: true },
     }),
     prisma.inventory.count({
@@ -480,6 +1004,11 @@ const getDashboard = async (req, res) => {
     }),
     prisma.orderItem.groupBy({
       by: ['variantId'],
+      where: {
+        order: {
+          deletedAt: null,
+        },
+      },
       _sum: {
         quantity: true,
       },
@@ -491,6 +1020,9 @@ const getDashboard = async (req, res) => {
       take: 1,
     }),
     prisma.order.findMany({
+      where: {
+        deletedAt: null,
+      },
       take: 8,
       orderBy: {
         createdAt: 'desc',
@@ -509,6 +1041,12 @@ const getDashboard = async (req, res) => {
       },
     }),
     prisma.orderShipment.findMany({
+      where: {
+        deletedAt: null,
+        order: {
+          deletedAt: null,
+        },
+      },
       take: 8,
       orderBy: {
         createdAt: 'desc',
@@ -524,6 +1062,7 @@ const getDashboard = async (req, res) => {
     }),
     prisma.payment.findMany({
       where: {
+        deletedAt: null,
         status: 'SUCCESS',
       },
       take: 8,
@@ -686,8 +1225,10 @@ const listOrders = async (req, res) => {
 
   const status = ensureEnumValue(req.query.status, ORDER_STATUSES, 'status');
   const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
 
   const where = {
+    ...(includeDeleted ? {} : { deletedAt: null }),
     ...(status ? { status } : {}),
     ...(search
       ? {
@@ -750,6 +1291,7 @@ const listOrders = async (req, res) => {
           },
         },
         shipments: {
+          ...(includeDeleted ? {} : { where: { deletedAt: null } }),
           orderBy: {
             createdAt: 'desc',
           },
@@ -767,6 +1309,7 @@ const listOrders = async (req, res) => {
 
 const getOrderById = async (req, res) => {
   const { orderId } = req.params;
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -794,11 +1337,13 @@ const getOrderById = async (req, res) => {
       },
       orderAddress: true,
       shipments: {
+        ...(includeDeleted ? {} : { where: { deletedAt: null } }),
         orderBy: {
           createdAt: 'desc',
         },
       },
       payments: {
+        ...(includeDeleted ? {} : { where: { deletedAt: null } }),
         orderBy: {
           createdAt: 'asc',
         },
@@ -806,7 +1351,7 @@ const getOrderById = async (req, res) => {
     },
   });
 
-  if (!order) {
+  if (!order || (!includeDeleted && order.deletedAt)) {
     throw createError(404, 'Order not found');
   }
 
@@ -816,17 +1361,31 @@ const getOrderById = async (req, res) => {
 const updateOrderStatus = async (req, res) => {
   const { orderId } = req.params;
   const status = ensureEnumValue(req.body?.status, ORDER_STATUSES, 'status');
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { adminId } = getAdminActor(req);
 
   if (!status) {
     throw createError(400, 'status is required');
   }
 
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) {
-    throw createError(404, 'Order not found');
-  }
-
   await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!order) {
+      throw createError(404, 'Order not found');
+    }
+    if (order.deletedAt) {
+      throw createError(409, 'Cannot update a cancelled order');
+    }
+
     await tx.order.update({
       where: { id: orderId },
       data: {
@@ -834,16 +1393,32 @@ const updateOrderStatus = async (req, res) => {
       },
     });
 
+    if (order.status !== status || note) {
+      await createOrderLogTx(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'STATUS_UPDATED',
+        fromStatus: order.status,
+        toStatus: status,
+        note: note || null,
+      });
+    }
+
     if (status === 'SHIPPED' || status === 'DELIVERED') {
       const currentShipment = await tx.orderShipment.findFirst({
-        where: { orderId },
+        where: {
+          orderId,
+          deletedAt: null,
+        },
         orderBy: { createdAt: 'desc' },
       });
 
       const shipmentStatus = status === 'SHIPPED' ? 'SHIPPED' : 'DELIVERED';
 
+      let savedShipment;
       if (currentShipment) {
-        await tx.orderShipment.update({
+        savedShipment = await tx.orderShipment.update({
           where: { id: currentShipment.id },
           data: {
             status: shipmentStatus,
@@ -851,12 +1426,28 @@ const updateOrderStatus = async (req, res) => {
           },
         });
       } else {
-        await tx.orderShipment.create({
+        savedShipment = await tx.orderShipment.create({
           data: {
             orderId,
             status: shipmentStatus,
             shippedAt: status === 'SHIPPED' ? new Date() : null,
           },
+        });
+      }
+
+      if (!currentShipment || currentShipment.status !== shipmentStatus || note) {
+        await createShipmentLogTx(tx, {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          shipmentId: savedShipment.id,
+          adminId,
+          action: currentShipment ? 'STATUS_SYNC_FROM_ORDER' : 'CREATED_FROM_ORDER_STATUS',
+          fromStatus: currentShipment?.status,
+          toStatus: shipmentStatus,
+          courierName: savedShipment.courierName,
+          trackingNumber: savedShipment.trackingNumber,
+          trackingUrl: savedShipment.trackingUrl,
+          note: note || null,
         });
       }
     }
@@ -886,6 +1477,9 @@ const updateOrderStatus = async (req, res) => {
         },
       },
       shipments: {
+        where: {
+          deletedAt: null,
+        },
         orderBy: {
           createdAt: 'desc',
         },
@@ -907,6 +1501,8 @@ const updateOrderStatus = async (req, res) => {
 const updateOrderPaymentStatus = async (req, res) => {
   const { orderId } = req.params;
   const paymentStatus = ensureEnumValue(req.body?.paymentStatus, PAYMENT_STATUSES, 'paymentStatus');
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { adminId } = getAdminActor(req);
 
   if (!paymentStatus) {
     throw createError(400, 'paymentStatus is required');
@@ -915,12 +1511,35 @@ const updateOrderPaymentStatus = async (req, res) => {
   const updatedOrder = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
-      include: {
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        paymentStatus: true,
+        paymentMethod: true,
+        razorpayOrderId: true,
+        razorpayPaymentId: true,
+        totalAmount: true,
+        deletedAt: true,
         payments: {
+          where: {
+            deletedAt: null,
+          },
           orderBy: {
             createdAt: 'desc',
           },
           take: 1,
+          select: {
+            id: true,
+            gateway: true,
+            gatewayOrderId: true,
+            gatewayPaymentId: true,
+            externalReference: true,
+            amount: true,
+            status: true,
+            paidAt: true,
+            note: true,
+          },
         },
       },
     });
@@ -928,13 +1547,130 @@ const updateOrderPaymentStatus = async (req, res) => {
     if (!order) {
       throw createError(404, 'Order not found');
     }
+    if (order.deletedAt) {
+      throw createError(409, 'Cannot update payment status for a cancelled order');
+    }
 
-    const updated = await tx.order.update({
+    const latestPayment = order.payments?.[0] || null;
+    let touchedPayment;
+
+    if (latestPayment) {
+      const resolvedGatewayOrderId = latestPayment.gatewayOrderId
+        || (latestPayment.gateway === 'RAZORPAY' ? order.razorpayOrderId || null : null);
+      const resolvedGatewayPaymentId = latestPayment.gatewayPaymentId
+        || (latestPayment.gateway === 'RAZORPAY' ? order.razorpayPaymentId || null : null);
+
+      assertPaymentReferences({
+        gateway: latestPayment.gateway,
+        status: paymentStatus,
+        gatewayOrderId: resolvedGatewayOrderId,
+        gatewayPaymentId: resolvedGatewayPaymentId,
+        externalReference: latestPayment.externalReference || null,
+        context: 'order payment status update',
+      });
+
+      touchedPayment = await tx.payment.update({
+        where: { id: latestPayment.id },
+        data: {
+          status: paymentStatus,
+          gatewayOrderId: resolvedGatewayOrderId,
+          gatewayPaymentId: resolvedGatewayPaymentId,
+          paidAt: paymentStatus === 'SUCCESS'
+            ? (latestPayment.paidAt || new Date())
+            : null,
+          ...(note !== undefined ? { note: note || null } : {}),
+        },
+      });
+
+      if (latestPayment.status !== touchedPayment.status || note) {
+        await createPaymentLogTx(tx, {
+          paymentId: touchedPayment.id,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          adminId,
+          action: 'STATUS_UPDATED',
+          fromStatus: latestPayment.status,
+          toStatus: touchedPayment.status,
+          amount: touchedPayment.amount,
+          note: note || null,
+          metadata: {
+            source: 'ORDER_PAYMENT_STATUS_ENDPOINT',
+          },
+        });
+      }
+    } else {
+      const resolvedGatewayOrderId = order.paymentMethod === 'RAZORPAY'
+        ? order.razorpayOrderId || null
+        : null;
+      const resolvedGatewayPaymentId = order.paymentMethod === 'RAZORPAY'
+        ? order.razorpayPaymentId || null
+        : null;
+
+      assertPaymentReferences({
+        gateway: order.paymentMethod,
+        status: paymentStatus,
+        gatewayOrderId: resolvedGatewayOrderId,
+        gatewayPaymentId: resolvedGatewayPaymentId,
+        externalReference: null,
+        context: 'order payment status update',
+      });
+
+      touchedPayment = await tx.payment.create({
+        data: {
+          orderId: order.id,
+          gateway: order.paymentMethod,
+          gatewayOrderId: resolvedGatewayOrderId,
+          gatewayPaymentId: resolvedGatewayPaymentId,
+          amount: order.totalAmount,
+          status: paymentStatus,
+          paidAt: paymentStatus === 'SUCCESS' ? new Date() : null,
+          idempotencyKey: `admin-order-payment-status-${randomUUID()}`,
+          ...(note !== undefined ? { note: note || null } : {}),
+        },
+      });
+
+      await createPaymentLogTx(tx, {
+        paymentId: touchedPayment.id,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'CREATED',
+        toStatus: touchedPayment.status,
+        amount: touchedPayment.amount,
+        note: note || null,
+        metadata: {
+          source: 'ORDER_PAYMENT_STATUS_ENDPOINT',
+        },
+      });
+    }
+
+    const syncResult = await syncOrderPaymentStateTx(tx, order.id);
+
+    if (
+      order.paymentStatus !== syncResult.toPaymentStatus
+      || order.status !== syncResult.toStatus
+      || note
+    ) {
+      await createOrderLogTx(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'PAYMENT_STATUS_UPDATED',
+        fromStatus: syncResult.fromStatus,
+        toStatus: syncResult.toStatus,
+        fromPaymentStatus: syncResult.fromPaymentStatus,
+        toPaymentStatus: syncResult.toPaymentStatus,
+        note: note || null,
+        metadata: {
+          requestedPaymentStatus: paymentStatus,
+          paymentId: touchedPayment.id,
+          source: 'ORDER_PAYMENT_STATUS_ENDPOINT',
+        },
+      });
+    }
+
+    return tx.order.findUnique({
       where: { id: orderId },
-      data: {
-        paymentStatus,
-        ...(paymentStatus === 'SUCCESS' && order.status === 'PENDING' ? { status: 'PAID' } : {}),
-      },
       include: {
         user: {
           select: {
@@ -957,6 +1693,9 @@ const updateOrderPaymentStatus = async (req, res) => {
           },
         },
         shipments: {
+          where: {
+            deletedAt: null,
+          },
           orderBy: {
             createdAt: 'desc',
           },
@@ -964,35 +1703,11 @@ const updateOrderPaymentStatus = async (req, res) => {
         },
       },
     });
-
-    const latestPayment = order.payments?.[0] || null;
-    if (latestPayment) {
-      await tx.payment.update({
-        where: { id: latestPayment.id },
-        data: {
-          status: paymentStatus,
-          paidAt: paymentStatus === 'SUCCESS' ? new Date() : null,
-        },
-      });
-    } else {
-      const gatewayOrderId = order.razorpayOrderId || `manual-order-${order.id}`;
-      const gatewayPaymentId = order.razorpayPaymentId || `manual-payment-${order.id}`;
-
-      await tx.payment.create({
-        data: {
-          orderId: order.id,
-          gateway: order.paymentMethod,
-          gatewayOrderId,
-          gatewayPaymentId,
-          amount: order.totalAmount,
-          status: paymentStatus,
-          paidAt: paymentStatus === 'SUCCESS' ? new Date() : null,
-        },
-      });
-    }
-
-    return updated;
   });
+
+  if (!updatedOrder) {
+    throw createError(500, 'Order could not be loaded after payment status update');
+  }
 
   return res.status(200).json({
     message: 'Order payment status updated successfully',
@@ -1003,22 +1718,51 @@ const updateOrderPaymentStatus = async (req, res) => {
 const updateOrderShipment = async (req, res) => {
   const { orderId } = req.params;
   const shipmentStatus = ensureEnumValue(req.body?.status, SHIPMENT_STATUSES, 'status');
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { adminId } = getAdminActor(req);
+  const parsedShippedAt = req.body?.shippedAt !== undefined
+    ? (req.body.shippedAt ? new Date(req.body.shippedAt) : null)
+    : undefined;
+
+  if (parsedShippedAt && Number.isNaN(parsedShippedAt.getTime())) {
+    throw createError(400, 'shippedAt must be a valid date');
+  }
 
   const payload = {
     ...(req.body.courierName !== undefined ? { courierName: req.body.courierName || null } : {}),
     ...(req.body.trackingNumber !== undefined ? { trackingNumber: req.body.trackingNumber || null } : {}),
     ...(req.body.trackingUrl !== undefined ? { trackingUrl: req.body.trackingUrl || null } : {}),
     ...(shipmentStatus ? { status: shipmentStatus } : {}),
+    ...(parsedShippedAt !== undefined ? { shippedAt: parsedShippedAt } : {}),
   };
 
+  if (Object.keys(payload).length === 0 && !note) {
+    throw createError(400, 'No shipment fields provided to update');
+  }
+
   const shipment = await prisma.$transaction(async (tx) => {
-    const order = await tx.order.findUnique({ where: { id: orderId } });
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        deletedAt: true,
+      },
+    });
+
     if (!order) {
       throw createError(404, 'Order not found');
     }
+    if (order.deletedAt) {
+      throw createError(409, 'Cannot update shipment for a cancelled order');
+    }
 
     const existingShipment = await tx.orderShipment.findFirst({
-      where: { orderId },
+      where: {
+        orderId,
+        deletedAt: null,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -1030,7 +1774,9 @@ const updateOrderShipment = async (req, res) => {
         where: { id: existingShipment.id },
         data: {
           ...payload,
-          ...(shouldSetShippedAt && !existingShipment.shippedAt ? { shippedAt: new Date() } : {}),
+          ...(parsedShippedAt === undefined && shouldSetShippedAt && !existingShipment.shippedAt
+            ? { shippedAt: new Date() }
+            : {}),
         },
       });
     } else {
@@ -1038,39 +1784,68 @@ const updateOrderShipment = async (req, res) => {
         data: {
           orderId,
           ...payload,
-          ...(shouldSetShippedAt ? { shippedAt: new Date() } : {}),
+          ...(parsedShippedAt === undefined && shouldSetShippedAt ? { shippedAt: new Date() } : {}),
         },
       });
     }
 
-    if (shipmentStatus === 'SHIPPED' || shipmentStatus === 'DELIVERED') {
+    const nextOrderStatus = shipmentStatus === 'SHIPPED'
+      ? 'SHIPPED'
+      : shipmentStatus === 'DELIVERED'
+        ? 'DELIVERED'
+        : order.status;
+
+    if (nextOrderStatus !== order.status) {
       await tx.order.update({
         where: { id: orderId },
         data: {
-          status: shipmentStatus === 'SHIPPED' ? 'SHIPPED' : 'DELIVERED',
+          status: nextOrderStatus,
         },
       });
+
+      await createOrderLogTx(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'STATUS_SYNCED_FROM_SHIPMENT',
+        fromStatus: order.status,
+        toStatus: nextOrderStatus,
+        note: note || null,
+      });
     }
+
+    await createShipmentLogTx(tx, {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      shipmentId: savedShipment.id,
+      adminId,
+      action: existingShipment ? 'UPDATED' : 'CREATED',
+      fromStatus: existingShipment?.status,
+      toStatus: savedShipment.status,
+      courierName: savedShipment.courierName,
+      trackingNumber: savedShipment.trackingNumber,
+      trackingUrl: savedShipment.trackingUrl,
+      note: note || null,
+      metadata: existingShipment
+        ? {
+            updatedFields: Object.keys(payload),
+          }
+        : null,
+    });
 
     return savedShipment;
   });
 
   return res.status(200).json({
     message: 'Shipment updated successfully',
-    shipment: {
-      id: shipment.id,
-      courierName: shipment.courierName,
-      trackingNumber: shipment.trackingNumber,
-      trackingUrl: shipment.trackingUrl,
-      status: shipment.status,
-      shippedAt: shipment.shippedAt ? shipment.shippedAt.toISOString() : null,
-    },
+    shipment: formatShipment(shipment),
   });
 };
 
 const deleteOrder = async (req, res) => {
   const { orderId } = req.params;
   const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : undefined;
+  const { adminId } = getAdminActor(req);
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -1093,6 +1868,9 @@ const deleteOrder = async (req, res) => {
       },
       orderAddress: true,
       shipments: {
+        where: {
+          deletedAt: null,
+        },
         orderBy: {
           createdAt: 'desc',
         },
@@ -1104,17 +1882,1484 @@ const deleteOrder = async (req, res) => {
   if (!order) {
     throw createError(404, 'Order not found');
   }
+  if (order.deletedAt) {
+    throw createError(409, 'Order has already been cancelled');
+  }
 
-  await prisma.order.delete({
-    where: { id: orderId },
+  const softDeletedOrder = await prisma.$transaction(async (tx) => {
+    const activeShipments = await tx.orderShipment.findMany({
+      where: {
+        orderId: order.id,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        status: true,
+        courierName: true,
+        trackingNumber: true,
+        trackingUrl: true,
+      },
+    });
+
+    if (activeShipments.length > 0) {
+      for (const shipment of activeShipments) {
+        await createShipmentLogTx(tx, {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          shipmentId: shipment.id,
+          adminId,
+          action: 'VOIDED_BY_ORDER_CANCELLATION',
+          fromStatus: shipment.status,
+          toStatus: shipment.status,
+          courierName: shipment.courierName,
+          trackingNumber: shipment.trackingNumber,
+          trackingUrl: shipment.trackingUrl,
+          note: reason || null,
+        });
+      }
+
+      await tx.orderShipment.updateMany({
+        where: {
+          orderId: order.id,
+          deletedAt: null,
+        },
+        data: {
+          deletedAt: new Date(),
+          deleteReason: reason || null,
+          deletedBy: adminId,
+        },
+      });
+    }
+
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: 'CANCELLED',
+        deletedAt: new Date(),
+        deleteReason: reason || null,
+        deletedBy: adminId,
+      },
+    });
+
+    await createOrderLogTx(tx, {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      adminId,
+      action: 'CANCELLED',
+      fromStatus: order.status,
+      toStatus: 'CANCELLED',
+      fromPaymentStatus: order.paymentStatus,
+      toPaymentStatus: order.paymentStatus,
+      note: reason || null,
+      metadata: {
+        totalAmount: toNumber(order.totalAmount),
+        itemsCount: (order.items || []).reduce((acc, item) => acc + item.quantity, 0),
+        cancelledShipmentCount: activeShipments.length,
+      },
+    });
+
+    return tx.order.findUnique({
+      where: { id: order.id },
+      include: {
+        items: {
+          select: {
+            quantity: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+          },
+        },
+        orderAddress: {
+          select: {
+            name: true,
+            email: true,
+            phone: true,
+          },
+        },
+        shipments: {
+          where: {
+            deletedAt: null,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
+      },
+    });
   });
 
+  if (!softDeletedOrder) {
+    throw createError(500, 'Order could not be loaded after cancellation');
+  }
+
   return res.status(200).json({
-    message: 'Order deleted successfully',
+    message: 'Order cancelled successfully',
     order: {
-      ...formatOrderSummary(order),
+      ...formatOrderSummary(softDeletedOrder),
       reason: reason || null,
     },
+  });
+};
+
+const listOrderLogs = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const orderId = req.params.orderId || (typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined);
+  const action = typeof req.query.action === 'string' ? req.query.action.trim().toUpperCase() : undefined;
+  const adminId = typeof req.query.adminId === 'string' ? req.query.adminId.trim() : undefined;
+  const status = ensureEnumValue(req.query.status, ORDER_STATUSES, 'status');
+  const paymentStatus = ensureEnumValue(req.query.paymentStatus, PAYMENT_STATUSES, 'paymentStatus');
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'order log date range');
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+  const and = [];
+  if (status) {
+    and.push({
+      OR: [{ fromStatus: status }, { toStatus: status }],
+    });
+  }
+  if (paymentStatus) {
+    and.push({
+      OR: [{ fromPaymentStatus: paymentStatus }, { toPaymentStatus: paymentStatus }],
+    });
+  }
+  if (search) {
+    and.push({
+      OR: [
+        { note: { contains: search, mode: 'insensitive' } },
+        { orderNumberSnapshot: { contains: search, mode: 'insensitive' } },
+        { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        { admin: { fullName: { contains: search, mode: 'insensitive' } } },
+        { admin: { email: { contains: search, mode: 'insensitive' } } },
+      ],
+    });
+  }
+
+  const where = {
+    ...(orderId ? { orderId } : {}),
+    ...(action ? { action } : {}),
+    ...(adminId ? { adminId } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(and.length ? { AND: and } : {}),
+  };
+
+  const [total, logs] = await prisma.$transaction([
+    prisma.orderLog.count({ where }),
+    prisma.orderLog.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+          },
+        },
+        admin: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    logs: logs.map(formatOrderLog),
+    pagination: buildPagination(total, skip, take),
+  });
+};
+
+const listShipments = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const status = ensureEnumValue(req.query.status, SHIPMENT_STATUSES, 'status');
+  const orderId = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined;
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'shipment date range');
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
+
+  const where = {
+    ...(includeDeleted ? {} : { deletedAt: null }),
+    ...(status ? { status } : {}),
+    ...(orderId ? { orderId } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(search
+      ? {
+          OR: [
+            { trackingNumber: { contains: search, mode: 'insensitive' } },
+            { courierName: { contains: search, mode: 'insensitive' } },
+            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, shipments] = await prisma.$transaction([
+    prisma.orderShipment.count({ where }),
+    prisma.orderShipment.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            deletedAt: true,
+            createdAt: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    shipments: shipments.map((shipment) => formatShipment(shipment, true)),
+    pagination: buildPagination(total, skip, take),
+  });
+};
+
+const getShipmentById = async (req, res) => {
+  const { shipmentId } = req.params;
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
+
+  const shipment = await prisma.orderShipment.findUnique({
+    where: { id: shipmentId },
+    include: {
+      order: {
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          paymentStatus: true,
+          createdAt: true,
+        },
+      },
+      shipmentLogs: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 50,
+        include: {
+          admin: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!shipment || (!includeDeleted && shipment.deletedAt)) {
+    throw createError(404, 'Shipment not found');
+  }
+
+  return res.status(200).json({
+    shipment: formatShipment(shipment, true),
+    logs: shipment.shipmentLogs.map(formatShipmentLog),
+  });
+};
+
+const createShipmentForOrder = async (req, res) => {
+  const { orderId } = req.params;
+  const requestedStatus = ensureEnumValue(req.body?.status, SHIPMENT_STATUSES, 'status');
+  const status = requestedStatus || 'PENDING';
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { adminId } = getAdminActor(req);
+  const parsedShippedAt = req.body?.shippedAt ? new Date(req.body.shippedAt) : undefined;
+
+  if (parsedShippedAt && Number.isNaN(parsedShippedAt.getTime())) {
+    throw createError(400, 'shippedAt must be a valid date');
+  }
+
+  const shipment = await prisma.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        deletedAt: true,
+      },
+    });
+
+    if (!order) {
+      throw createError(404, 'Order not found');
+    }
+    if (order.deletedAt) {
+      throw createError(409, 'Cannot create shipment for a cancelled order');
+    }
+
+    const savedShipment = await tx.orderShipment.create({
+      data: {
+        orderId,
+        courierName: req.body?.courierName || null,
+        trackingNumber: req.body?.trackingNumber || null,
+        trackingUrl: req.body?.trackingUrl || null,
+        status,
+        shippedAt: parsedShippedAt || ((status === 'SHIPPED' || status === 'DELIVERED') ? new Date() : null),
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    await createShipmentLogTx(tx, {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      shipmentId: savedShipment.id,
+      adminId,
+      action: 'CREATED',
+      toStatus: savedShipment.status,
+      courierName: savedShipment.courierName,
+      trackingNumber: savedShipment.trackingNumber,
+      trackingUrl: savedShipment.trackingUrl,
+      note: note || null,
+    });
+
+    const nextOrderStatus = status === 'SHIPPED'
+      ? 'SHIPPED'
+      : status === 'DELIVERED'
+        ? 'DELIVERED'
+        : order.status;
+
+    if (nextOrderStatus !== order.status) {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          status: nextOrderStatus,
+        },
+      });
+
+      await createOrderLogTx(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'STATUS_SYNCED_FROM_SHIPMENT',
+        fromStatus: order.status,
+        toStatus: nextOrderStatus,
+        note: note || null,
+      });
+    }
+
+    return tx.orderShipment.findUnique({
+      where: { id: savedShipment.id },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+  });
+
+  if (!shipment) {
+    throw createError(500, 'Shipment could not be loaded after creation');
+  }
+
+  return res.status(201).json({
+    message: 'Shipment created successfully',
+    shipment: formatShipment(shipment, true),
+  });
+};
+
+const updateShipmentById = async (req, res) => {
+  const { shipmentId } = req.params;
+  const shipmentStatus = ensureEnumValue(req.body?.status, SHIPMENT_STATUSES, 'status');
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { adminId } = getAdminActor(req);
+  const parsedShippedAt = req.body?.shippedAt !== undefined
+    ? (req.body.shippedAt ? new Date(req.body.shippedAt) : null)
+    : undefined;
+
+  if (parsedShippedAt && Number.isNaN(parsedShippedAt.getTime())) {
+    throw createError(400, 'shippedAt must be a valid date');
+  }
+
+  const payload = {
+    ...(req.body?.courierName !== undefined ? { courierName: req.body.courierName || null } : {}),
+    ...(req.body?.trackingNumber !== undefined ? { trackingNumber: req.body.trackingNumber || null } : {}),
+    ...(req.body?.trackingUrl !== undefined ? { trackingUrl: req.body.trackingUrl || null } : {}),
+    ...(shipmentStatus ? { status: shipmentStatus } : {}),
+    ...(parsedShippedAt !== undefined ? { shippedAt: parsedShippedAt } : {}),
+  };
+
+  if (Object.keys(payload).length === 0 && !note) {
+    throw createError(400, 'No shipment fields provided to update');
+  }
+
+  const updatedShipment = await prisma.$transaction(async (tx) => {
+    const existingShipment = await tx.orderShipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!existingShipment) {
+      throw createError(404, 'Shipment not found');
+    }
+    if (existingShipment.deletedAt) {
+      throw createError(409, 'Shipment has been cancelled');
+    }
+    if (existingShipment.order.deletedAt) {
+      throw createError(409, 'Cannot update shipment for a cancelled order');
+    }
+
+    const shouldSetShippedAt = shipmentStatus === 'SHIPPED' || shipmentStatus === 'DELIVERED';
+    const savedShipment = await tx.orderShipment.update({
+      where: { id: shipmentId },
+      data: {
+        ...payload,
+        ...(parsedShippedAt === undefined && shouldSetShippedAt && !existingShipment.shippedAt
+          ? { shippedAt: new Date() }
+          : {}),
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    const nextOrderStatus = shipmentStatus === 'SHIPPED'
+      ? 'SHIPPED'
+      : shipmentStatus === 'DELIVERED'
+        ? 'DELIVERED'
+        : existingShipment.order.status;
+
+    if (nextOrderStatus !== existingShipment.order.status) {
+      await tx.order.update({
+        where: { id: existingShipment.order.id },
+        data: {
+          status: nextOrderStatus,
+        },
+      });
+
+      await createOrderLogTx(tx, {
+        orderId: existingShipment.order.id,
+        orderNumber: existingShipment.order.orderNumber,
+        adminId,
+        action: 'STATUS_SYNCED_FROM_SHIPMENT',
+        fromStatus: existingShipment.order.status,
+        toStatus: nextOrderStatus,
+        note: note || null,
+      });
+    }
+
+    await createShipmentLogTx(tx, {
+      orderId: existingShipment.order.id,
+      orderNumber: existingShipment.order.orderNumber,
+      shipmentId: savedShipment.id,
+      adminId,
+      action: existingShipment.status !== savedShipment.status ? 'STATUS_UPDATED' : 'UPDATED',
+      fromStatus: existingShipment.status,
+      toStatus: savedShipment.status,
+      courierName: savedShipment.courierName,
+      trackingNumber: savedShipment.trackingNumber,
+      trackingUrl: savedShipment.trackingUrl,
+      note: note || null,
+      metadata: {
+        updatedFields: Object.keys(payload),
+      },
+    });
+
+    return tx.orderShipment.findUnique({
+      where: { id: savedShipment.id },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+  });
+
+  if (!updatedShipment) {
+    throw createError(500, 'Shipment could not be loaded after update');
+  }
+
+  return res.status(200).json({
+    message: 'Shipment updated successfully',
+    shipment: formatShipment(updatedShipment, true),
+  });
+};
+
+const deleteShipmentById = async (req, res) => {
+  const { shipmentId } = req.params;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : undefined;
+  const { adminId } = getAdminActor(req);
+
+  const deletedShipment = await prisma.$transaction(async (tx) => {
+    const shipment = await tx.orderShipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+
+    if (!shipment) {
+      throw createError(404, 'Shipment not found');
+    }
+    if (shipment.deletedAt) {
+      throw createError(409, 'Shipment has already been cancelled');
+    }
+
+    await createShipmentLogTx(tx, {
+      orderId: shipment.order.id,
+      orderNumber: shipment.order.orderNumber,
+      shipmentId: shipment.id,
+      adminId,
+      action: 'VOIDED',
+      fromStatus: shipment.status,
+      toStatus: shipment.status,
+      courierName: shipment.courierName,
+      trackingNumber: shipment.trackingNumber,
+      trackingUrl: shipment.trackingUrl,
+      note: reason || null,
+    });
+
+    await tx.orderShipment.update({
+      where: { id: shipment.id },
+      data: {
+        deletedAt: new Date(),
+        deleteReason: reason || null,
+        deletedBy: adminId,
+      },
+    });
+
+    const latestActiveShipment = await tx.orderShipment.findFirst({
+      where: {
+        orderId: shipment.order.id,
+        deletedAt: null,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        status: true,
+      },
+    });
+
+    const inferredOrderStatus = latestActiveShipment?.status === 'DELIVERED'
+      ? 'DELIVERED'
+      : latestActiveShipment?.status === 'SHIPPED'
+        ? 'SHIPPED'
+        : (shipment.order.status === 'DELIVERED' || shipment.order.status === 'SHIPPED')
+          ? 'PENDING'
+          : shipment.order.status;
+
+    if (inferredOrderStatus !== shipment.order.status) {
+      await tx.order.update({
+        where: { id: shipment.order.id },
+        data: {
+          status: inferredOrderStatus,
+        },
+      });
+    }
+
+    await createOrderLogTx(tx, {
+      orderId: shipment.order.id,
+      orderNumber: shipment.order.orderNumber,
+      adminId,
+      action: 'SHIPMENT_VOIDED',
+      fromStatus: shipment.order.status,
+      toStatus: inferredOrderStatus,
+      fromPaymentStatus: shipment.order.paymentStatus,
+      toPaymentStatus: shipment.order.paymentStatus,
+      note: reason || null,
+      metadata: {
+        shipmentId: shipment.id,
+        shipmentStatus: shipment.status,
+        previousOrderStatus: shipment.order.status,
+        inferredOrderStatus,
+      },
+    });
+
+    return tx.orderShipment.findUnique({
+      where: { id: shipment.id },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+            paymentStatus: true,
+            createdAt: true,
+          },
+        },
+      },
+    });
+  });
+
+  if (!deletedShipment) {
+    throw createError(500, 'Shipment could not be loaded after cancellation');
+  }
+
+  return res.status(200).json({
+    message: 'Shipment cancelled successfully',
+    shipment: formatShipment(deletedShipment, true),
+  });
+};
+
+const listShipmentLogs = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const shipmentId = req.params.shipmentId || (typeof req.query.shipmentId === 'string' ? req.query.shipmentId.trim() : undefined);
+  const orderId = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined;
+  const adminId = typeof req.query.adminId === 'string' ? req.query.adminId.trim() : undefined;
+  const action = typeof req.query.action === 'string' ? req.query.action.trim().toUpperCase() : undefined;
+  const status = ensureEnumValue(req.query.status, SHIPMENT_STATUSES, 'status');
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'shipment log date range');
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+  const and = [];
+  if (status) {
+    and.push({
+      OR: [{ fromStatus: status }, { toStatus: status }],
+    });
+  }
+  if (search) {
+    and.push({
+      OR: [
+        { note: { contains: search, mode: 'insensitive' } },
+        { orderNumberSnapshot: { contains: search, mode: 'insensitive' } },
+        { trackingNumber: { contains: search, mode: 'insensitive' } },
+        { courierName: { contains: search, mode: 'insensitive' } },
+        { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        { admin: { fullName: { contains: search, mode: 'insensitive' } } },
+        { admin: { email: { contains: search, mode: 'insensitive' } } },
+      ],
+    });
+  }
+
+  const where = {
+    ...(shipmentId ? { shipmentId } : {}),
+    ...(orderId ? { orderId } : {}),
+    ...(adminId ? { adminId } : {}),
+    ...(action ? { action } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(and.length ? { AND: and } : {}),
+  };
+
+  const [total, logs] = await prisma.$transaction([
+    prisma.shipmentLog.count({ where }),
+    prisma.shipmentLog.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        shipment: {
+          select: {
+            id: true,
+            status: true,
+            trackingNumber: true,
+            trackingUrl: true,
+            courierName: true,
+            shippedAt: true,
+            createdAt: true,
+            orderId: true,
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+          },
+        },
+        admin: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    logs: logs.map((log) => ({
+      ...formatShipmentLog(log),
+      shipment: log.shipment ? formatShipment(log.shipment) : null,
+    })),
+    pagination: buildPagination(total, skip, take),
+  });
+};
+
+const listPayments = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const status = ensureEnumValue(req.query.status, PAYMENT_STATUSES, 'status');
+  const gateway = ensureEnumValue(req.query.gateway, PAYMENT_GATEWAYS, 'gateway');
+  const orderId = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined;
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'payment date range');
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
+
+  const where = {
+    ...(includeDeleted ? {} : { deletedAt: null }),
+    ...(status ? { status } : {}),
+    ...(gateway ? { gateway } : {}),
+    ...(orderId ? { orderId } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(search
+      ? {
+          OR: [
+            { gatewayOrderId: { contains: search, mode: 'insensitive' } },
+            { gatewayPaymentId: { contains: search, mode: 'insensitive' } },
+            { externalReference: { contains: search, mode: 'insensitive' } },
+            { note: { contains: search, mode: 'insensitive' } },
+            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+            { order: { user: { email: { contains: search, mode: 'insensitive' } } } },
+            { order: { orderAddress: { email: { contains: search, mode: 'insensitive' } } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, payments] = await prisma.$transaction([
+    prisma.payment.count({ where }),
+    prisma.payment.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        order: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+              },
+            },
+            orderAddress: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    payments: payments.map((payment) => formatPayment(payment, true)),
+    pagination: buildPagination(total, skip, take),
+  });
+};
+
+const getPaymentById = async (req, res) => {
+  const { paymentId } = req.params;
+  const includeDeleted = parseBool(req.query.includeDeleted) === true;
+
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    include: {
+      order: {
+        include: {
+          user: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          orderAddress: {
+            select: {
+              name: true,
+              email: true,
+              phone: true,
+            },
+          },
+        },
+      },
+      paymentLogs: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          admin: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!payment || (!includeDeleted && payment.deletedAt)) {
+    throw createError(404, 'Payment not found');
+  }
+
+  return res.status(200).json({
+    payment: formatPayment(payment, true),
+    logs: payment.paymentLogs.map(formatPaymentLog),
+  });
+};
+
+const createPaymentForOrder = async (req, res) => {
+  const { orderId } = req.params;
+  const gateway = ensureEnumValue(req.body?.gateway, PAYMENT_GATEWAYS, 'gateway');
+  const status = ensureEnumValue(req.body?.status, PAYMENT_STATUSES, 'status') || 'SUCCESS';
+  const amount = parseNumber(req.body?.amount, NaN);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const metadata = parseJsonInput(req.body?.metadata, 'metadata');
+  const paidAt = parseDateTimeInput(req.body?.paidAt, 'paidAt');
+  const externalReferenceInput = parseNullableTextInput(req.body?.externalReference);
+  const gatewayOrderIdInput = parseNullableTextInput(req.body?.gatewayOrderId);
+  const gatewayPaymentIdInput = parseNullableTextInput(req.body?.gatewayPaymentId);
+  const idempotencyKey = parseIdempotencyKey(req);
+  const { adminId } = getAdminActor(req);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw createError(400, 'amount must be greater than 0');
+  }
+  if (!idempotencyKey) {
+    throw createError(400, 'idempotencyKey is required (body.idempotencyKey or Idempotency-Key header)');
+  }
+  if (idempotencyKey.length > 128) {
+    throw createError(400, 'idempotencyKey must be 128 characters or fewer');
+  }
+
+  let replayedFromIdempotency = false;
+  let createdPayment;
+
+  try {
+    createdPayment = await prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          paymentStatus: true,
+          paymentMethod: true,
+          razorpayOrderId: true,
+          razorpayPaymentId: true,
+          deletedAt: true,
+        },
+      });
+
+      if (!order) {
+        throw createError(404, 'Order not found');
+      }
+      if (order.deletedAt) {
+        throw createError(409, 'Cannot create payment for a cancelled order');
+      }
+
+      const resolvedGateway = gateway || order.paymentMethod;
+      const resolvedGatewayOrderId = gatewayOrderIdInput !== undefined
+        ? gatewayOrderIdInput
+        : (resolvedGateway === 'RAZORPAY' ? order.razorpayOrderId || null : null);
+      const resolvedGatewayPaymentId = gatewayPaymentIdInput !== undefined
+        ? gatewayPaymentIdInput
+        : (resolvedGateway === 'RAZORPAY' ? order.razorpayPaymentId || null : null);
+      const resolvedExternalReference = externalReferenceInput !== undefined
+        ? externalReferenceInput
+        : null;
+
+      assertPaymentReferences({
+        gateway: resolvedGateway,
+        status,
+        gatewayOrderId: resolvedGatewayOrderId,
+        gatewayPaymentId: resolvedGatewayPaymentId,
+        externalReference: resolvedExternalReference,
+        context: 'create payment',
+      });
+
+      const existingByIdempotency = await tx.payment.findFirst({
+        where: {
+          orderId: order.id,
+          idempotencyKey,
+          deletedAt: null,
+        },
+      });
+
+      if (existingByIdempotency) {
+        assertIdempotentPaymentPayload(existingByIdempotency, {
+          gateway: resolvedGateway,
+          gatewayOrderId: resolvedGatewayOrderId,
+          gatewayPaymentId: resolvedGatewayPaymentId,
+          externalReference: resolvedExternalReference,
+          amount,
+          status,
+        });
+
+        replayedFromIdempotency = true;
+        await syncOrderPaymentStateTx(tx, order.id);
+
+        return tx.payment.findUnique({
+          where: { id: existingByIdempotency.id },
+          include: {
+            order: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    email: true,
+                    phone: true,
+                  },
+                },
+                orderAddress: {
+                  select: {
+                    name: true,
+                    email: true,
+                    phone: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+      }
+
+      const payment = await tx.payment.create({
+        data: {
+          orderId: order.id,
+          gateway: resolvedGateway,
+          gatewayOrderId: resolvedGatewayOrderId,
+          gatewayPaymentId: resolvedGatewayPaymentId,
+          externalReference: resolvedExternalReference,
+          idempotencyKey,
+          amount,
+          status,
+          paidAt: paidAt !== undefined ? paidAt : (status === 'SUCCESS' ? new Date() : null),
+          ...(note !== undefined ? { note } : {}),
+          ...(metadata !== undefined ? { metadata } : {}),
+        },
+      });
+
+      const syncResult = await syncOrderPaymentStateTx(tx, order.id);
+
+      await createPaymentLogTx(tx, {
+        paymentId: payment.id,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'CREATED',
+        toStatus: payment.status,
+        amount: payment.amount,
+        note: note || null,
+        metadata: {
+          gateway: payment.gateway,
+          gatewayOrderId: payment.gatewayOrderId,
+          gatewayPaymentId: payment.gatewayPaymentId,
+          externalReference: payment.externalReference,
+          idempotencyKey: payment.idempotencyKey,
+        },
+      });
+
+      await createOrderLogTx(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        adminId,
+        action: 'PAYMENT_RECORDED',
+        fromStatus: syncResult.fromStatus,
+        toStatus: syncResult.toStatus,
+        fromPaymentStatus: syncResult.fromPaymentStatus,
+        toPaymentStatus: syncResult.toPaymentStatus,
+        note: note || null,
+        metadata: {
+          paymentId: payment.id,
+          paymentStatus: payment.status,
+          gateway: payment.gateway,
+          amount: toNumber(payment.amount),
+          idempotencyKey: payment.idempotencyKey,
+        },
+      });
+
+      return tx.payment.findUnique({
+        where: { id: payment.id },
+        include: {
+          order: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+              orderAddress: {
+                select: {
+                  name: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (error?.code === 'P2002') {
+      throw createError(409, 'Duplicate payment reference or idempotency key detected');
+    }
+    throw error;
+  }
+
+  if (!createdPayment) {
+    throw createError(500, 'Payment could not be loaded after creation');
+  }
+
+  return res.status(replayedFromIdempotency ? 200 : 201).json({
+    message: replayedFromIdempotency
+      ? 'Idempotency key replayed; returning existing payment'
+      : 'Payment created successfully',
+    payment: formatPayment(createdPayment, true),
+  });
+};
+
+const updatePaymentById = async (req, res) => {
+  const { paymentId } = req.params;
+  const status = ensureEnumValue(req.body?.status, PAYMENT_STATUSES, 'status');
+  const gateway = ensureEnumValue(req.body?.gateway, PAYMENT_GATEWAYS, 'gateway');
+  const amount = req.body?.amount !== undefined ? parseNumber(req.body.amount, NaN) : undefined;
+  const paidAt = parseDateTimeInput(req.body?.paidAt, 'paidAt');
+  const note = req.body?.note !== undefined ? parseNullableTextInput(req.body.note) : undefined;
+  const metadata = parseJsonInput(req.body?.metadata, 'metadata');
+  const externalReference = parseNullableTextInput(req.body?.externalReference);
+  const gatewayOrderId = parseNullableTextInput(req.body?.gatewayOrderId);
+  const gatewayPaymentId = parseNullableTextInput(req.body?.gatewayPaymentId);
+  const { adminId } = getAdminActor(req);
+
+  if (amount !== undefined && (!Number.isFinite(amount) || amount <= 0)) {
+    throw createError(400, 'amount must be greater than 0');
+  }
+
+  const data = {
+    ...(status ? { status } : {}),
+    ...(gateway ? { gateway } : {}),
+    ...(amount !== undefined ? { amount } : {}),
+    ...(externalReference !== undefined ? { externalReference } : {}),
+    ...(gatewayOrderId !== undefined ? { gatewayOrderId } : {}),
+    ...(gatewayPaymentId !== undefined ? { gatewayPaymentId } : {}),
+    ...(note !== undefined ? { note } : {}),
+    ...(metadata !== undefined ? { metadata } : {}),
+    ...(paidAt !== undefined ? { paidAt } : {}),
+  };
+
+  if (status && paidAt === undefined) {
+    if (status === 'SUCCESS') {
+      data.paidAt = new Date();
+    } else {
+      data.paidAt = null;
+    }
+  }
+
+  if (Object.keys(data).length === 0) {
+    throw createError(400, 'No valid payment fields provided to update');
+  }
+
+  let updatedPayment;
+
+  try {
+    updatedPayment = await prisma.$transaction(async (tx) => {
+      const existing = await tx.payment.findUnique({
+        where: { id: paymentId },
+        include: {
+          order: {
+            select: {
+              id: true,
+              orderNumber: true,
+              status: true,
+              paymentStatus: true,
+              deletedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!existing) {
+        throw createError(404, 'Payment not found');
+      }
+      if (existing.deletedAt) {
+        throw createError(409, 'Payment has been voided');
+      }
+      if (existing.order.deletedAt) {
+        throw createError(409, 'Cannot update payment for a cancelled order');
+      }
+
+      const nextGateway = gateway || existing.gateway;
+      const nextStatus = status || existing.status;
+      const nextGatewayOrderId = gatewayOrderId !== undefined ? gatewayOrderId : existing.gatewayOrderId;
+      const nextGatewayPaymentId = gatewayPaymentId !== undefined ? gatewayPaymentId : existing.gatewayPaymentId;
+      const nextExternalReference = externalReference !== undefined ? externalReference : existing.externalReference;
+
+      assertPaymentReferences({
+        gateway: nextGateway,
+        status: nextStatus,
+        gatewayOrderId: nextGatewayOrderId,
+        gatewayPaymentId: nextGatewayPaymentId,
+        externalReference: nextExternalReference,
+        context: 'update payment',
+      });
+
+      const payment = await tx.payment.update({
+        where: { id: paymentId },
+        data,
+      });
+
+      const syncResult = await syncOrderPaymentStateTx(tx, existing.order.id);
+
+      await createPaymentLogTx(tx, {
+        paymentId: payment.id,
+        orderId: existing.order.id,
+        orderNumber: existing.order.orderNumber,
+        adminId,
+        action: existing.status !== payment.status ? 'STATUS_UPDATED' : 'UPDATED',
+        fromStatus: existing.status,
+        toStatus: payment.status,
+        amount: payment.amount,
+        note: note || null,
+        metadata: {
+          updatedFields: Object.keys(data),
+        },
+      });
+
+      await createOrderLogTx(tx, {
+        orderId: existing.order.id,
+        orderNumber: existing.order.orderNumber,
+        adminId,
+        action: 'PAYMENT_UPDATED',
+        fromStatus: syncResult.fromStatus,
+        toStatus: syncResult.toStatus,
+        fromPaymentStatus: syncResult.fromPaymentStatus,
+        toPaymentStatus: syncResult.toPaymentStatus,
+        note: note || null,
+        metadata: {
+          paymentId: payment.id,
+          paymentStatus: payment.status,
+          updatedFields: Object.keys(data),
+        },
+      });
+
+      return tx.payment.findUnique({
+        where: { id: payment.id },
+        include: {
+          order: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+              orderAddress: {
+                select: {
+                  name: true,
+                  email: true,
+                  phone: true,
+                },
+              },
+            },
+          },
+        },
+      });
+    });
+  } catch (error) {
+    if (error?.code === 'P2002') {
+      throw createError(409, 'Duplicate payment reference detected');
+    }
+    throw error;
+  }
+
+  if (!updatedPayment) {
+    throw createError(500, 'Payment could not be loaded after update');
+  }
+
+  return res.status(200).json({
+    message: 'Payment updated successfully',
+    payment: formatPayment(updatedPayment, true),
+  });
+};
+
+const deletePaymentById = async (req, res) => {
+  const { paymentId } = req.params;
+  const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : undefined;
+  const { adminId } = getAdminActor(req);
+
+  const deletedPayment = await prisma.$transaction(async (tx) => {
+    const existing = await tx.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        order: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+              },
+            },
+            orderAddress: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!existing) {
+      throw createError(404, 'Payment not found');
+    }
+    if (existing.deletedAt) {
+      throw createError(409, 'Payment has already been voided');
+    }
+
+    await createPaymentLogTx(tx, {
+      paymentId: existing.id,
+      orderId: existing.order.id,
+      orderNumber: existing.order.orderNumber,
+      adminId,
+      action: 'VOIDED',
+      fromStatus: existing.status,
+      toStatus: existing.status,
+      amount: existing.amount,
+      note: reason || null,
+      metadata: {
+        gateway: existing.gateway,
+        gatewayOrderId: existing.gatewayOrderId,
+        gatewayPaymentId: existing.gatewayPaymentId,
+        externalReference: existing.externalReference,
+      },
+    });
+
+    await tx.payment.update({
+      where: { id: existing.id },
+      data: {
+        deletedAt: new Date(),
+        deleteReason: reason || null,
+        deletedBy: adminId,
+      },
+    });
+
+    const syncResult = await syncOrderPaymentStateTx(tx, existing.order.id);
+
+    await createOrderLogTx(tx, {
+      orderId: existing.order.id,
+      orderNumber: existing.order.orderNumber,
+      adminId,
+      action: 'PAYMENT_VOIDED',
+      fromStatus: syncResult.fromStatus,
+      toStatus: syncResult.toStatus,
+      fromPaymentStatus: syncResult.fromPaymentStatus,
+      toPaymentStatus: syncResult.toPaymentStatus,
+      note: reason || null,
+      metadata: {
+        paymentId: existing.id,
+        deletedPaymentStatus: existing.status,
+      },
+    });
+
+    return tx.payment.findUnique({
+      where: { id: existing.id },
+      include: {
+        order: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+                email: true,
+                phone: true,
+              },
+            },
+            orderAddress: {
+              select: {
+                name: true,
+                email: true,
+                phone: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  if (!deletedPayment) {
+    throw createError(500, 'Payment could not be loaded after cancellation');
+  }
+
+  return res.status(200).json({
+    message: 'Payment voided successfully',
+    payment: {
+      ...formatPayment(deletedPayment, true),
+      reason: reason || null,
+    },
+  });
+};
+
+const listPaymentLogs = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const paymentId = req.params.paymentId || (typeof req.query.paymentId === 'string' ? req.query.paymentId.trim() : undefined);
+  const orderId = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined;
+  const adminId = typeof req.query.adminId === 'string' ? req.query.adminId.trim() : undefined;
+  const action = typeof req.query.action === 'string' ? req.query.action.trim().toUpperCase() : undefined;
+  const status = ensureEnumValue(req.query.status, PAYMENT_STATUSES, 'status');
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'payment log date range');
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+  const and = [];
+  if (status) {
+    and.push({
+      OR: [{ fromStatus: status }, { toStatus: status }],
+    });
+  }
+  if (search) {
+    and.push({
+      OR: [
+        { note: { contains: search, mode: 'insensitive' } },
+        { orderNumberSnapshot: { contains: search, mode: 'insensitive' } },
+        { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        { payment: { gatewayOrderId: { contains: search, mode: 'insensitive' } } },
+        { payment: { gatewayPaymentId: { contains: search, mode: 'insensitive' } } },
+        { payment: { externalReference: { contains: search, mode: 'insensitive' } } },
+        { admin: { fullName: { contains: search, mode: 'insensitive' } } },
+        { admin: { email: { contains: search, mode: 'insensitive' } } },
+      ],
+    });
+  }
+
+  const where = {
+    ...(paymentId ? { paymentId } : {}),
+    ...(orderId ? { orderId } : {}),
+    ...(adminId ? { adminId } : {}),
+    ...(action ? { action } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(and.length ? { AND: and } : {}),
+  };
+
+  const [total, logs] = await prisma.$transaction([
+    prisma.paymentLog.count({ where }),
+    prisma.paymentLog.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        payment: true,
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+          },
+        },
+        admin: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    logs: logs.map((log) => ({
+      ...formatPaymentLog(log),
+      payment: log.payment ? formatPayment(log.payment) : null,
+    })),
+    pagination: buildPagination(total, skip, take),
   });
 };
 
@@ -1600,9 +3845,247 @@ const getInventoryByVariantId = async (req, res) => {
   });
 };
 
+const listInventoryLogs = async (req, res) => {
+  const { skip, take } = parsePagination(req.query, 30, 200);
+  const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+  const type = ensureEnumValue(req.query.type, INVENTORY_LOG_TYPES, 'type');
+  const variantId = typeof req.query.variantId === 'string' ? req.query.variantId.trim() : undefined;
+  const orderId = typeof req.query.orderId === 'string' ? req.query.orderId.trim() : undefined;
+  const createdAt = parseDateFilter(req.query.startDate, req.query.endDate, 'inventory log date range');
+
+  const where = {
+    ...(type ? { type } : {}),
+    ...(variantId ? { variantId } : {}),
+    ...(orderId ? { orderId } : {}),
+    ...(createdAt ? { createdAt } : {}),
+    ...(search
+      ? {
+          OR: [
+            { note: { contains: search, mode: 'insensitive' } },
+            { performedBy: { contains: search, mode: 'insensitive' } },
+            { variant: { sku: { contains: search, mode: 'insensitive' } } },
+            { variant: { product: { name: { contains: search, mode: 'insensitive' } } } },
+            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+          ],
+        }
+      : {}),
+  };
+
+  const [total, logs] = await prisma.$transaction([
+    prisma.inventoryLog.count({ where }),
+    prisma.inventoryLog.findMany({
+      where,
+      skip,
+      take,
+      orderBy: {
+        createdAt: 'desc',
+      },
+      include: {
+        order: {
+          select: {
+            id: true,
+            orderNumber: true,
+          },
+        },
+        variant: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                brand: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  ]);
+
+  return res.status(200).json({
+    logs: logs.map((log) => ({
+      id: log.id,
+      variantId: log.variantId,
+      type: log.type,
+      quantity: log.quantity,
+      note: log.note,
+      performedBy: log.performedBy,
+      order: log.order
+        ? {
+            id: log.order.id,
+            orderNumber: log.order.orderNumber,
+          }
+        : null,
+      variant: {
+        id: log.variant.id,
+        sku: log.variant.sku,
+        size: log.variant.size,
+        color: log.variant.color,
+        product: {
+          id: log.variant.product.id,
+          name: log.variant.product.name,
+          brand: log.variant.product.brand,
+        },
+      },
+      createdAt: log.createdAt.toISOString(),
+    })),
+    pagination: buildPagination(total, skip, take),
+  });
+};
+
+const adjustVariantInventory = async (req, res) => {
+  const { variantId } = req.params;
+  const operation = ensureEnumValue(req.body?.operation, INVENTORY_ADJUST_OPERATIONS, 'operation');
+  const quantity = Number(req.body?.quantity);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const orderId = req.body?.orderId ? String(req.body.orderId) : null;
+  const { performedBy } = getAdminActor(req);
+
+  if (!operation) {
+    throw createError(400, 'operation is required');
+  }
+
+  if (!Number.isInteger(quantity) || quantity < 0) {
+    throw createError(400, 'quantity must be a non-negative integer');
+  }
+
+  if (operation !== 'SET' && quantity === 0) {
+    throw createError(400, 'quantity must be greater than 0 for this operation');
+  }
+
+  const updatedVariant = await prisma.$transaction(async (tx) => {
+    if (orderId) {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { id: true },
+      });
+      if (!order) {
+        throw createError(404, 'orderId not found');
+      }
+    }
+
+    const variant = await tx.productVariant.findUnique({
+      where: { id: variantId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            category: true,
+            gender: true,
+          },
+        },
+      },
+    });
+
+    if (!variant) {
+      throw createError(404, 'Variant not found');
+    }
+
+    const inventory = await ensureLockedInventoryRowTx(tx, variantId);
+
+    const currentQuantity = inventory.quantity;
+    const currentReserved = inventory.reserved;
+    let nextQuantity = currentQuantity;
+    let nextReserved = currentReserved;
+    let logType = 'MANUAL';
+    let logQuantity = quantity;
+
+    switch (operation) {
+      case 'SET':
+        nextQuantity = quantity;
+        logType = nextQuantity >= currentQuantity ? 'RESTOCK' : 'MANUAL';
+        logQuantity = Math.abs(nextQuantity - currentQuantity);
+        break;
+      case 'RESTOCK':
+        nextQuantity = currentQuantity + quantity;
+        logType = 'RESTOCK';
+        break;
+      case 'REDUCE':
+        nextQuantity = currentQuantity - quantity;
+        logType = 'MANUAL';
+        break;
+      case 'HOLD':
+        nextReserved = currentReserved + quantity;
+        logType = 'HOLD';
+        break;
+      case 'RELEASE':
+        nextReserved = currentReserved - quantity;
+        logType = 'RELEASE';
+        break;
+      case 'RETURN':
+        nextQuantity = currentQuantity + quantity;
+        logType = 'RETURN';
+        break;
+      default:
+        throw createError(400, `Unsupported operation: ${operation}`);
+    }
+
+    if (nextQuantity < 0) {
+      throw createError(400, 'Resulting inventory quantity cannot be negative');
+    }
+
+    if (nextReserved < 0) {
+      throw createError(400, 'Resulting reserved quantity cannot be negative');
+    }
+
+    if (nextReserved > nextQuantity) {
+      throw createError(400, 'reserved inventory cannot exceed total quantity');
+    }
+
+    if (nextQuantity === currentQuantity && nextReserved === currentReserved) {
+      throw createError(400, 'No inventory change applied');
+    }
+
+    await tx.inventory.update({
+      where: { id: inventory.id },
+      data: {
+        quantity: nextQuantity,
+        reserved: nextReserved,
+      },
+    });
+
+    await tx.inventoryLog.create({
+      data: {
+        variantId,
+        orderId,
+        quantity: logQuantity,
+        type: logType,
+        performedBy,
+        note: note || `Inventory ${operation.toLowerCase()} via admin panel`,
+      },
+    });
+
+    return tx.productVariant.findUnique({
+      where: { id: variantId },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            brand: true,
+            category: true,
+            gender: true,
+          },
+        },
+        inventory: true,
+      },
+    });
+  });
+
+  return res.status(200).json({
+    message: 'Inventory adjusted successfully',
+    operation,
+    inventory: formatInventoryRow(updatedVariant),
+  });
+};
+
 const updateVariantInventory = async (req, res) => {
   const { variantId } = req.params;
   const quantity = Number(req.body?.quantity);
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
+  const { performedBy } = getAdminActor(req);
 
   if (!Number.isInteger(quantity) || quantity < 0) {
     throw createError(400, 'quantity must be a non-negative integer');
@@ -1614,29 +4097,34 @@ const updateVariantInventory = async (req, res) => {
       throw createError(404, 'Variant not found');
     }
 
-    const existingInventory = await tx.inventory.findUnique({ where: { variantId } });
-    const previousQuantity = existingInventory?.quantity || 0;
+    const lockedInventory = await ensureLockedInventoryRowTx(tx, variantId);
+    const previousQuantity = lockedInventory.quantity;
+    const previousReserved = lockedInventory.reserved;
 
-    const savedInventory = await tx.inventory.upsert({
-      where: { variantId },
-      create: {
-        variantId,
-        quantity,
-      },
-      update: {
+    if (previousReserved > quantity) {
+      throw createError(400, `quantity must be >= reserved stock (${previousReserved})`);
+    }
+
+    const savedInventory = await tx.inventory.update({
+      where: { id: lockedInventory.id },
+      data: {
         quantity,
       },
     });
 
     const diff = quantity - previousQuantity;
-    if (diff !== 0) {
+    if (diff !== 0 || note) {
       await tx.inventoryLog.create({
         data: {
           variantId,
           quantity: Math.abs(diff),
           type: diff > 0 ? 'RESTOCK' : 'MANUAL',
-          performedBy: req.user?.id || 'admin',
-          note: diff > 0 ? 'Inventory restocked via admin panel' : 'Inventory reduced via admin panel',
+          performedBy,
+          note: note || (diff > 0
+            ? 'Inventory restocked via admin panel'
+            : diff < 0
+              ? 'Inventory reduced via admin panel'
+              : 'Inventory reviewed via admin panel'),
         },
       });
     }
@@ -1962,6 +4450,7 @@ const getAnalytics = async (req, res) => {
   const [orders, statusGroups, paymentMethodGroups, topProductGroups] = await prisma.$transaction([
     prisma.order.findMany({
       where: {
+        deletedAt: null,
         createdAt: {
           gte: start,
           lte: end,
@@ -1978,6 +4467,7 @@ const getAnalytics = async (req, res) => {
     prisma.order.groupBy({
       by: ['status'],
       where: {
+        deletedAt: null,
         createdAt: {
           gte: start,
           lte: end,
@@ -1990,6 +4480,7 @@ const getAnalytics = async (req, res) => {
     prisma.order.groupBy({
       by: ['paymentMethod'],
       where: {
+        deletedAt: null,
         createdAt: {
           gte: start,
           lte: end,
@@ -2003,6 +4494,7 @@ const getAnalytics = async (req, res) => {
       by: ['productName'],
       where: {
         order: {
+          deletedAt: null,
           createdAt: {
             gte: start,
             lte: end,
@@ -2370,11 +4862,24 @@ const broadcastNotification = async (req, res) => {
 module.exports = {
   getDashboard,
   listOrders,
+  listOrderLogs,
   getOrderById,
   updateOrderStatus,
   updateOrderPaymentStatus,
+  listPayments,
+  listPaymentLogs,
+  getPaymentById,
+  createPaymentForOrder,
+  updatePaymentById,
+  deletePaymentById,
   updateOrderShipment,
   deleteOrder,
+  listShipments,
+  listShipmentLogs,
+  getShipmentById,
+  createShipmentForOrder,
+  updateShipmentById,
+  deleteShipmentById,
   listProducts,
   getProductById,
   updateProduct,
@@ -2383,7 +4888,9 @@ module.exports = {
   updateVariant,
   deleteVariant,
   getInventory,
+  listInventoryLogs,
   getInventoryByVariantId,
+  adjustVariantInventory,
   updateVariantInventory,
   createVariantImage,
   updateImage,
