@@ -84,7 +84,6 @@ body {
 @media (min-width: 768px) {
   .main-content {
     padding: 32px 40px;
-    padding-left: 296px;
     padding-bottom: 40px;
   }
 }

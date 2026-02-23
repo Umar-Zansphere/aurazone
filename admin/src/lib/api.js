@@ -21,10 +21,17 @@ export class ApiError extends Error {
 
 export const apiFetch = async (path, options = {}) => {
   const { params, headers, ...rest } = options;
+
+  // Don't set Content-Type for FormData — let the browser set multipart/form-data with boundary
+  const isFormData = typeof FormData !== "undefined" && rest.body instanceof FormData;
+  const defaultHeaders = isFormData
+    ? { 'ngrok-skip-browser-warning': 'true' }
+    : { "Content-Type": "application/json", 'ngrok-skip-browser-warning': 'true' };
+
   const response = await fetch(buildUrl(path, params), {
     credentials: "include",
     headers: {
-      "Content-Type": "application/json", 'ngrok-skip-browser-warning': 'true',
+      ...defaultHeaders,
       ...(headers || {}),
     },
     ...rest,

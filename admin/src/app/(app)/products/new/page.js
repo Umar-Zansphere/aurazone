@@ -1,9 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Check, ChevronRight, Plus, Sparkles, Trash2, AlertCircle } from "lucide-react";
+import { Check, ChevronRight, Plus, Sparkles, Trash2, AlertCircle, ImagePlus, X, Image as ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { apiFetch } from "@/lib/api";
 
 const categories = ["RUNNING", "CASUAL", "FORMAL", "SNEAKERS"];
 const genders = ["MEN", "WOMEN", "UNISEX", "KIDS"];
@@ -58,6 +59,10 @@ export default function CreateProductPage() {
     return map;
   }, [form.variants]);
 
+  const totalImages = useMemo(() => {
+    return form.variants.reduce((sum, v) => sum + (v.images?.length || 0), 0);
+  }, [form.variants]);
+
   const addVariant = (copyColor) => {
     setForm((prev) => ({
       ...prev,
@@ -83,6 +88,17 @@ export default function CreateProductPage() {
     setForm((prev) => ({
       ...prev,
       variants: prev.variants.filter((_, idx) => idx !== index),
+    }));
+  };
+
+  const removeVariantImage = (variantIndex, imageIndex) => {
+    setForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant, idx) =>
+        idx === variantIndex
+          ? { ...variant, images: variant.images.filter((_, i) => i !== imageIndex) }
+          : variant
+      ),
     }));
   };
 
@@ -118,15 +134,10 @@ export default function CreateProductPage() {
         });
       });
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api"}/admin/products`, {
+      await apiFetch(`/admin/products`, {
         method: "POST",
-        credentials: "include",
         body: formData,
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to publish");
-      }
 
       setSuccess(true);
       setTimeout(() => router.replace("/products"), 1500);
@@ -148,13 +159,19 @@ export default function CreateProductPage() {
         </div>
         <div className="mt-2 flex gap-4">
           {[1, 2, 3].map((s) => (
-            <span key={s} className={`text-xs font-medium ${step >= s ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"}`}>
+            <button
+              key={s}
+              type="button"
+              onClick={() => s < step && setStep(s)}
+              className={`text-xs font-medium transition-colors ${step >= s ? "text-[var(--text-primary)]" : "text-[var(--text-muted)]"} ${s < step ? "cursor-pointer hover:text-[var(--highlight)]" : ""}`}
+            >
               {s === 1 ? "Details" : s === 2 ? "Variants" : "Review"}
-            </span>
+            </button>
           ))}
         </div>
       </header>
 
+      {/* ═══════════════════ STEP 1: PRODUCT DETAILS ═══════════════════ */}
       {step === 1 ? (
         <section className="card-surface space-y-4 p-4">
           <div>
@@ -259,15 +276,19 @@ export default function CreateProductPage() {
           <button
             type="button"
             onClick={() => setStep(2)}
-            className="app-button app-button-primary flex h-11 w-full items-center justify-center gap-1 text-sm"
+            disabled={!form.name || !form.brand}
+            className="app-button app-button-primary flex h-11 w-full items-center justify-center gap-1 text-sm disabled:opacity-50"
           >
             Next <ChevronRight size={15} />
           </button>
         </section>
       ) : null}
 
+      {/* ═══════════════════ STEP 2: VARIANTS & IMAGES ═══════════════════ */}
       {step === 2 ? (
         <section className="card-surface space-y-4 p-4">
+          <p className="section-title">Sizes, Colors & Images</p>
+
           {Object.entries(colorGroups).map(([color, variants]) => (
             <div key={color} className="rounded-[14px] border border-[var(--border)] p-3">
               <div className="mb-2 flex items-center justify-between">
@@ -331,8 +352,9 @@ export default function CreateProductPage() {
                         <input
                           value={variant.price}
                           onChange={(event) => patchVariant(variant.index, { price: event.target.value })}
-                          placeholder="Price"
+                          placeholder="₹"
                           className="form-input text-xs"
+                          type="number"
                         />
                       </div>
                     </div>
@@ -343,8 +365,9 @@ export default function CreateProductPage() {
                         <input
                           value={variant.compareAtPrice}
                           onChange={(event) => patchVariant(variant.index, { compareAtPrice: event.target.value })}
-                          placeholder="Compare-at"
+                          placeholder="₹"
                           className="form-input text-xs"
+                          type="number"
                         />
                       </div>
                       <div>
@@ -352,31 +375,61 @@ export default function CreateProductPage() {
                         <input
                           value={variant.quantity}
                           onChange={(event) => patchVariant(variant.index, { quantity: event.target.value })}
-                          placeholder="Stock"
+                          placeholder="0"
                           className="form-input text-xs"
+                          type="number"
                         />
                       </div>
                     </div>
 
-                    <label className="mt-2 flex h-10 cursor-pointer items-center justify-center rounded-xl border border-dashed border-[var(--border-strong)] text-xs text-[var(--text-secondary)] transition-colors hover:bg-white">
-                      <input
-                        type="file"
-                        className="hidden"
-                        accept="image/*"
-                        multiple
-                        onChange={(event) => {
-                          const files = Array.from(event.target.files || []);
-                          patchVariant(variant.index, { images: [...(variant.images || []), ...files] });
-                        }}
-                      />
-                      Upload images for {variant.color}
-                    </label>
+                    {/* ── Image Upload with Previews ── */}
+                    <div className="mt-3">
+                      <label className="form-label flex items-center gap-1">
+                        <ImageIcon size={11} /> Images
+                        {(variant.images?.length || 0) > 0 && (
+                          <span className="ml-1 text-[var(--highlight)]">({variant.images.length})</span>
+                        )}
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {(variant.images || []).map((file, imgIdx) => (
+                          <div key={imgIdx} className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-[var(--border)]">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={URL.createObjectURL(file)}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeVariantImage(variant.index, imgIdx)}
+                              className="absolute -right-1 -top-1 grid h-4 w-4 place-items-center rounded-full bg-[var(--error)] text-white opacity-0 transition-opacity group-hover:opacity-100"
+                            >
+                              <X size={8} />
+                            </button>
+                          </div>
+                        ))}
+                        <label className="grid h-14 w-14 shrink-0 cursor-pointer place-items-center rounded-lg border border-dashed border-[var(--border-strong)] bg-white transition-colors hover:bg-[var(--surface-hover)]">
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*"
+                            multiple
+                            onChange={(event) => {
+                              const files = Array.from(event.target.files || []);
+                              patchVariant(variant.index, { images: [...(variant.images || []), ...files] });
+                              event.target.value = "";
+                            }}
+                          />
+                          <ImagePlus size={14} className="text-[var(--text-muted)]" />
+                        </label>
+                      </div>
+                    </div>
 
                     {form.variants.length > 1 ? (
                       <button
                         type="button"
                         onClick={() => removeVariant(variant.index)}
-                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-[var(--error)]"
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] text-[var(--error)] hover:underline"
                       >
                         <Trash2 size={12} /> Remove
                       </button>
@@ -406,7 +459,8 @@ export default function CreateProductPage() {
             <button
               type="button"
               onClick={() => setStep(3)}
-              className="app-button app-button-primary flex h-11 flex-1 items-center justify-center gap-1 text-sm"
+              disabled={form.variants.some((v) => !v.sku || !v.price)}
+              className="app-button app-button-primary flex h-11 flex-1 items-center justify-center gap-1 text-sm disabled:opacity-50"
             >
               Review <ChevronRight size={15} />
             </button>
@@ -414,18 +468,80 @@ export default function CreateProductPage() {
         </section>
       ) : null}
 
+      {/* ═══════════════════ STEP 3: REVIEW & PUBLISH ═══════════════════ */}
       {step === 3 ? (
         <section className="card-surface space-y-4 p-4">
           <h2 className="text-base font-semibold text-[var(--text-primary)]">Review & Publish</h2>
-          <div className="rounded-[14px] bg-[var(--bg-app)] p-3 text-sm">
-            <p className="font-semibold text-[var(--text-primary)]">{form.name || "Untitled"}</p>
-            <p className="text-[var(--text-secondary)]">{form.brand} · {form.modelNumber}</p>
-            <p className="mt-1 text-xs text-[var(--text-secondary)]">
-              {form.category} · {form.gender}
+
+          {/* Product summary */}
+          <div className="rounded-[14px] bg-[var(--bg-app)] p-3">
+            <p className="text-sm font-semibold text-[var(--text-primary)]">{form.name || "Untitled"}</p>
+            <p className="text-xs text-[var(--text-secondary)]">{form.brand} · {form.modelNumber}</p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="inline-flex items-center rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                {form.category}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-[var(--highlight)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                {form.gender}
+              </span>
+            </div>
+            {form.description && (
+              <p className="mt-2 text-xs text-[var(--text-secondary)] line-clamp-2">{form.description}</p>
+            )}
+            {form.tags && (
+              <div className="mt-2 flex flex-wrap gap-1">
+                {form.tags.split(",").filter(Boolean).map((tag) => (
+                  <span key={tag.trim()} className="rounded-full bg-[var(--highlight-soft)] px-2 py-0.5 text-[10px] text-[var(--text-primary)]">
+                    {tag.trim()}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Variants summary with images */}
+          <div className="space-y-2">
+            <p className="section-title">
+              {form.variants.length} Variant{form.variants.length !== 1 ? "s" : ""} · {totalImages} Image{totalImages !== 1 ? "s" : ""}
             </p>
-            <p className="mt-2 text-xs text-[var(--text-secondary)]">
-              {form.variants.length} variant{form.variants.length !== 1 ? "s" : ""} configured
-            </p>
+            {form.variants.map((variant, index) => (
+              <div key={index} className="rounded-[14px] border border-[var(--border)] p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="h-3 w-3 rounded-full border border-[var(--border-strong)]"
+                      style={{ background: variant.color.toLowerCase() }}
+                    />
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">
+                      {variant.color} · Size {variant.size}
+                    </span>
+                  </div>
+                  <span className="text-xs font-medium text-[var(--text-primary)]">
+                    ₹{variant.price || 0}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-[11px] text-[var(--text-muted)]">
+                  SKU: {variant.sku} · Stock: {variant.quantity || 0}
+                  {variant.compareAtPrice ? ` · Compare: ₹${variant.compareAtPrice}` : ""}
+                </p>
+
+                {/* Image previews in review */}
+                {(variant.images?.length || 0) > 0 && (
+                  <div className="mt-2 flex gap-1.5 overflow-x-auto hide-scrollbar">
+                    {variant.images.map((file, imgIdx) => (
+                      <div key={imgIdx} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-[var(--bg-app)]">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {publishError && (

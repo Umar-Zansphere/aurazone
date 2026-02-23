@@ -6,14 +6,6 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useAuthStore } from "@/stores/use-auth-store";
 
-const particles = Array.from({ length: 9 }, (_, idx) => ({
-  id: idx,
-  size: 22 + idx * 8,
-  left: `${8 + idx * 10}%`,
-  top: `${10 + (idx % 4) * 18}%`,
-  delay: idx * 0.22,
-}));
-
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((state) => state.login);
@@ -40,29 +32,21 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_20%_20%,#243b69_0%,#101827_42%,#0b111b_100%)] p-6">
-      {particles.map((particle) => (
-        <motion.span
-          key={particle.id}
-          className="absolute rounded-[40%] border border-white/12 bg-white/5"
-          style={{ width: particle.size, height: particle.size, left: particle.left, top: particle.top }}
-          animate={{ y: [0, -12, 0], rotate: [0, 12, 0], opacity: [0.2, 0.5, 0.2] }}
-          transition={{ duration: 6 + particle.id * 0.4, repeat: Infinity, delay: particle.delay }}
-        />
-      ))}
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden p-6" style={{ background: "var(--bg-app)" }}>
 
       <div className="relative z-10 w-full max-w-[420px]">
-        <div className="mb-8 text-center text-white">
+        <div className="mb-8 text-center">
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: "spring", stiffness: 260, damping: 22 }}
-            className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl bg-white/10 backdrop-blur"
+            className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl"
+            style={{ background: "var(--highlight-soft)" }}
           >
-            <span className="text-2xl font-bold">AZ</span>
+            <span className="text-2xl font-bold" style={{ color: "var(--highlight)" }}>AZ</span>
           </motion.div>
-          <h1 className="text-[28px] font-semibold">AuraZone Admin</h1>
-          <p className="mt-1 text-sm text-white/70">Mobile control center for your storefront</p>
+          <h1 className="text-[28px] font-semibold" style={{ color: "var(--text-primary)" }}>AuraZone Admin</h1>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Mobile control center for your storefront</p>
         </div>
 
         <motion.form
@@ -70,51 +54,65 @@ export default function LoginPage() {
           initial={{ y: 16, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.08 }}
-          className="space-y-4 rounded-[28px] border border-white/12 bg-white/8 p-4 backdrop-blur-xl"
+          className="space-y-4 rounded-[28px] border p-4"
+          style={{ background: "var(--surface)", borderColor: "var(--card-border)" }}
         >
-          <label className="group relative block rounded-2xl border border-white/20 bg-white/10 px-3 pb-2 pt-5">
-            <span className={`absolute left-3 text-xs transition-all ${email ? "top-2 text-white/70" : "top-5 text-white/45"}`}>
+          <div className="space-y-2">
+            <label htmlFor="email" className="form-label">
               Email
-            </span>
-            <Mail size={16} className="absolute right-3 top-4 text-white/60" />
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full border-none bg-transparent text-sm text-white outline-none placeholder:text-white/35"
-              placeholder="admin@aurazone.com"
-              required
-            />
-          </label>
+            </label>
+            <div className="relative">
+              <Mail size={16} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                className="form-input pr-9"
+                placeholder="admin@aurazone.com"
+                autoComplete="email"
+                required
+                aria-label="Email address"
+              />
+            </div>
+          </div>
 
-          <label className="relative block rounded-2xl border border-white/20 bg-white/10 px-3 pb-2 pt-5">
-            <span className={`absolute left-3 text-xs transition-all ${password ? "top-2 text-white/70" : "top-5 text-white/45"}`}>
+          <div className="space-y-2">
+            <label htmlFor="password" className="form-label">
               Password
-            </span>
-            <Lock size={16} className="absolute right-9 top-4 text-white/60" />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-2 top-3 grid h-7 w-7 place-items-center rounded-full text-white/70"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
-            </button>
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="w-full border-none bg-transparent pr-9 text-sm text-white outline-none placeholder:text-white/35"
-              placeholder="••••••••"
-              required
-            />
-          </label>
+            </label>
+            <div className="relative">
+              <Lock size={16} className="absolute right-9 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: "var(--text-muted)" }} />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 grid h-7 w-7 place-items-center rounded-full transition-colors hover:bg-[var(--surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--highlight)]"
+                style={{ color: "var(--text-muted)" }}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={0}
+              >
+                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="form-input pr-14"
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+                aria-label="Password"
+              />
+            </div>
+          </div>
 
           <motion.button
             whileTap={{ scale: 0.98 }}
             disabled={!canSubmit || loading}
             type="submit"
-            className="app-button flex h-12 w-full items-center justify-center gap-2 bg-[var(--highlight)] text-sm font-semibold text-white disabled:opacity-60"
+            className="app-button flex h-12 w-full items-center justify-center gap-2 text-sm font-semibold text-white disabled:opacity-60"
+            style={{ background: "var(--highlight)" }}
           >
             {loading ? <span className="brand-spinner h-4 w-4 rounded-full border-2 border-white border-t-transparent" /> : null}
             {loading ? "Signing In..." : "Sign In"}
@@ -125,7 +123,8 @@ export default function LoginPage() {
           <motion.div
             initial={{ y: 6, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="mt-3 rounded-2xl border border-[color:rgba(196,91,91,0.6)] bg-[color:rgba(196,91,91,0.15)] px-3 py-2 text-sm text-white"
+            className="mt-3 rounded-2xl border px-3 py-2 text-sm"
+            style={{ borderColor: "rgba(155, 44, 44, 0.25)", background: "rgba(155, 44, 44, 0.04)", color: "var(--error)" }}
           >
             {error}
           </motion.div>

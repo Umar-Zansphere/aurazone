@@ -36,6 +36,7 @@ const getInventoryByVariantId = catchAsync(async (req, res) => adminService.getI
 const adjustVariantInventory = catchAsync(async (req, res) => adminService.adjustVariantInventory(req, res));
 const updateVariantInventory = catchAsync(async (req, res) => adminService.updateVariantInventory(req, res));
 const createVariantImage = catchAsync(async (req, res) => adminService.createVariantImage(req, res));
+const copyVariantImages = catchAsync(async (req, res) => adminService.copyVariantImages(req, res));
 const updateImage = catchAsync(async (req, res) => adminService.updateImage(req, res));
 const deleteImage = catchAsync(async (req, res) => adminService.deleteImage(req, res));
 const createProduct = catchAsync(async (req, res) => adminService.createProduct(req, res));
@@ -85,6 +86,7 @@ module.exports = {
   adjustVariantInventory,
   updateVariantInventory,
   createVariantImage,
+  copyVariantImages,
   updateImage,
   deleteImage,
   createProduct,

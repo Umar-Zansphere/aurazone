@@ -54,9 +54,9 @@ export default function ProductCard({ product, onOpen, onLongPress }) {
       onTouchCancel={() => {
         clearTimeout(timerRef.current);
       }}
-      className="card-surface overflow-hidden text-left"
+      className="card-surface overflow-hidden text-left h-full flex flex-col"
     >
-      <div className="relative h-36 w-full bg-[var(--bg-app)]">
+      <div className="relative h-40 w-full shrink-0 bg-[var(--bg-app)]">
         {primaryImage?.url ? (
           <Image src={primaryImage.url} alt={product.name} fill className="object-cover" unoptimized />
         ) : (
@@ -65,14 +65,14 @@ export default function ProductCard({ product, onOpen, onLongPress }) {
           </div>
         )}
 
-        <div className="absolute left-2 top-2 flex gap-1">
+        <div className="absolute left-2 top-2 flex max-w-[calc(100%-16px)] flex-wrap gap-1">
           {product.isActive ? (
-            <span className="app-chip rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-semibold text-white">
+            <span className="app-chip shrink-0 rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-semibold text-white">
               Active
             </span>
           ) : null}
           {product.isFeatured ? (
-            <span className="app-chip rounded-full bg-[var(--highlight)] px-2 py-0.5 text-[10px] font-semibold text-white">
+            <span className="app-chip shrink-0 rounded-full bg-[var(--highlight)] px-2 py-0.5 text-[10px] font-semibold text-white">
               Featured
             </span>
           ) : null}

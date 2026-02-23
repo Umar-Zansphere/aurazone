@@ -13,13 +13,16 @@ import {
   PackageSearch,
   Truck,
   X,
+  Trash2,
+  ScrollText,
+  Plus,
 } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import BottomSheet from "@/components/ui/bottom-sheet";
 import EmptyState from "@/components/ui/empty-state";
 import { apiFetch } from "@/lib/api";
-import { formatCurrencyINR, formatRelativeTime, statusTone, shipmentTone } from "@/lib/format";
+import { formatCurrencyINR, formatRelativeTime, formatDateTime, statusTone, shipmentTone, paymentTone } from "@/lib/format";
 
 const statusSteps = [
   { key: "PENDING", label: "Placed", icon: Clock },
@@ -36,8 +39,32 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
+
+  // Shipment creation
   const [shipmentSheet, setShipmentSheet] = useState(false);
   const [shipmentDraft, setShipmentDraft] = useState({ provider: "", trackingNumber: "", trackingUrl: "" });
+
+  // Activity logs
+  const [logsOpen, setLogsOpen] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+
+  // Payment status update
+  const [paymentStatusSheet, setPaymentStatusSheet] = useState(false);
+  const [paymentStatusDraft, setPaymentStatusDraft] = useState("");
+
+  // Create payment
+  const [createPaymentSheet, setCreatePaymentSheet] = useState(false);
+  const [paymentDraft, setPaymentDraft] = useState({ method: "RAZORPAY", amount: "", transactionId: "" });
+  const [paymentSaving, setPaymentSaving] = useState(false);
+
+  // Create shipment for order
+  const [createShipmentSheet, setCreateShipmentSheet] = useState(false);
+  const [newShipmentDraft, setNewShipmentDraft] = useState({ provider: "", trackingNumber: "", trackingUrl: "" });
+  const [shipmentSaving, setShipmentSaving] = useState(false);
+
+  // Delete order
+  const [deleteSheet, setDeleteSheet] = useState(false);
 
   const loadOrder = useCallback(async () => {
     setLoading(true);
@@ -74,7 +101,7 @@ export default function OrderDetailPage() {
     setActionError(null);
     try {
       await apiFetch(`/admin/orders/${order.id}/shipment`, {
-        method: "POST",
+        method: "PUT",
         body: JSON.stringify(shipmentDraft),
       });
       setShipmentSheet(false);
@@ -87,6 +114,90 @@ export default function OrderDetailPage() {
 
   const cancelOrder = async () => {
     await updateOrderStatus("CANCELLED");
+  };
+
+  // Activity logs
+  const loadLogs = async () => {
+    setLogsOpen(true);
+    setLogsLoading(true);
+    try {
+      const data = await apiFetch(`/admin/orders/${order.id}/logs`, { params: { take: 50 } });
+      setLogs(data.logs || []);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // Update payment status
+  const updatePaymentStatus = async () => {
+    if (!paymentStatusDraft) return;
+    setActionError(null);
+    try {
+      await apiFetch(`/admin/orders/${order.id}/payment-status`, {
+        method: "PUT",
+        body: JSON.stringify({ paymentStatus: paymentStatusDraft }),
+      });
+      setPaymentStatusSheet(false);
+      await loadOrder();
+    } catch {
+      setActionError("Failed to update payment status.");
+    }
+  };
+
+  // Create payment for order
+  const createPayment = async () => {
+    setPaymentSaving(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/admin/orders/${order.id}/payments`, {
+        method: "POST",
+        body: JSON.stringify({
+          method: paymentDraft.method,
+          amount: Number(paymentDraft.amount),
+          transactionId: paymentDraft.transactionId || undefined,
+        }),
+      });
+      setCreatePaymentSheet(false);
+      setPaymentDraft({ method: "RAZORPAY", amount: "", transactionId: "" });
+      await loadOrder();
+    } catch {
+      setActionError("Failed to create payment.");
+    } finally {
+      setPaymentSaving(false);
+    }
+  };
+
+  // Create shipment for order (standalone)
+  const createShipmentForOrder = async () => {
+    setShipmentSaving(true);
+    setActionError(null);
+    try {
+      await apiFetch(`/admin/orders/${order.id}/shipments`, {
+        method: "POST",
+        body: JSON.stringify(newShipmentDraft),
+      });
+      setCreateShipmentSheet(false);
+      setNewShipmentDraft({ provider: "", trackingNumber: "", trackingUrl: "" });
+      await loadOrder();
+    } catch {
+      setActionError("Failed to create shipment.");
+    } finally {
+      setShipmentSaving(false);
+    }
+  };
+
+  // Delete order
+  const deleteOrder = async () => {
+    setActionError(null);
+    try {
+      await apiFetch(`/admin/orders/${order.id}`, { method: "DELETE" });
+      router.replace("/orders");
+    } catch {
+      setActionError("Failed to delete order.");
+      setDeleteSheet(false);
+    }
   };
 
   if (loading) {
@@ -246,7 +357,16 @@ export default function OrderDetailPage() {
 
       {order.payment ? (
         <section className="card-surface p-4">
-          <p className="section-title mb-3">Payment</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="section-title">Payment</p>
+            <button
+              type="button"
+              onClick={() => { setPaymentStatusDraft(order.payment.status || "PENDING"); setPaymentStatusSheet(true); }}
+              className="text-xs font-semibold text-[var(--highlight)]"
+            >
+              Update Status
+            </button>
+          </div>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div>
               <span className="text-[var(--text-secondary)]">Method</span>
@@ -266,7 +386,21 @@ export default function OrderDetailPage() {
             ) : null}
           </div>
         </section>
-      ) : null}
+      ) : (
+        <section className="card-surface p-4">
+          <div className="flex items-center justify-between">
+            <p className="section-title">Payment</p>
+            <button
+              type="button"
+              onClick={() => { setPaymentDraft({ method: "RAZORPAY", amount: String(order.totalAmount || ""), transactionId: "" }); setCreatePaymentSheet(true); }}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--highlight)]"
+            >
+              <Plus size={12} /> Add Payment
+            </button>
+          </div>
+          <p className="mt-2 text-sm text-[var(--text-muted)]">No payment recorded yet.</p>
+        </section>
+      )}
 
       {order.shipment ? (
         <section className="card-surface p-4">
@@ -293,6 +427,41 @@ export default function OrderDetailPage() {
           </div>
         </section>
       ) : null}
+
+      {/* Quick Actions */}
+      <section className="card-surface p-4">
+        <p className="section-title mb-3">Quick Actions</p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={loadLogs}
+            className="app-button app-button-secondary flex items-center justify-center gap-2 py-2.5 text-xs"
+          >
+            <ScrollText size={14} /> Activity Logs
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreateShipmentSheet(true)}
+            className="app-button app-button-secondary flex items-center justify-center gap-2 py-2.5 text-xs"
+          >
+            <Truck size={14} /> Add Shipment
+          </button>
+          <button
+            type="button"
+            onClick={() => { setPaymentDraft({ method: "RAZORPAY", amount: String(order.totalAmount || ""), transactionId: "" }); setCreatePaymentSheet(true); }}
+            className="app-button app-button-secondary flex items-center justify-center gap-2 py-2.5 text-xs"
+          >
+            <CreditCard size={14} /> Add Payment
+          </button>
+          <button
+            type="button"
+            onClick={() => setDeleteSheet(true)}
+            className="app-button app-button-danger flex items-center justify-center gap-2 py-2.5 text-xs"
+          >
+            <Trash2 size={14} /> Delete Order
+          </button>
+        </div>
+      </section>
 
       <section className="card-surface p-4">
         <p className="section-title mb-3">Meta</p>
@@ -344,6 +513,7 @@ export default function OrderDetailPage() {
         </footer>
       ) : null}
 
+      {/* Shipment Sheet (existing pattern) */}
       <BottomSheet open={shipmentSheet} onClose={() => setShipmentSheet(false)} title="Shipment Details" snap="half">
         <div className="space-y-3">
           <div>
@@ -379,6 +549,174 @@ export default function OrderDetailPage() {
             className="app-button app-button-primary h-11 w-full text-sm"
           >
             Create Shipment & Mark Shipped
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* Activity Logs Sheet */}
+      <BottomSheet
+        open={logsOpen}
+        onClose={() => { setLogsOpen(false); setLogs([]); }}
+        title="Activity Logs"
+        snap="full"
+      >
+        {logsLoading ? (
+          <div className="space-y-2">
+            <div className="skeleton h-12 rounded-xl" />
+            <div className="skeleton h-12 rounded-xl" />
+          </div>
+        ) : logs.length === 0 ? (
+          <p className="py-6 text-center text-sm text-[var(--text-muted)]">No activity logs found.</p>
+        ) : (
+          <div className="space-y-2">
+            {logs.map((log, idx) => (
+              <div key={log.id || idx} className="rounded-[14px] border border-[var(--border)] p-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-[var(--text-primary)]">{log.action || log.event || log.type || "Event"}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{log.details || log.message || log.description || ""}</p>
+                  </div>
+                  <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{formatRelativeTime(log.createdAt)}</span>
+                </div>
+                {log.performedBy && (
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">by {log.performedBy}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </BottomSheet>
+
+      {/* Payment Status Sheet */}
+      <BottomSheet open={paymentStatusSheet} onClose={() => setPaymentStatusSheet(false)} title="Update Payment Status" snap="half">
+        <div className="space-y-3">
+          <div>
+            <label className="form-label">Payment Status</label>
+            <select
+              value={paymentStatusDraft}
+              onChange={(e) => setPaymentStatusDraft(e.target.value)}
+              className="form-input"
+            >
+              {["PENDING", "PAID", "FAILED", "REFUNDED"].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={updatePaymentStatus}
+            className="app-button app-button-primary h-11 w-full text-sm"
+          >
+            Update Status
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* Create Payment Sheet */}
+      <BottomSheet open={createPaymentSheet} onClose={() => setCreatePaymentSheet(false)} title="Create Payment" snap="half">
+        <div className="space-y-3">
+          <div>
+            <label className="form-label">Method</label>
+            <select
+              value={paymentDraft.method}
+              onChange={(e) => setPaymentDraft((prev) => ({ ...prev, method: e.target.value }))}
+              className="form-input"
+            >
+              {["RAZORPAY", "COD", "BANK_TRANSFER", "UPI"].map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Amount</label>
+            <input
+              value={paymentDraft.amount}
+              onChange={(e) => setPaymentDraft((prev) => ({ ...prev, amount: e.target.value }))}
+              placeholder="Amount"
+              className="form-input"
+              type="number"
+            />
+          </div>
+          <div>
+            <label className="form-label">Transaction ID (optional)</label>
+            <input
+              value={paymentDraft.transactionId}
+              onChange={(e) => setPaymentDraft((prev) => ({ ...prev, transactionId: e.target.value }))}
+              placeholder="Transaction ID"
+              className="form-input"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={paymentSaving}
+            onClick={createPayment}
+            className="app-button app-button-primary h-11 w-full text-sm disabled:opacity-50"
+          >
+            {paymentSaving ? "Creating..." : "Create Payment"}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* Create Shipment Sheet */}
+      <BottomSheet open={createShipmentSheet} onClose={() => setCreateShipmentSheet(false)} title="Create Shipment" snap="half">
+        <div className="space-y-3">
+          <div>
+            <label className="form-label">Provider</label>
+            <input
+              value={newShipmentDraft.provider}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, provider: e.target.value }))}
+              placeholder="e.g. Delhivery"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Tracking Number</label>
+            <input
+              value={newShipmentDraft.trackingNumber}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, trackingNumber: e.target.value }))}
+              placeholder="Tracking ID"
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Tracking URL (optional)</label>
+            <input
+              value={newShipmentDraft.trackingUrl}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, trackingUrl: e.target.value }))}
+              placeholder="https://..."
+              className="form-input"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={shipmentSaving}
+            onClick={createShipmentForOrder}
+            className="app-button app-button-primary h-11 w-full text-sm disabled:opacity-50"
+          >
+            {shipmentSaving ? "Creating..." : "Create Shipment"}
+          </button>
+        </div>
+      </BottomSheet>
+
+      {/* Delete Order Sheet */}
+      <BottomSheet open={deleteSheet} onClose={() => setDeleteSheet(false)} title="Delete Order" snap="half">
+        <p className="text-sm text-[var(--text-secondary)]">
+          This will permanently delete order #{order.orderNumber}. This action cannot be undone.
+        </p>
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setDeleteSheet(false)}
+            className="app-button app-button-secondary h-11 flex-1 text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={deleteOrder}
+            className="app-button h-11 flex-1 rounded-[14px] bg-[var(--error)] text-sm font-semibold text-white"
+          >
+            Delete Order
           </button>
         </div>
       </BottomSheet>

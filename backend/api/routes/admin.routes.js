@@ -36,6 +36,7 @@ const {
   adjustVariantInventory,
   updateVariantInventory,
   createVariantImage,
+  copyVariantImages,
   updateImage,
   deleteImage,
   createProduct,
@@ -94,6 +95,7 @@ router.get('/inventory/:variantId', getInventoryByVariantId);
 router.put('/variants/:variantId/inventory', updateVariantInventory);
 router.post('/variants/:variantId/inventory/adjust', adjustVariantInventory);
 router.post('/variants/:variantId/images', uploadInMemory.single('image'), createVariantImage);
+router.post('/variants/:variantId/images/copy', copyVariantImages);
 
 router.put('/images/:imageId', updateImage);
 router.delete('/images/:imageId', deleteImage);

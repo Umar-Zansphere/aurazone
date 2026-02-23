@@ -1,7 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Filter, Plus, Search, Star, ToggleLeft, ToggleRight, Trash2, PackageX } from "lucide-react";
+import {
+  Filter, Plus, Search, Star, ToggleRight, Trash2, PackageX,
+  ShoppingBag, Sparkles, CheckCircle2, AlertTriangle, AlertCircle,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import BottomSheet from "@/components/ui/bottom-sheet";
 import ProductCard from "@/components/products/product-card";
@@ -95,6 +98,22 @@ export default function ProductsPage() {
 
   const listState = useEmptyState(loading, products, error);
 
+  // Overview stats
+  const overview = useMemo(() => {
+    const total = products.length;
+    const active = products.filter((p) => p.isActive).length;
+    const featured = products.filter((p) => p.isFeatured).length;
+    const outOfStock = products.filter((p) => {
+      const qty = (p.variants || []).reduce((sum, v) => sum + (v.inventory?.quantity || 0), 0);
+      return qty <= 0;
+    }).length;
+    const lowStock = products.filter((p) => {
+      const qty = (p.variants || []).reduce((sum, v) => sum + (v.inventory?.quantity || 0), 0);
+      return qty > 0 && qty < 10;
+    }).length;
+    return { total, active, featured, outOfStock, lowStock };
+  }, [products]);
+
   return (
     <div className="pb-6">
       <header className="mb-4">
@@ -132,8 +151,55 @@ export default function ProductsPage() {
         </div>
       </header>
 
+      {/* Overview Dashboard */}
+      {!loading && products.length > 0 && (
+        <section className="card-surface p-4 mb-4">
+          <p className="section-title mb-3">Overview</p>
+          <div className="grid grid-cols-3 gap-2.5">
+            <div className="rounded-[14px] bg-[var(--bg-app)] p-2.5 text-center">
+              <ShoppingBag size={16} className="mx-auto text-[var(--text-muted)]" />
+              <p className="mt-1 text-lg font-bold text-[var(--text-primary)]">{overview.total}</p>
+              <p className="text-[10px] text-[var(--text-secondary)]">Total</p>
+            </div>
+            <div className="rounded-[14px] bg-[var(--bg-app)] p-2.5 text-center">
+              <CheckCircle2 size={16} className="mx-auto text-[var(--success)]" />
+              <p className="mt-1 text-lg font-bold text-[var(--success)]">{overview.active}</p>
+              <p className="text-[10px] text-[var(--text-secondary)]">Active</p>
+            </div>
+            <div className="rounded-[14px] bg-[var(--bg-app)] p-2.5 text-center">
+              <Sparkles size={16} className="mx-auto text-[var(--highlight)]" />
+              <p className="mt-1 text-lg font-bold text-[var(--highlight)]">{overview.featured}</p>
+              <p className="text-[10px] text-[var(--text-secondary)]">Featured</p>
+            </div>
+          </div>
+
+          {(overview.lowStock > 0 || overview.outOfStock > 0) && (
+            <div className="mt-2.5 flex gap-2">
+              {overview.lowStock > 0 && (
+                <div className="flex flex-1 items-center gap-2 rounded-[14px] border border-[rgba(183,121,31,0.2)] bg-[rgba(183,121,31,0.04)] p-2.5">
+                  <AlertTriangle size={14} className="shrink-0 text-[var(--warning)]" />
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--warning)]">{overview.lowStock}</p>
+                    <p className="text-[10px] text-[var(--text-secondary)]">Low Stock</p>
+                  </div>
+                </div>
+              )}
+              {overview.outOfStock > 0 && (
+                <div className="flex flex-1 items-center gap-2 rounded-[14px] border border-[rgba(155,44,44,0.2)] bg-[rgba(155,44,44,0.04)] p-2.5">
+                  <AlertCircle size={14} className="shrink-0 text-[var(--error)]" />
+                  <div>
+                    <p className="text-xs font-semibold text-[var(--error)]">{overview.outOfStock}</p>
+                    <p className="text-[10px] text-[var(--text-secondary)]">Out of Stock</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {listState.isLoading ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
           <div className="skeleton h-56 rounded-[20px]" />
           <div className="skeleton h-64 rounded-[20px]" />
           <div className="skeleton h-64 rounded-[20px]" />
@@ -159,15 +225,14 @@ export default function ProductsPage() {
           />
         </div>
       ) : (
-        <div className="columns-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
           {products.map((product) => (
-            <div key={product.id} className="mb-3 break-inside-avoid">
-              <ProductCard
-                product={product}
-                onOpen={(item) => router.push(`/products/${item.id}`)}
-                onLongPress={(item) => setMenuProduct(item)}
-              />
-            </div>
+            <ProductCard
+              key={product.id}
+              product={product}
+              onOpen={(item) => router.push(`/products/${item.id}`)}
+              onLongPress={(item) => setMenuProduct(item)}
+            />
           ))}
         </div>
       )}

@@ -640,14 +640,14 @@ const formatVariant = (variant, includeInventory = true) => ({
   images: (variant.images || []).sort((a, b) => a.position - b.position).map(formatImage),
   ...(includeInventory
     ? {
-        inventory: variant.inventory
-          ? {
-              id: variant.inventory.id,
-              quantity: variant.inventory.quantity,
-              reserved: variant.inventory.reserved,
-            }
-          : null,
-      }
+      inventory: variant.inventory
+        ? {
+          id: variant.inventory.id,
+          quantity: variant.inventory.quantity,
+          reserved: variant.inventory.reserved,
+        }
+        : null,
+    }
     : {}),
 });
 
@@ -714,13 +714,13 @@ const formatOrderSummary = (order) => {
     itemsCount: (order.items || []).reduce((acc, item) => acc + item.quantity, 0),
     shipment: latestShipment
       ? {
-          id: latestShipment.id,
-          courierName: latestShipment.courierName,
-          trackingNumber: latestShipment.trackingNumber,
-          trackingUrl: latestShipment.trackingUrl,
-          status: latestShipment.status,
-          shippedAt: latestShipment.shippedAt ? latestShipment.shippedAt.toISOString() : null,
-        }
+        id: latestShipment.id,
+        courierName: latestShipment.courierName,
+        trackingNumber: latestShipment.trackingNumber,
+        trackingUrl: latestShipment.trackingUrl,
+        status: latestShipment.status,
+        shippedAt: latestShipment.shippedAt ? latestShipment.shippedAt.toISOString() : null,
+      }
       : null,
   };
 };
@@ -768,25 +768,25 @@ const formatFullOrder = (order) => {
     }),
     orderAddress: order.orderAddress
       ? {
-          name: order.orderAddress.name,
-          phone: order.orderAddress.phone,
-          addressLine1: order.orderAddress.addressLine1,
-          addressLine2: order.orderAddress.addressLine2,
-          city: order.orderAddress.city,
-          state: order.orderAddress.state,
-          postalCode: order.orderAddress.postalCode,
-          country: order.orderAddress.country,
-        }
+        name: order.orderAddress.name,
+        phone: order.orderAddress.phone,
+        addressLine1: order.orderAddress.addressLine1,
+        addressLine2: order.orderAddress.addressLine2,
+        city: order.orderAddress.city,
+        state: order.orderAddress.state,
+        postalCode: order.orderAddress.postalCode,
+        country: order.orderAddress.country,
+      }
       : null,
     shipment: latestShipment
       ? {
-          id: latestShipment.id,
-          courierName: latestShipment.courierName,
-          trackingNumber: latestShipment.trackingNumber,
-          trackingUrl: latestShipment.trackingUrl,
-          status: latestShipment.status,
-          shippedAt: latestShipment.shippedAt ? latestShipment.shippedAt.toISOString() : null,
-        }
+        id: latestShipment.id,
+        courierName: latestShipment.courierName,
+        trackingNumber: latestShipment.trackingNumber,
+        trackingUrl: latestShipment.trackingUrl,
+        status: latestShipment.status,
+        shippedAt: latestShipment.shippedAt ? latestShipment.shippedAt.toISOString() : null,
+      }
       : null,
     payments: (order.payments || []).map((payment) => ({
       id: payment.id,
@@ -829,23 +829,23 @@ const formatPayment = (payment, includeOrder = false) => ({
   updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : null,
   ...(includeOrder
     ? {
-        order: payment.order
-          ? {
-              id: payment.order.id,
-              orderNumber: payment.order.orderNumber,
-              status: payment.order.status,
-              paymentStatus: payment.order.paymentStatus,
-              totalAmount: toNumber(payment.order.totalAmount),
-              createdAt: payment.order.createdAt.toISOString(),
-              customer: {
-                id: payment.order.user?.id || null,
-                fullName: payment.order.user?.fullName || payment.order.orderAddress?.name || null,
-                email: payment.order.user?.email || payment.order.orderAddress?.email || null,
-                phone: payment.order.user?.phone || payment.order.orderAddress?.phone || null,
-              },
-            }
-          : null,
-      }
+      order: payment.order
+        ? {
+          id: payment.order.id,
+          orderNumber: payment.order.orderNumber,
+          status: payment.order.status,
+          paymentStatus: payment.order.paymentStatus,
+          totalAmount: toNumber(payment.order.totalAmount),
+          createdAt: payment.order.createdAt.toISOString(),
+          customer: {
+            id: payment.order.user?.id || null,
+            fullName: payment.order.user?.fullName || payment.order.orderAddress?.name || null,
+            email: payment.order.user?.email || payment.order.orderAddress?.email || null,
+            phone: payment.order.user?.phone || payment.order.orderAddress?.phone || null,
+          },
+        }
+        : null,
+    }
     : {}),
 });
 
@@ -863,16 +863,16 @@ const formatShipment = (shipment, includeOrder = false) => ({
   createdAt: shipment.createdAt ? shipment.createdAt.toISOString() : null,
   ...(includeOrder
     ? {
-        order: shipment.order
-          ? {
-              id: shipment.order.id,
-              orderNumber: shipment.order.orderNumber,
-              status: shipment.order.status,
-              paymentStatus: shipment.order.paymentStatus,
-              createdAt: shipment.order.createdAt.toISOString(),
-            }
-          : null,
-      }
+      order: shipment.order
+        ? {
+          id: shipment.order.id,
+          orderNumber: shipment.order.orderNumber,
+          status: shipment.order.status,
+          paymentStatus: shipment.order.paymentStatus,
+          createdAt: shipment.order.createdAt.toISOString(),
+        }
+        : null,
+    }
     : {}),
 });
 
@@ -890,10 +890,10 @@ const formatOrderLog = (log) => ({
   createdAt: log.createdAt.toISOString(),
   admin: log.admin
     ? {
-        id: log.admin.id,
-        fullName: log.admin.fullName,
-        email: log.admin.email,
-      }
+      id: log.admin.id,
+      fullName: log.admin.fullName,
+      email: log.admin.email,
+    }
     : null,
 });
 
@@ -913,10 +913,10 @@ const formatShipmentLog = (log) => ({
   createdAt: log.createdAt.toISOString(),
   admin: log.admin
     ? {
-        id: log.admin.id,
-        fullName: log.admin.fullName,
-        email: log.admin.email,
-      }
+      id: log.admin.id,
+      fullName: log.admin.fullName,
+      email: log.admin.email,
+    }
     : null,
 });
 
@@ -934,10 +934,10 @@ const formatPaymentLog = (log) => ({
   createdAt: log.createdAt.toISOString(),
   admin: log.admin
     ? {
-        id: log.admin.id,
-        fullName: log.admin.fullName,
-        email: log.admin.email,
-      }
+      id: log.admin.id,
+      fullName: log.admin.fullName,
+      email: log.admin.email,
+    }
     : null,
 });
 
@@ -1232,31 +1232,31 @@ const listOrders = async (req, res) => {
     ...(status ? { status } : {}),
     ...(search
       ? {
-          OR: [
-            {
-              orderNumber: {
+        OR: [
+          {
+            orderNumber: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+          {
+            user: {
+              email: {
                 contains: search,
                 mode: 'insensitive',
               },
             },
-            {
-              user: {
-                email: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
+          },
+          {
+            orderAddress: {
+              email: {
+                contains: search,
+                mode: 'insensitive',
               },
             },
-            {
-              orderAddress: {
-                email: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
-              },
-            },
-          ],
-        }
+          },
+        ],
+      }
       : {}),
   };
 
@@ -1828,8 +1828,8 @@ const updateOrderShipment = async (req, res) => {
       note: note || null,
       metadata: existingShipment
         ? {
-            updatedFields: Object.keys(payload),
-          }
+          updatedFields: Object.keys(payload),
+        }
         : null,
     });
 
@@ -2096,12 +2096,12 @@ const listShipments = async (req, res) => {
     ...(createdAt ? { createdAt } : {}),
     ...(search
       ? {
-          OR: [
-            { trackingNumber: { contains: search, mode: 'insensitive' } },
-            { courierName: { contains: search, mode: 'insensitive' } },
-            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
-          ],
-        }
+        OR: [
+          { trackingNumber: { contains: search, mode: 'insensitive' } },
+          { courierName: { contains: search, mode: 'insensitive' } },
+          { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        ],
+      }
       : {}),
   };
 
@@ -2671,16 +2671,16 @@ const listPayments = async (req, res) => {
     ...(createdAt ? { createdAt } : {}),
     ...(search
       ? {
-          OR: [
-            { gatewayOrderId: { contains: search, mode: 'insensitive' } },
-            { gatewayPaymentId: { contains: search, mode: 'insensitive' } },
-            { externalReference: { contains: search, mode: 'insensitive' } },
-            { note: { contains: search, mode: 'insensitive' } },
-            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
-            { order: { user: { email: { contains: search, mode: 'insensitive' } } } },
-            { order: { orderAddress: { email: { contains: search, mode: 'insensitive' } } } },
-          ],
-        }
+        OR: [
+          { gatewayOrderId: { contains: search, mode: 'insensitive' } },
+          { gatewayPaymentId: { contains: search, mode: 'insensitive' } },
+          { externalReference: { contains: search, mode: 'insensitive' } },
+          { note: { contains: search, mode: 'insensitive' } },
+          { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+          { order: { user: { email: { contains: search, mode: 'insensitive' } } } },
+          { order: { orderAddress: { email: { contains: search, mode: 'insensitive' } } } },
+        ],
+      }
       : {}),
   };
 
@@ -3386,11 +3386,11 @@ const listProducts = async (req, res) => {
     ...(isFeatured !== undefined ? { isFeatured } : {}),
     ...(search
       ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { brand: { contains: search, mode: 'insensitive' } },
-          ],
-        }
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { brand: { contains: search, mode: 'insensitive' } },
+        ],
+      }
       : {}),
   };
 
@@ -3680,11 +3680,11 @@ const updateVariant = async (req, res) => {
     ...(req.body?.price !== undefined ? { price: Number(req.body.price) } : {}),
     ...(req.body?.compareAtPrice !== undefined
       ? {
-          compareAtPrice:
-            req.body.compareAtPrice === null || req.body.compareAtPrice === ''
-              ? null
-              : Number(req.body.compareAtPrice),
-        }
+        compareAtPrice:
+          req.body.compareAtPrice === null || req.body.compareAtPrice === ''
+            ? null
+            : Number(req.body.compareAtPrice),
+      }
       : {}),
     ...(req.body?.isAvailable !== undefined ? { isAvailable: parseBool(req.body.isAvailable) } : {}),
   };
@@ -3748,19 +3748,19 @@ const getInventory = async (req, res) => {
   const where = {
     ...(search
       ? {
-          OR: [
-            { sku: { contains: search, mode: 'insensitive' } },
-            { color: { contains: search, mode: 'insensitive' } },
-            {
-              product: {
-                OR: [
-                  { name: { contains: search, mode: 'insensitive' } },
-                  { brand: { contains: search, mode: 'insensitive' } },
-                ],
-              },
+        OR: [
+          { sku: { contains: search, mode: 'insensitive' } },
+          { color: { contains: search, mode: 'insensitive' } },
+          {
+            product: {
+              OR: [
+                { name: { contains: search, mode: 'insensitive' } },
+                { brand: { contains: search, mode: 'insensitive' } },
+              ],
             },
-          ],
-        }
+          },
+        ],
+      }
       : {}),
     ...(lowStockOnly ? { inventory: { quantity: { lte: 5 } } } : {}),
   };
@@ -3860,14 +3860,14 @@ const listInventoryLogs = async (req, res) => {
     ...(createdAt ? { createdAt } : {}),
     ...(search
       ? {
-          OR: [
-            { note: { contains: search, mode: 'insensitive' } },
-            { performedBy: { contains: search, mode: 'insensitive' } },
-            { variant: { sku: { contains: search, mode: 'insensitive' } } },
-            { variant: { product: { name: { contains: search, mode: 'insensitive' } } } },
-            { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
-          ],
-        }
+        OR: [
+          { note: { contains: search, mode: 'insensitive' } },
+          { performedBy: { contains: search, mode: 'insensitive' } },
+          { variant: { sku: { contains: search, mode: 'insensitive' } } },
+          { variant: { product: { name: { contains: search, mode: 'insensitive' } } } },
+          { order: { orderNumber: { contains: search, mode: 'insensitive' } } },
+        ],
+      }
       : {}),
   };
 
@@ -3912,9 +3912,9 @@ const listInventoryLogs = async (req, res) => {
       performedBy: log.performedBy,
       order: log.order
         ? {
-            id: log.order.id,
-            orderNumber: log.order.orderNumber,
-          }
+          id: log.order.id,
+          orderNumber: log.order.orderNumber,
+        }
         : null,
       variant: {
         id: log.variant.id,
@@ -4205,6 +4205,63 @@ const createVariantImage = async (req, res) => {
   return res.status(201).json({
     message: 'Image added successfully',
     image: formatImage(image),
+  });
+};
+
+const copyVariantImages = async (req, res) => {
+  const { variantId } = req.params;
+  const { sourceVariantId } = req.body;
+
+  if (!sourceVariantId) {
+    throw createError(400, 'sourceVariantId is required');
+  }
+
+  const [targetVariant, sourceImages] = await Promise.all([
+    prisma.productVariant.findUnique({
+      where: { id: variantId },
+      include: {
+        product: { select: { name: true } },
+        images: { orderBy: { position: 'desc' }, take: 1 },
+      },
+    }),
+    prisma.productImage.findMany({
+      where: { variantId: sourceVariantId },
+      orderBy: { position: 'asc' },
+    }),
+  ]);
+
+  if (!targetVariant) {
+    throw createError(404, 'Target variant not found');
+  }
+
+  if (sourceImages.length === 0) {
+    return res.status(200).json({ message: 'No images to copy', images: [] });
+  }
+
+  const startPosition = (targetVariant.images[0]?.position ?? -1) + 1;
+  const hasExistingImages = (targetVariant.images[0]?.position ?? -1) >= 0;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const newImages = [];
+    for (let i = 0; i < sourceImages.length; i++) {
+      const src = sourceImages[i];
+      const image = await tx.productImage.create({
+        data: {
+          variantId,
+          url: src.url,
+          altText: src.altText || `${targetVariant.product.name} - ${targetVariant.color} ${targetVariant.size}`,
+          position: startPosition + i,
+          isPrimary: !hasExistingImages && i === 0,
+        },
+      });
+      newImages.push(image);
+    }
+    return newImages;
+  });
+
+  return res.status(201).json({
+    message: `${created.length} image(s) copied successfully`,
+    images: created.map(formatImage),
   });
 };
 
@@ -4893,6 +4950,7 @@ module.exports = {
   adjustVariantInventory,
   updateVariantInventory,
   createVariantImage,
+  copyVariantImages,
   updateImage,
   deleteImage,
   createProduct,

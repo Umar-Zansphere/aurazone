@@ -54,3 +54,31 @@ export const shipmentTone = {
   RETURNED: "#9b2c2c",
   LOST: "#9b2c2c",
 };
+
+export const paymentTone = {
+  PENDING: "#b7791f",
+  COMPLETED: "#2f6b4f",
+  PAID: "#2f6b4f",
+  FAILED: "#9b2c2c",
+  REFUNDED: "#3b6b8c",
+  CANCELLED: "#9a9a9a",
+};
+
+export const formatDate = (dateInput) => {
+  if (!dateInput) return "—";
+  return new Date(dateInput).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+export const formatDateTime = (dateInput) => {
+  if (!dateInput) return "—";
+  return new Date(dateInput).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
