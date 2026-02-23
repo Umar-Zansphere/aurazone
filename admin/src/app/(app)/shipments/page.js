@@ -69,6 +69,7 @@ export default function ShipmentsPage() {
         try {
             const data = await apiFetch(`/admin/shipments/${shipmentId}`);
             setDetail(data);
+            console.log("Loaded shipment detail:", data);
         } catch {
             setDetail(null);
         } finally {
@@ -108,7 +109,7 @@ export default function ShipmentsPage() {
             status: shipment.status || "",
             trackingNumber: shipment.trackingNumber || "",
             trackingUrl: shipment.trackingUrl || "",
-            provider: shipment.provider || "",
+            provider: shipment.courierName || shipment.provider || "",
         });
         setEditSheet(shipment);
     };
@@ -247,7 +248,7 @@ export default function ShipmentsPage() {
                                         </span>
                                         <div>
                                             <p className="text-sm font-semibold text-[var(--text-primary)]">
-                                                {shipment.provider || "Shipment"}
+                                                {shipment.courierName || shipment.provider || "Shipment"}
                                             </p>
                                             <p className="font-mono text-xs text-[var(--text-secondary)]">
                                                 {shipment.trackingNumber || "—"}
@@ -276,17 +277,23 @@ export default function ShipmentsPage() {
                                             <div className="space-y-2 text-sm">
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div>
-                                                        <span className="text-[var(--text-secondary)]">Provider</span>
-                                                        <p className="font-semibold text-[var(--text-primary)]">{detail.provider || "—"}</p>
+                                                        <span className="text-[var(--text-secondary)]">Courier</span>
+                                                        <p className="font-semibold text-[var(--text-primary)]">{detail.shipment.courierName || detail.provider || "—"}</p>
                                                     </div>
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Order</span>
                                                         <p className="font-semibold text-[var(--text-primary)]">
-                                                            #{detail.order?.orderNumber || detail.orderId?.slice(0, 8) || "—"}
+                                                            #{detail.shipment.order?.orderNumber || detail.shipment.orderId?.slice(0, 8) || "—"}
                                                         </p>
                                                     </div>
                                                 </div>
-                                                {detail.trackingUrl && (
+                                                {detail.shipment.trackingNumber && (
+                                                    <div>
+                                                        <span className="text-[var(--text-secondary)]">Tracking Number</span>
+                                                        <span className="block font-mono text-xs text-[var(--text-primary)]">{detail.trackingNumber}</span>
+                                                    </div>
+                                                )}
+                                                {detail.shipment.trackingUrl && (
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Tracking URL</span>
                                                         <a href={detail.trackingUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-[var(--highlight)] underline">
@@ -297,11 +304,11 @@ export default function ShipmentsPage() {
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Created</span>
-                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.createdAt)}</p>
+                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.shipment.createdAt)}</p>
                                                     </div>
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Updated</span>
-                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.updatedAt)}</p>
+                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.shipment.updatedAt)}</p>
                                                     </div>
                                                 </div>
                                             </div>

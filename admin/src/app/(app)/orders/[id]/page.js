@@ -297,13 +297,23 @@ export default function OrderDetailPage() {
         <div className="flex items-center gap-3 rounded-[14px] border border-[var(--border)] p-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--highlight-soft)]">
             <span className="text-xs font-bold text-[var(--highlight)]">
-              {(order.customer?.fullName || "C")[0]}
+              {(
+                order.customer?.fullName ||
+                order.orderAddress?.name ||
+                "C"
+              )[0]}
             </span>
           </div>
           <div>
-            <p className="text-sm font-semibold text-[var(--text-primary)]">{order.customer?.fullName || "N/A"}</p>
-            <p className="text-xs text-[var(--text-secondary)]">{order.customer?.email || "N/A"}</p>
-            <p className="text-xs text-[var(--text-muted)]">{order.customer?.phone || ""}</p>
+            <p className="text-sm font-semibold text-[var(--text-primary)]">
+              {order.customer?.fullName || order.orderAddress?.name || "N/A"}
+            </p>
+            <p className="text-xs text-[var(--text-secondary)]">
+              {order.customer?.email || order.orderAddress?.email || "N/A"}
+            </p>
+            <p className="text-xs text-[var(--text-muted)]">
+              {order.customer?.phone || order.orderAddress?.phone || ""}
+            </p>
           </div>
         </div>
       </section>
@@ -339,18 +349,20 @@ export default function OrderDetailPage() {
         </div>
       </section>
 
-      {order.address ? (
+      {order.orderAddress ? (
         <section className="card-surface p-4">
           <p className="section-title mb-3">
             <MapPin size={12} className="inline" /> Delivery Address
           </p>
           <div className="text-sm text-[var(--text-primary)]">
-            <p className="font-semibold">{order.address.fullName}</p>
-            <p className="text-[var(--text-secondary)]">{order.address.line1}</p>
-            {order.address.line2 ? <p className="text-[var(--text-secondary)]">{order.address.line2}</p> : null}
+            <p className="font-semibold">{order.orderAddress.name}</p>
+            <p className="text-[var(--text-secondary)]">{order.orderAddress.addressLine1}</p>
+            {order.orderAddress.addressLine2 ? <p className="text-[var(--text-secondary)]">{order.orderAddress.addressLine2}</p> : null}
             <p className="text-[var(--text-secondary)]">
-              {order.address.city}, {order.address.state} {order.address.zip}
+              {order.orderAddress.city}, {order.orderAddress.state} {order.orderAddress.postalCode}
             </p>
+            <p className="text-[var(--text-secondary)]">{order.orderAddress.country}</p>
+            <p className="text-[var(--text-secondary)]">Phone: {order.orderAddress.phone}</p>
           </div>
         </section>
       ) : null}
@@ -622,7 +634,7 @@ export default function OrderDetailPage() {
               onChange={(e) => setPaymentDraft((prev) => ({ ...prev, method: e.target.value }))}
               className="form-input"
             >
-              {["RAZORPAY", "COD", "BANK_TRANSFER", "UPI"].map((m) => (
+              {["RAZORPAY", "COD"].map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>

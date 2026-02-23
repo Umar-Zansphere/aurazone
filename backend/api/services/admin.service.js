@@ -1097,7 +1097,8 @@ const getDashboard = async (req, res) => {
         updatedAt: 'desc',
       },
     }),
-  ]);
+  ]
+);
 
   const statusBreakdown = ORDER_STATUSES.reduce((acc, status) => {
     acc[status] = 0;

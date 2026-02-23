@@ -40,8 +40,8 @@ enum CartStatus {
 
 enum OrderStatus {
   PENDING
-  PAID
-  SHIPPED
+  SUCCESS
+  FAILED
   DELIVERED
   CANCELLED
 }
@@ -54,7 +54,7 @@ enum PaymentStatus {
 
 enum PaymentGateway {
   RAZORPAY
-  COD
+  COD 
 }
 
 enum OrderShipmentStatus {
