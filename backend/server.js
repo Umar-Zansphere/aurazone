@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const cookieParser = require('cookie-parser');
-
+const notificationService = require('./api/services/notification.service');
 const prisma = require('./config/prisma.js');
 
 dotenv.config();
@@ -24,7 +24,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // Initialize web-push service
-// notificationService.initializeWebPush();
+notificationService.initializeWebPush();
 
 // Import routes
 const apiRoutes = require("./api/routes/index.js");
