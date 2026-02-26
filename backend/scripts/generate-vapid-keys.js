@@ -12,7 +12,7 @@ console.log('Backend (.env):');
 console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`VAPID_PUBLIC_KEY=${vapidKeys.publicKey}`);
 console.log(`VAPID_PRIVATE_KEY=${vapidKeys.privateKey}`);
-console.log('VAPID_SUBJECT=mailto:admin@solemate.com');
+console.log('VAPID_SUBJECT=mailto:admin@aurazone.com');
 console.log('');
 
 console.log('Frontend (.env.local):');

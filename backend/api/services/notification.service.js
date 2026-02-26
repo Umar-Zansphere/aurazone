@@ -5,7 +5,7 @@ const prisma = require('../../config/prisma');
 function initializeWebPush() {
     const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
     const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-    const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@solemate.com';
+    const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:admin@Aurazone.com';
 
     if (!vapidPublicKey || !vapidPrivateKey) {
         console.warn('⚠️  VAPID keys not configured. Push notifications will not work.');

@@ -55,7 +55,7 @@ const signup = async (email, password) => {
   const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${newUser.emailVerificationToken}`;
   await sendEmail(
     newUser.email,
-    'Verify Your SoleMate Account',
+    'Verify Your Aurazone Account',
     'verify-email',
     { user: newUser, verificationUrl }
   );
@@ -129,7 +129,7 @@ const forgotPassword = async (email) => {
   const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${resetToken}`;
   await sendEmail(
     user.email,
-    'Reset Your SoleMate Password',
+    'Reset Your Aurazone Password',
     'reset-password', // <-- Template name
     { user, resetUrl } // <-- Data for the template
   );
@@ -214,7 +214,7 @@ const resendVerification = async (email) => {
   const verificationUrl = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
   await sendEmail(
     email,
-    'Verify Your SoleMate Account',
+    'Verify Your Aurazone Account',
     'verify-email',
     { user, verificationUrl }
   );
@@ -267,7 +267,7 @@ const sendPhoneVerification = async (userId, phoneNumber, email) => {
     // Send OTP via email
     await sendEmail(
       email,
-      'Your SoleMate Verification Code',
+      'Your Aurazone Verification Code',
       'otp-verification',
       { otp, purpose: 'VERIFICATION' }
     );
@@ -396,7 +396,7 @@ const phoneSignup = async (phoneNumber, email) => {
     // Send OTP via email
     await sendEmail(
       email,
-      'Your SoleMate Signup Code',
+      'Your Aurazone Signup Code',
       'otp-verification',
       { otp, purpose: 'SIGNUP' }
     );
@@ -559,7 +559,7 @@ const phoneLogin = async (phoneNumber) => {
     // Send OTP via email
     await sendEmail(
       user.email,
-      'Your SoleMate Login Code',
+      'Your Aurazone Login Code',
       'otp-verification',
       { otp, purpose: 'LOGIN' }
     );

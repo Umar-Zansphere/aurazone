@@ -320,7 +320,7 @@ export default function TrackOrderPage() {
 
                 {/* Help Text */}
                 <div className="text-center mt-8 text-sm text-gray-600">
-                    <p>Need help? Contact us at <span className="font-semibold">support@solemate.com</span></p>
+                    <p>Need help? Contact us at <span className="font-semibold">support@Aurazone.com</span></p>
                 </div>
             </main>
         </div>

@@ -158,7 +158,7 @@ export default function CheckoutPage() {
           key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
           amount: Math.round(finalAmount * 100), // in paise
           currency: 'INR',
-          name: 'SoleMate',
+          name: 'Aurazone',
           description: `Order ${orderData.orderNumber}`,
           order_id: orderData.razorpayOrderId,
           handler: async (response) => {

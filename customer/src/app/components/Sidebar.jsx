@@ -92,7 +92,7 @@ const Sidebar = ({ isOpen, onClose, onAuthRequest }) => {
           {/* Header */}
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-2xl font-black tracking-tight text-white">
-              SoleMate<span className="text-orange-500">.</span>
+              Aurazone<span className="text-orange-500">.</span>
             </h2>
             <button
               onClick={onClose}

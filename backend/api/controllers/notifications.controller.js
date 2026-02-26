@@ -323,7 +323,7 @@ async function sendTestNotification(req, res) {
 
         const payload = {
             title: 'Test Notification',
-            body: 'This is a test notification from SoleMate Admin',
+            body: 'This is a test notification from Aurazone Admin',
             url: '/notifications',
             icon: '/icons/manifest-icon-192.maskable.png'
         };

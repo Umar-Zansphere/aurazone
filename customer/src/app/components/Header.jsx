@@ -64,7 +64,7 @@ export default function Header({
               href="/"
               className="text-xl sm:text-2xl font-black tracking-tighter text-slate-900 hover:opacity-80 transition-opacity"
             >
-              SoleMate<span className="text-orange-500 text-2xl sm:text-3xl leading-none">.</span>
+              Aurazone<span className="text-orange-500 text-2xl sm:text-3xl leading-none">.</span>
             </a>
           </div>
 

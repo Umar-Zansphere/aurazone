@@ -6,7 +6,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import StoreInitializer from '@/components/StoreInitializer';
 
 export const metadata = {
-  title: 'SoleMate - Premium Footwear',
+  title: 'Aurazone - Premium Footwear',
   description: 'Discover premium shoes with exclusive collections. Shop as a guest or create an account for exclusive benefits.',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes',
   themeColor: '#FF6B6B',
