@@ -377,12 +377,16 @@ body {
 
 /* ─── Toggle Switch ─── */
 .toggle-track {
+  display: inline-flex;
+  align-items: center;
   width: 44px;
   height: 24px;
   border-radius: 12px;
   padding: 2px;
   cursor: pointer;
   transition: background 0.25s ease;
+  background: var(--border-strong);
+  flex-shrink: 0;
 }
 
 .toggle-track[data-active="true"] {
@@ -394,16 +398,22 @@ body {
 }
 
 .toggle-thumb {
+  display: block;
   width: 20px;
   height: 20px;
-  border-radius: 10px;
+  border-radius: 50%;
   background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  transition: transform 0.25s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: transform 0.25s cubic-bezier(0.4, 0.0, 0.2, 1);
+  transform: translateX(0);
 }
 
 .toggle-track[data-active="true"] .toggle-thumb {
   transform: translateX(20px);
+}
+
+.toggle-track[data-active="false"] .toggle-thumb {
+  transform: translateX(0);
 }
 
 /* ─── Global Reset ─── */

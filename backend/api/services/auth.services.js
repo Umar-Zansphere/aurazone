@@ -229,9 +229,14 @@ const hashOTP = (otp) => {
   return crypto.createHash('sha256').update(otp).digest('hex');
 };
 
-const sendPhoneVerification = async (userId, phoneNumber, email) => {
+const sendPhoneVerification = async (userId, phoneNumber) => {
   try {
-    // Validate email is provided
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+
+    const email = user?.email;
     if (!email) {
       throw new Error('Email is required to send verification code.');
     }
@@ -349,23 +354,67 @@ const verifyPhoneOtp = async (userId, phoneNumber, otp) => {
   }
 };
 
-const phoneSignup = async (phoneNumber, email) => {
+const phoneSignup = async (phoneNumber, email, password) => {
   try {
-    // Validate email is provided
-    if (!email) {
-      throw new Error('Email is required to send verification code.');
+    const normalizedEmail = email ? email.trim().toLowerCase() : null;
+    const normalizedPhone = phoneNumber ? phoneNumber.trim() : phoneNumber;
+
+    const userByPhone = normalizedPhone
+      ? await prisma.user.findUnique({ where: { phone: normalizedPhone } })
+      : null;
+    const userByEmail = normalizedEmail
+      ? await prisma.user.findUnique({ where: { email: normalizedEmail } })
+      : null;
+
+    if (userByPhone && userByEmail && userByPhone.id !== userByEmail.id) {
+      throw new Error('Email or phone number is already linked to another account.');
     }
 
-    // Check if phone already exists and is verified
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        phone: phoneNumber,
-        is_phone_verified: { not: null }
-      }
-    });
+    let signupUser = userByPhone || userByEmail;
+    const isResend = !normalizedEmail && !password;
 
-    if (existingUser) {
-      throw new Error('Phone number already registered');
+    if (!signupUser) {
+      if (!normalizedEmail || !password) {
+        throw new Error('Email and password are required for signup.');
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      signupUser = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          password: hashedPassword,
+          is_active: false,
+          is_email_verified: null,
+        },
+      });
+    } else {
+      if (signupUser.is_email_verified || signupUser.is_active) {
+        throw new Error('Account already registered. Please login instead.');
+      }
+
+      const nextEmail = normalizedEmail || signupUser.email;
+      if (!nextEmail) {
+        throw new Error('Email is required to send verification code.');
+      }
+
+      let nextPassword = undefined;
+      if (!isResend && password) {
+        nextPassword = await bcrypt.hash(password, 10);
+      }
+
+      signupUser = await prisma.user.update({
+        where: { id: signupUser.id },
+        data: {
+          email: nextEmail,
+          phone: normalizedPhone,
+          ...(nextPassword ? { password: nextPassword } : {}),
+        },
+      });
+    }
+
+    if (!signupUser.email) {
+      throw new Error('Email is required to send verification code.');
     }
 
     // Generate OTP
@@ -376,7 +425,8 @@ const phoneSignup = async (phoneNumber, email) => {
     // Delete any existing active OTP for this phone (for signup)
     await prisma.otpVerification.deleteMany({
       where: {
-        phone: phoneNumber,
+        userId: signupUser.id,
+        phone: normalizedPhone,
         purpose: 'SIGNUP',
         verifiedAt: null,
       },
@@ -385,9 +435,10 @@ const phoneSignup = async (phoneNumber, email) => {
     // Create new OTP verification record
     await prisma.otpVerification.create({
       data: {
-        phone: phoneNumber,
+        userId: signupUser.id,
+        phone: normalizedPhone,
         otpHash,
-        identifier: 'phone',
+        identifier: 'email',
         purpose: 'SIGNUP',
         expiresAt,
       },
@@ -395,7 +446,7 @@ const phoneSignup = async (phoneNumber, email) => {
 
     // Send OTP via email
     await sendEmail(
-      email,
+      signupUser.email,
       'Your Aurazone Signup Code',
       'otp-verification',
       { otp, purpose: 'SIGNUP' }
@@ -403,7 +454,7 @@ const phoneSignup = async (phoneNumber, email) => {
 
     return {
       success: true,
-      message: `Verification code sent to ${email}`,
+      message: `Verification code sent to ${signupUser.email}`,
       expiresIn: 600, // 10 minutes in seconds
     };
   } catch (error) {
@@ -431,6 +482,9 @@ const phoneSignupVerify = async (phoneNumber, otp) => {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        user: true,
+      },
     });
 
     if (!otpVerification) {
@@ -454,54 +508,44 @@ const phoneSignupVerify = async (phoneNumber, otp) => {
       data: { verifiedAt: now },
     });
 
-    // Check if user already exists with this phone
-    let user = await prisma.user.findFirst({
-      where: {
-        phone: phoneNumber,
-      }
-    });
-
-    // If user doesn't exist, create a new one
+    const user = otpVerification.user;
     if (!user) {
-      user = await prisma.user.create({
-        data: {
-          phone: phoneNumber,
-          is_phone_verified: now,
-          is_active: true,
-          is_email_verified: null,
-        },
-      });
-    } else {
-      // Update existing user with phone verification
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { is_phone_verified: now },
-      });
+      throw new Error('Signup session is invalid. Please request a new code.');
     }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        phone: phoneNumber,
+        is_active: true,
+        is_email_verified: now,
+      },
+    });
 
     // Mark OTP as verified AND link it to the User ID
     await prisma.otpVerification.update({
       where: { id: otpVerification.id },
       data: {
         verifiedAt: now,
-        userId: user.id // Link the OTP record to the created/found user
+        userId: updatedUser.id
       },
     });
 
     // Generate tokens
-    const { accessToken } = generateTokens(user);
+    const { accessToken } = generateTokens(updatedUser);
 
     return {
       success: true,
       message: 'Phone verified successfully. Account created.',
       accessToken,
       user: {
-        id: user.id,
-        fullName: user.fullName,
-        userRole: user.role,
-        phone: user.phone,
-        email: user.email,
-        is_phone_verified: user.is_phone_verified,
+        id: updatedUser.id,
+        fullName: updatedUser.fullName,
+        userRole: updatedUser.role,
+        phone: updatedUser.phone,
+        email: updatedUser.email,
+        is_phone_verified: updatedUser.is_phone_verified,
+        is_email_verified: updatedUser.is_email_verified,
       }
     };
   } catch (error) {
@@ -512,11 +556,12 @@ const phoneSignupVerify = async (phoneNumber, otp) => {
 
 const phoneLogin = async (phoneNumber) => {
   try {
-    // Check if user exists with this phone and it's verified
+    // Phone login is allowed only after the account email has been verified.
     const user = await prisma.user.findFirst({
       where: {
         phone: phoneNumber,
-        is_phone_verified: { not: null }
+        is_email_verified: { not: null },
+        is_active: true,
       }
     });
 
@@ -550,7 +595,7 @@ const phoneLogin = async (phoneNumber) => {
         userId: user.id,
         phone: phoneNumber,
         otpHash,
-        identifier: 'phone',
+        identifier: 'email',
         purpose: 'LOGIN',
         expiresAt,
       },
@@ -588,7 +633,8 @@ const phoneLoginVerify = async (phoneNumber, otp, req) => {
     const user = await prisma.user.findFirst({
       where: {
         phone: phoneNumber,
-        is_phone_verified: { not: null }
+        is_email_verified: { not: null },
+        is_active: true,
       }
     });
 

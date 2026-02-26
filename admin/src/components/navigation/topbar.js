@@ -34,29 +34,13 @@ export default function Topbar() {
                     >
                         <Menu size={18} />
                     </button>
-
-                    {/* Desktop search */}
-                    <div className="hidden items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--bg-app)] px-4 py-2 text-sm text-[var(--text-muted)] transition-all focus-within:border-[var(--highlight)] focus-within:ring-2 focus-within:ring-[var(--highlight-soft)] md:flex w-64 lg:w-80">
-                        <Search size={15} />
-                        <input
-                            type="text"
-                            placeholder="Search orders, products..."
-                            className="w-full bg-transparent outline-none placeholder:text-[var(--text-muted)] text-[var(--text-primary)] text-sm"
-                        />
-                    </div>
+                    {/* Logo */}
+                    <Link href="/" className="text-lg font-bold text-[var(--text-primary)]">
+                        AuraZone
+                    </Link>
                 </div>
 
                 <div className="flex items-center gap-1">
-                    {/* Mobile search toggle */}
-                    <button
-                        type="button"
-                        onClick={toggleSearch}
-                        className="grid h-9 w-9 place-items-center rounded-xl text-[var(--text-secondary)] transition-colors hover:bg-[var(--bg-app)] hover:text-[var(--text-primary)] md:hidden"
-                        aria-label="Toggle search"
-                    >
-                        {searchOpen ? <X size={18} /> : <Search size={18} />}
-                    </button>
-
                     {/* Notifications */}
                     <Link
                         href="/notifications"
@@ -67,40 +51,6 @@ export default function Topbar() {
                     </Link>
                 </div>
             </div>
-
-            {/* Mobile search bar — slides down */}
-            <AnimatePresence>
-                {searchOpen && (
-                    <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: "auto", opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        transition={{ duration: 0.2, ease: "easeInOut" }}
-                        className="overflow-hidden border-t border-[var(--border)] md:hidden"
-                    >
-                        <div className="flex items-center gap-2 px-4 py-2.5">
-                            <Search size={15} className="shrink-0 text-[var(--text-muted)]" />
-                            <input
-                                ref={searchRef}
-                                type="text"
-                                placeholder="Search orders, products..."
-                                onBlur={() => {
-                                    // Delay close to allow tap on results
-                                    setTimeout(closeSearch, 150);
-                                }}
-                                className="w-full bg-transparent text-sm outline-none placeholder:text-[var(--text-muted)] text-[var(--text-primary)]"
-                            />
-                            <button
-                                type="button"
-                                onClick={closeSearch}
-                                className="shrink-0 text-xs font-medium text-[var(--highlight)]"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
         </header>
     );
 }

@@ -1,15 +1,21 @@
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Smartphone, Mail, Lock, ArrowRight, User } from 'lucide-react';
+import { Smartphone, Mail, Lock, ArrowRight } from 'lucide-react';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { authApi } from '@/lib/api';
+import {
+  getPasswordStrengthErrors,
+  isValidEmail,
+  isValidPhone,
+  normalizeEmail,
+  normalizePhone,
+} from '@/lib/auth-validation';
 import PublicRoute from '@/components/PublicRoute';
 
 function SignupContent() {
   const router = useRouter();
-  const [method, setMethod] = useState('phone');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -22,26 +28,36 @@ function SignupContent() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    const normalizedPhone = normalizePhone(formData.phone);
+    const normalizedEmail = normalizeEmail(formData.email);
+    const passwordErrors = getPasswordStrengthErrors(formData.password);
+
+    if (!isValidPhone(normalizedPhone)) {
+      setError('Enter a valid phone number with 10 to 15 digits.');
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      setError('Enter a valid email address.');
+      return;
+    }
+
+    if (passwordErrors.length > 0) {
+      setError(passwordErrors[0]);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      if (method === 'phone') {
-        const res = await authApi.phoneSignup(formData.phone);
-        const data = await res.json();
-        
-        if (!res.ok) throw new Error(data.message || 'Failed to send code');
-        
-        router.push(`/verify-otp?phone=${encodeURIComponent(formData.phone)}&mode=signup`);
-      } else {
-        const res = await authApi.signup(formData.email, formData.password);
-        const data = await res.json();
+      const res = await authApi.phoneSignup(normalizedPhone, normalizedEmail, formData.password);
+      const data = await res.json();
 
-        if (!res.ok) throw new Error(data.message || 'Signup failed');
-        
-        // Show success state or redirect to a specific email sent page
-        alert('Signup successful! Please check your email.');
-        router.push('/login');
-      }
+      if (!res.ok) throw new Error(data.message || 'Failed to send code');
+
+      router.push(
+        `/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&email=${encodeURIComponent(normalizedEmail)}&mode=signup`
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -61,64 +77,40 @@ function SignupContent() {
         {/* Header */}
         <div className="text-center space-y-2">
           <h1 className="text-3xl font-bold tracking-tight text-(--text-primary)">Create Account</h1>
-          <p className="text-(--text-secondary)">Join us to get exclusive offers!</p>
-        </div>
-
-        {/* Toggle */}
-        <div className="flex bg-(--img-bg) p-1.5 rounded-full relative">
-          <button
-            onClick={() => setMethod('phone')}
-            className={`flex-1 py-3 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
-              method === 'phone' 
-                ? 'bg-white shadow-md text-(--text-primary)' 
-                : 'text-(--text-secondary) hover:text-(--text-primary)'
-            }`}
-          >
-            Phone Number
-          </button>
-          <button
-            onClick={() => setMethod('email')}
-            className={`flex-1 py-3 px-4 rounded-full text-sm font-semibold transition-all duration-300 ${
-              method === 'email' 
-                ? 'bg-white shadow-md text-(--text-primary)' 
-                : 'text-(--text-secondary) hover:text-(--text-primary)'
-            }`}
-          >
-            Email
-          </button>
+          <p className="text-(--text-secondary)">Use your phone number, email and password to continue.</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-6">
-          {method === 'phone' ? (
+          <div className="space-y-5">
             <Input
               icon={Smartphone}
               placeholder="+1 555 000 0000"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, phone: normalizePhone(e.target.value) })}
               type="tel"
               required
             />
-          ) : (
-            <div className="space-y-5">
-              <Input
-                icon={Mail}
-                placeholder="hello@example.com"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                type="email"
-                required
-              />
-              <Input
-                icon={Lock}
-                type="password"
-                placeholder="Create password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-              />
-            </div>
-          )}
+            <Input
+              icon={Mail}
+              placeholder="hello@example.com"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              type="email"
+              required
+            />
+            <Input
+              icon={Lock}
+              type="password"
+              placeholder="Create password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
+            />
+            <p className="text-xs text-(--text-secondary)">
+              Use 8+ characters with uppercase, lowercase, number and symbol.
+            </p>
+          </div>
 
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 text-(--accent) text-sm rounded-2xl text-center font-medium">
@@ -126,8 +118,8 @@ function SignupContent() {
             </div>
           )}
 
-          <Button type="submit" isLoading={loading} variant={method === 'phone' ? 'accent' : 'primary'}>
-            {method === 'phone' ? 'Get Code' : 'Create Account'}
+          <Button type="submit" isLoading={loading} variant="accent">
+            Get Verification Code
             {!loading && <ArrowRight size={18} />}
           </Button>
         </form>

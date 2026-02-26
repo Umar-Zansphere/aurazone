@@ -5,6 +5,7 @@ import { Smartphone, Mail, Lock, ArrowRight } from 'lucide-react';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
 import { authApi } from '@/lib/api';
+import { isValidEmail, isValidPhone, normalizeEmail, normalizePhone } from '@/lib/auth-validation';
 import PublicRoute from '@/components/PublicRoute';
 
 function LoginContent() {
@@ -22,19 +23,37 @@ function LoginContent() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
     try {
       if (method === 'phone') {
-        const res = await authApi.phoneLogin(formData.phone);
+        const normalizedPhone = normalizePhone(formData.phone);
+        if (!isValidPhone(normalizedPhone)) {
+          setError('Enter a valid phone number with 10 to 15 digits.');
+          return;
+        }
+
+        setLoading(true);
+        const res = await authApi.phoneLogin(normalizedPhone);
         const data = await res.json();
 
         if (!res.ok) throw new Error(data.message || 'Failed to send code');
 
         // Redirect to OTP verification
-        router.push(`/verify-otp?phone=${encodeURIComponent(formData.phone)}&mode=login`);
+        router.push(`/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&mode=login`);
       } else {
-        const res = await authApi.login(formData.email, formData.password);
+        const normalizedEmail = normalizeEmail(formData.email);
+        if (!isValidEmail(normalizedEmail)) {
+          setError('Enter a valid email address.');
+          return;
+        }
+
+        if (!formData.password.trim()) {
+          setError('Password is required.');
+          return;
+        }
+
+        setLoading(true);
+        const res = await authApi.login(normalizedEmail, formData.password);
         const data = await res.json();
         console.log(data);
 
@@ -100,7 +119,7 @@ function LoginContent() {
               icon={Smartphone}
               placeholder="+1 555 000 0000"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, phone: normalizePhone(e.target.value) })}
               type="tel"
               required
             />

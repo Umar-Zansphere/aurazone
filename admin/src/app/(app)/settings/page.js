@@ -37,7 +37,7 @@ export default function SettingsPage() {
 
     checkSubscribed();
 
-    fetch(`/health`)
+    fetch(`https://${process.env.NEXT_PUBLIC_API_URL}/health`)
       .then((res) => res.json())
       .then((json) => {
         if (active) {
@@ -98,9 +98,9 @@ export default function SettingsPage() {
             await logout();
             router.replace("/login");
           }}
-          className="app-button app-button-danger mt-3 flex items-center gap-2 px-3 py-2 text-sm"
+          className="app-button app-button-danger mt-3 flex w-full items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-all focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--error)]"
         >
-          <LogOut size={15} /> Log Out
+          <LogOut size={16} /> Log Out
         </button>
       </section>
 
@@ -116,10 +116,15 @@ export default function SettingsPage() {
             key={pref.key}
             type="button"
             onClick={() => savePref(pref.key, !prefs[pref.key])}
-            className="flex w-full items-center justify-between border-b border-[var(--border)] py-3 last:border-none"
+            className="flex w-full items-center justify-between border-b border-[var(--border)] px-0 py-3 last:border-none transition-colors hover:bg-[var(--surface-hover)] active:bg-[var(--surface)] focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--highlight)] rounded-lg"
           >
-            <span className="text-sm text-[var(--text-primary)]">{pref.label}</span>
-            <span className="toggle-track" data-active={String(prefs[pref.key])}>
+            <span className="text-sm font-medium text-[var(--text-primary)]">{pref.label}</span>
+            <span 
+              className="toggle-track" 
+              data-active={String(prefs[pref.key])}
+              role="switch"
+              aria-checked={prefs[pref.key]}
+            >
               <span className="toggle-thumb" />
             </span>
           </button>
@@ -129,9 +134,9 @@ export default function SettingsPage() {
           type="button"
           disabled={pushLoading}
           onClick={() => (subscribed ? unsubscribe() : subscribe())}
-          className="mt-3 flex w-full items-center justify-between rounded-[14px] border border-[var(--border)] px-3 py-3 transition-colors hover:bg-[var(--surface-hover)]"
+          className="mt-3 flex w-full items-center justify-between rounded-[14px] border border-[var(--border)] px-3 py-3 transition-all hover:bg-[var(--surface-hover)] active:bg-[var(--surface)] disabled:opacity-60 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-[var(--highlight)]"
         >
-          <span className="inline-flex items-center gap-2 text-sm text-[var(--text-primary)]">
+          <span className="inline-flex items-center gap-2 text-sm font-medium text-[var(--text-primary)]">
             <Bell size={14} className="text-[var(--highlight)]" /> Push Subscription
           </span>
           <span className={`text-xs font-semibold ${subscribed ? "text-[var(--success)]" : "text-[var(--text-secondary)]"}`}>

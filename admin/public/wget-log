@@ -1,0 +1,24 @@
+--2026-02-26 07:15:22--  https://chat.google.com/u/1/api/get_attachment_url?url_type=FIFE_URL
+Resolving chat.google.com (chat.google.com)... 142.250.206.110, 2404:6800:4009:81f::200e
+Connecting to chat.google.com (chat.google.com)|142.250.206.110|:443... connected.
+HTTP request sent, awaiting response... 302 Found
+Location: https://accounts.google.com/ServiceLogin?service=dynamite&passive=1209600&osid=1&continue=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&followup=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL [following]
+--2026-02-26 07:15:23--  https://accounts.google.com/ServiceLogin?service=dynamite&passive=1209600&osid=1&continue=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&followup=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL
+Resolving accounts.google.com (accounts.google.com)... 192.178.211.84, 2404:6800:4000:1025::54
+Connecting to accounts.google.com (accounts.google.com)|192.178.211.84|:443... connected.
+HTTP request sent, awaiting response... 302 Found
+Location: https://accounts.google.com/InteractiveLogin?continue=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&followup=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&osid=1&passive=1209600&service=dynamite&dsh=S1528483073:1772090125464736&ifkv=ASfE1-qHuiA_N6trfbgvLvdwqT3gBwZ01Kxe9Rkjmamk5zxhdd9PBo5k5rlEDYR6_N3lC3Y4MO-ZMw [following]
+--2026-02-26 07:15:23--  https://accounts.google.com/InteractiveLogin?continue=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&followup=https://chat.google.com/u/1/api/get_attachment_url?url_type%3DFIFE_URL&osid=1&passive=1209600&service=dynamite&dsh=S1528483073:1772090125464736&ifkv=ASfE1-qHuiA_N6trfbgvLvdwqT3gBwZ01Kxe9Rkjmamk5zxhdd9PBo5k5rlEDYR6_N3lC3Y4MO-ZMw
+Reusing existing connection to accounts.google.com:443.
+HTTP request sent, awaiting response... 302 Moved Temporarily
+Location: https://accounts.google.com/v3/signin/identifier?continue=https%3A%2F%2Fchat.google.com%2Fu%2F1%2Fapi%2Fget_attachment_url%3Furl_type%3DFIFE_URL&dsh=S1528483073%3A1772090125464736&followup=https%3A%2F%2Fchat.google.com%2Fu%2F1%2Fapi%2Fget_attachment_url%3Furl_type%3DFIFE_URL&ifkv=ASfE1-q2J5HK0COBhz3_70p12avQ8LTwXCgnVnHBZwfuphjSotJCXEG4zC3bsyAfpTlhnmVOGmB2mg&osid=1&passive=1209600&service=dynamite&flowName=WebLiteSignIn&flowEntry=ServiceLogin [following]
+--2026-02-26 07:15:23--  https://accounts.google.com/v3/signin/identifier?continue=https%3A%2F%2Fchat.google.com%2Fu%2F1%2Fapi%2Fget_attachment_url%3Furl_type%3DFIFE_URL&dsh=S1528483073%3A1772090125464736&followup=https%3A%2F%2Fchat.google.com%2Fu%2F1%2Fapi%2Fget_attachment_url%3Furl_type%3DFIFE_URL&ifkv=ASfE1-q2J5HK0COBhz3_70p12avQ8LTwXCgnVnHBZwfuphjSotJCXEG4zC3bsyAfpTlhnmVOGmB2mg&osid=1&passive=1209600&service=dynamite&flowName=WebLiteSignIn&flowEntry=ServiceLogin
+Reusing existing connection to accounts.google.com:443.
+HTTP request sent, awaiting response... 200 OK
+Length: unspecified [text/html]
+Saving to: ‘get_attachment_url?url_type=FIFE_URL’
+
+get_attachment_url?url_type=FIFE_URL       [<=>                                                                         ]       0  --.-KB/s               get_attachment_url?url_type=FIFE_URL       [ <=>                                                                        ] 164.64K   823KB/s               get_attachment_url?url_type=FIFE_URL       [  <=>                                                                       ] 705.37K  1.69MB/s               get_attachment_url?url_type=FIFE_URL       [   <=>                                                                      ] 870.72K  1.54MB/s    in 0.6s    
+
+2026-02-26 07:15:24 (1.54 MB/s) - ‘get_attachment_url?url_type=FIFE_URL’ saved [891614]
+

@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const { createError } = require('../../utils/error');
 const { uploadBufferToS3 } = require('../services/s3.services');
+const notificationService = require('./notification.service');
 const { validateAndOptimizeImage } = require('../../utils/imageProcessor');
 const { randomUUID } = require('node:crypto');
 
@@ -4881,11 +4882,21 @@ const updateNotificationPreferences = async (req, res) => {
 };
 
 const broadcastNotification = async (req, res) => {
-  const { title, body, url } = req.body || {};
+  const { title, body, url, icon } = req.body || {};
 
   if (!title || !body) {
     throw createError(400, 'title and body are required');
   }
+
+  const payload = {
+    title,
+    body,
+    url: url || '/',
+    icon: icon || '/icons/web-app-manifest-192x192.png',
+    badge: '/icons/web-app-manifest-192x192.png',
+  };
+
+  const pushResult = await notificationService.broadcastToAll(payload, { onlyUsers: true });
 
   const subscriptions = await prisma.pushSubscription.findMany({
     where: {
@@ -4907,13 +4918,17 @@ const broadcastNotification = async (req, res) => {
         title,
         body,
         url: url || null,
+        icon: payload.icon,
       })),
     });
   }
 
   return res.status(200).json({
-    message: 'Notification broadcast queued',
-    sentCount: subscriptions.length,
+    message: 'Notification broadcast sent',
+    sentCount: pushResult.sent || 0,
+    failedCount: pushResult.failed || 0,
+    totalSubscriptions: pushResult.total || subscriptions.length,
+    totalRecipients: uniqueUserIds.length,
   });
 };
 

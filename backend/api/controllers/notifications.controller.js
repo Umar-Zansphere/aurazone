@@ -103,8 +103,8 @@ async function sendNotification(req, res) {
         const payload = {
             title: notification.title,
             body: notification.body,
-            icon: notification.icon || '/icons/manifest-icon-192.maskable.png',
-            badge: notification.badge || '/icons/manifest-icon-192.maskable.png',
+            icon: notification.icon || '/icons/web-app-manifest-192x192.png',
+            badge: notification.badge || '/icons/web-app-manifest-192x192.png',
             url: notification.url || '/',
             data: notification.data || {}
         };
@@ -142,8 +142,8 @@ async function broadcastNotification(req, res) {
         const payload = {
             title: notification.title,
             body: notification.body,
-            icon: notification.icon || '/icons/manifest-icon-192.maskable.png',
-            badge: notification.badge || '/icons/manifest-icon-192.maskable.png',
+            icon: notification.icon || '/icons/web-app-manifest-192x192.png',
+            badge: notification.badge || '/icons/web-app-manifest-192x192.png',
             url: notification.url || '/',
             data: notification.data || {}
         };
@@ -325,7 +325,7 @@ async function sendTestNotification(req, res) {
             title: 'Test Notification',
             body: 'This is a test notification from Aurazone Admin',
             url: '/notifications',
-            icon: '/icons/manifest-icon-192.maskable.png'
+            icon: '/icons/web-app-manifest-192x192.png'
         };
 
         const result = await notificationService.sendToUser(userId, payload);

@@ -313,7 +313,7 @@ async function notifyNewOrder(orderId, orderData) {
             title: `New Order #${orderData.orderNumber || orderId.slice(0, 8)}`,
             body: `Order from ${orderData.customerName || 'Customer'} - ₹${orderData.total?.toFixed(2) || '0.00'}`,
             url: `/orders/${orderId}`,
-            icon: '/icons/manifest-icon-192.maskable.png'
+            icon: '/icons/web-app-manifest-192x192.png'
         };
 
         // Get admins with newOrders preference enabled
@@ -358,7 +358,7 @@ async function notifyOrderStatusChange(orderId, orderNumber, oldStatus, newStatu
             title: `Order #${orderNumber || orderId.slice(0, 8)} ${newStatus}`,
             body: `Order status changed from ${oldStatus} to ${newStatus}`,
             url: `/orders/${orderId}`,
-            icon: '/icons/manifest-icon-192.maskable.png'
+            icon: '/icons/web-app-manifest-192x192.png'
         };
 
         // Get admins with orderStatusChange preference enabled
@@ -403,7 +403,7 @@ async function notifyLowStock(productId, productName, currentStock, threshold = 
             title: 'Low Stock Alert',
             body: `${productName} - Only ${currentStock} units left`,
             url: `/inventory`,
-            icon: '/icons/manifest-icon-192.maskable.png'
+            icon: '/icons/web-app-manifest-192x192.png'
         };
 
         // Get admins with lowStock preference enabled

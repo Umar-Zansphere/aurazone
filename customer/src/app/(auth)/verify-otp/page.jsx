@@ -11,6 +11,7 @@ function VerifyContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const phone = searchParams.get('phone');
+  const email = searchParams.get('email');
   const mode = searchParams.get('mode'); // 'login' or 'signup'
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -81,12 +82,17 @@ function VerifyContent() {
     if (timer > 0) return;
     setTimer(60);
     try {
-      if (mode === 'signup') await authApi.phoneSignup(phone);
+      if (mode === 'signup') await authApi.phoneSignup(phone, email);
       else await authApi.phoneLogin(phone);
     } catch (err) {
       console.error(err);
     }
   };
+
+  const destinationLabel =
+    mode === 'signup'
+      ? (email || 'your email address')
+      : 'your registered email';
 
   return (
     <div className="min-h-screen bg-(--background) flex flex-col">
@@ -112,7 +118,7 @@ function VerifyContent() {
           <div className="text-center space-y-4">
             <h1 className="text-2xl font-bold text-(--text-primary)">Verification Code</h1>
             <p className="text-(--text-secondary) text-sm px-4">
-              Code has been sent to <span className="text-(--text-primary) font-semibold">{phone}</span>
+              Code has been sent to <span className="text-(--text-primary) font-semibold">{destinationLabel}</span>
             </p>
           </div>
 

@@ -47,7 +47,11 @@ export const useNotificationHistoryStore = create((set, get) => ({
         notifications: state.notifications.map((item) =>
           item.id === notificationId ? { ...item, isRead: true } : item
         ),
-        unreadCount: Math.max(0, state.unreadCount - 1),
+        unreadCount: Math.max(
+          0,
+          state.unreadCount -
+            (state.notifications.find((item) => item.id === notificationId && !item.isRead) ? 1 : 0)
+        ),
       }));
     } catch (error) {
       set({ error: error.message });

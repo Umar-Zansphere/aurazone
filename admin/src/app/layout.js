@@ -19,10 +19,10 @@ export const metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-192.svg", type: "image/svg+xml" },
-      { url: "/icons/icon-512.svg", type: "image/svg+xml" },
+      { url: "/icons/web-app-manifest-192x192.png", type: "image/png" },
+      { url: "/icons/web-app-manifest-512x512.png", type: "image/png" },
     ],
-    apple: [{ url: "/icons/icon-192.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", type: "image/png" }],
   },
 };
 
@@ -31,7 +31,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#1c1c1c",
+  themeColor: "#FF6B6B",
 };
 
 export default function RootLayout({ children }) {

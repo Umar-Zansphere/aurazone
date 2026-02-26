@@ -139,14 +139,14 @@ const verifyPhoneOtp = async (req, res, next) => {
 
 const phoneSignup = async (req, res, next) => {
   try {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, email, password } = req.body;
 
     // Validate phone number
     if (!phoneNumber || phoneNumber.trim().length < 10) {
       return res.status(400).json({ message: 'Invalid phone number format.' });
     }
 
-    const result = await authService.phoneSignup(phoneNumber);
+    const result = await authService.phoneSignup(phoneNumber, email, password);
     res.json(result);
   } catch (error) {
     next(error);

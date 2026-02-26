@@ -34,7 +34,11 @@ export const useNotificationStore = create((set, get) => ({
   },
 
   async subscribe() {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("Notification" in window)
+    ) {
       return;
     }
 
@@ -54,11 +58,17 @@ export const useNotificationStore = create((set, get) => ({
 
       const registration = await navigator.serviceWorker.register("/push-sw.js");
       const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+      if (!vapidKey) {
+        throw new Error("Missing NEXT_PUBLIC_VAPID_PUBLIC_KEY");
+      }
 
-      const pushSubscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: vapidKey ? urlBase64ToUint8Array(vapidKey) : undefined,
-      });
+      let pushSubscription = await registration.pushManager.getSubscription();
+      if (!pushSubscription) {
+        pushSubscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      }
 
       const json = pushSubscription.toJSON();
       await apiFetch("/admin/notifications/subscribe", {
@@ -85,7 +95,7 @@ export const useNotificationStore = create((set, get) => ({
     set({ loading: true, error: null });
 
     try {
-      const registration = await navigator.serviceWorker.getRegistration("/");
+      const registration = await navigator.serviceWorker.getRegistration();
       const sub = await registration?.pushManager.getSubscription();
 
       if (sub) {
@@ -105,13 +115,17 @@ export const useNotificationStore = create((set, get) => ({
   },
 
   async checkSubscribed() {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+    if (
+      typeof window === "undefined" ||
+      !("serviceWorker" in navigator) ||
+      !("Notification" in window)
+    ) {
       return;
     }
 
     try {
       await navigator.serviceWorker.register("/push-sw.js");
-      const registration = await navigator.serviceWorker.getRegistration("/");
+      const registration = await navigator.serviceWorker.getRegistration();
       const sub = await registration?.pushManager.getSubscription();
       set({ subscribed: Boolean(sub), permission: Notification.permission });
     } catch {

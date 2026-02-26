@@ -49,11 +49,11 @@ export const authApi = {
       body: JSON.stringify({ phoneNumber, otp }),
     }),
 
-  phoneSignup: (phoneNumber) =>
+  phoneSignup: (phoneNumber, email, password) =>
     fetch(`/api/auth/phone-signup`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
-      body: JSON.stringify({ phoneNumber }),
+      body: JSON.stringify({ phoneNumber, email, password }),
     }),
 
   phoneSignupVerify: (phoneNumber, otp) =>
