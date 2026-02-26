@@ -37,7 +37,7 @@ export default function SettingsPage() {
 
     checkSubscribed();
 
-    fetch(`https://${process.env.NEXT_PUBLIC_API_URL}/health`)
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
       .then((res) => res.json())
       .then((json) => {
         if (active) {
