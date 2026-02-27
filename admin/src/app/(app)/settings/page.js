@@ -37,8 +37,24 @@ export default function SettingsPage() {
 
     checkSubscribed();
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`)
-      .then((res) => res.json())
+    fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    })
+      .then(async (res) => {
+        if (res.status === 304) {
+          return { status: "healthy", message: "Database connection OK ✅" };
+        }
+
+        if (!res.ok) {
+          throw new Error(`Health check failed with status ${res.status}`);
+        }
+
+        return res.json();
+      })
       .then((json) => {
         if (active) {
           setHealth(json);

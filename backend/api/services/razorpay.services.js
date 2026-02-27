@@ -8,6 +8,99 @@ const razorpay = new Razorpay({
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
 
+const parseBooleanEnv = (value) => {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+};
+
+const RAZORPAY_WEBHOOK_DEBUG_ENABLED = parseBooleanEnv(process.env.RAZORPAY_WEBHOOK_DEBUG);
+const RAZORPAY_WEBHOOK_DEBUG_UNTIL = process.env.RAZORPAY_WEBHOOK_DEBUG_UNTIL;
+
+const isWebhookDebugLoggingEnabled = () => {
+  if (!RAZORPAY_WEBHOOK_DEBUG_ENABLED) {
+    return false;
+  }
+
+  if (!RAZORPAY_WEBHOOK_DEBUG_UNTIL) {
+    return true;
+  }
+
+  const until = new Date(RAZORPAY_WEBHOOK_DEBUG_UNTIL);
+  if (Number.isNaN(until.getTime())) {
+    return true;
+  }
+
+  return Date.now() <= until.getTime();
+};
+
+const getWebhookEntity = (payloadNode) => {
+  if (!payloadNode) {
+    return null;
+  }
+
+  return payloadNode.entity || payloadNode;
+};
+
+const buildWebhookDebugSummary = (event, payload) => {
+  const payment = getWebhookEntity(payload?.payment);
+  const order = getWebhookEntity(payload?.order);
+  const refund = getWebhookEntity(payload?.refund);
+
+  return {
+    event,
+    receivedAt: new Date().toISOString(),
+    payment: payment
+      ? {
+        id: payment.id || null,
+        orderId: payment.order_id || payment.orderId || null,
+        amount: typeof payment.amount === 'number' ? payment.amount : null,
+        currency: payment.currency || null,
+        status: payment.status || null,
+        method: payment.method || null,
+        createdAtEpoch: payment.created_at || null,
+        noteOrderId: payment.notes?.orderId || payment.notes?.order_id || null,
+      }
+      : null,
+    order: order
+      ? {
+        id: order.id || null,
+        amountPaid: typeof order.amount_paid === 'number' ? order.amount_paid : null,
+        amountDue: typeof order.amount_due === 'number' ? order.amount_due : null,
+        currency: order.currency || null,
+        status: order.status || null,
+        receipt: order.receipt || null,
+        noteOrderId: order.notes?.orderId || order.notes?.order_id || null,
+      }
+      : null,
+    refund: refund
+      ? {
+        id: refund.id || null,
+        paymentId: refund.payment_id || null,
+        amount: typeof refund.amount === 'number' ? refund.amount : null,
+        status: refund.status || null,
+        createdAtEpoch: refund.created_at || null,
+      }
+      : null,
+  };
+};
+
+const logWebhookDebug = (stage, event, payload, extra = {}) => {
+  if (!isWebhookDebugLoggingEnabled()) {
+    return;
+  }
+
+  const summary = buildWebhookDebugSummary(event, payload);
+  console.info('[Razorpay webhook debug]', {
+    stage,
+    ...summary,
+    ...extra,
+  });
+};
+
 // ======================== CREATE RAZORPAY ORDER ========================
 
 const createRazorpayOrder = async (orderData) => {
@@ -146,33 +239,122 @@ const processPaymentWebhook = async (webhookData) => {
   const { event, payload } = webhookData;
 
   try {
+    logWebhookDebug('received', event, payload);
+
+    let result;
     switch (event) {
       case 'payment.authorized':
-        return await handlePaymentAuthorized(payload);
+        result = await handlePaymentAuthorized(payload);
+        break;
 
       case 'payment.failed':
-        return await handlePaymentFailed(payload);
+        result = await handlePaymentFailed(payload);
+        break;
 
       case 'payment.captured':
-        return await handlePaymentCaptured(payload);
+        result = await handlePaymentCaptured(payload);
+        break;
+
+      case 'order.paid':
+        result = await handleOrderPaid(payload);
+        break;
 
       case 'refund.created':
-        return await handleRefundCreated(payload);
+        result = await handleRefundCreated(payload);
+        break;
 
       case 'refund.processed':
-        return await handleRefundProcessed(payload);
+        result = await handleRefundProcessed(payload);
+        break;
 
       default:
         console.log('Unhandled webhook event:', event);
-        return { message: 'Webhook received but not processed' };
+        result = { message: 'Webhook received but not processed' };
+        break;
     }
+
+    logWebhookDebug('processed', event, payload, {
+      result: {
+        success: result?.success ?? null,
+        message: result?.message || null,
+        orderNumber: result?.orderNumber || null,
+        refundId: result?.refundId || null,
+      },
+    });
+
+    return result;
   } catch (error) {
+    logWebhookDebug('error', event, payload, {
+      errorMessage: error?.message || 'Unknown webhook processing error',
+    });
     console.error('Error processing webhook:', error);
     throw error;
   }
 };
 
 // ======================== WEBHOOK HANDLERS ========================
+
+const normalizeNonEmptyString = (value) => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+const extractPaymentWebhookData = (payload) => {
+  const payment = getWebhookEntity(payload?.payment);
+  if (!payment) {
+    throw new Error('Webhook payload is missing payment entity');
+  }
+
+  const razorpayPaymentId = normalizeNonEmptyString(payment.id);
+  if (!razorpayPaymentId) {
+    throw new Error('Webhook payload is missing Razorpay payment id');
+  }
+
+  return {
+    payment,
+    razorpayPaymentId,
+    razorpayOrderId: normalizeNonEmptyString(payment.order_id || payment.orderId),
+    localOrderId: normalizeNonEmptyString(payment.notes?.orderId || payment.notes?.order_id),
+  };
+};
+
+const findOrderForWebhook = async ({ razorpayOrderId, razorpayPaymentId, localOrderId }) => {
+  if (razorpayOrderId) {
+    const byRazorpayOrderId = await prisma.order.findUnique({
+      where: { razorpayOrderId },
+      include: { items: true },
+    });
+    if (byRazorpayOrderId) {
+      return byRazorpayOrderId;
+    }
+  }
+
+  if (razorpayPaymentId) {
+    const byRazorpayPaymentId = await prisma.order.findUnique({
+      where: { razorpayPaymentId },
+      include: { items: true },
+    });
+    if (byRazorpayPaymentId) {
+      return byRazorpayPaymentId;
+    }
+  }
+
+  if (localOrderId) {
+    const byLocalOrderId = await prisma.order.findUnique({
+      where: { id: localOrderId },
+      include: { items: true },
+    });
+    if (byLocalOrderId) {
+      return byLocalOrderId;
+    }
+  }
+
+  return null;
+};
 
 const upsertRazorpayPaymentTx = async (tx, {
   orderId,
@@ -182,18 +364,33 @@ const upsertRazorpayPaymentTx = async (tx, {
   status,
   paidAt = null,
 }) => {
-  const idempotencyKey = `rzp-webhook-${razorpayOrderId}`;
+  const uniqueIdentifier = razorpayOrderId || razorpayPaymentId;
+  if (!uniqueIdentifier) {
+    throw new Error('Cannot upsert Razorpay payment without order id or payment id');
+  }
 
-  return tx.payment.upsert({
-    where: {
+  const idempotencyKey = `rzp-webhook-${uniqueIdentifier}`;
+
+  const where = razorpayOrderId
+    ? {
       gateway_gatewayOrderId: {
         gateway: 'RAZORPAY',
         gatewayOrderId: razorpayOrderId,
       },
-    },
+    }
+    : {
+      gateway_gatewayPaymentId: {
+        gateway: 'RAZORPAY',
+        gatewayPaymentId: razorpayPaymentId,
+      },
+    };
+
+  return tx.payment.upsert({
+    where,
     update: {
       orderId,
-      gatewayPaymentId: razorpayPaymentId,
+      ...(razorpayOrderId ? { gatewayOrderId: razorpayOrderId } : {}),
+      ...(razorpayPaymentId ? { gatewayPaymentId: razorpayPaymentId } : {}),
       amount,
       status,
       paidAt,
@@ -202,8 +399,8 @@ const upsertRazorpayPaymentTx = async (tx, {
     create: {
       orderId,
       gateway: 'RAZORPAY',
-      gatewayOrderId: razorpayOrderId,
-      gatewayPaymentId: razorpayPaymentId,
+      ...(razorpayOrderId ? { gatewayOrderId: razorpayOrderId } : {}),
+      ...(razorpayPaymentId ? { gatewayPaymentId: razorpayPaymentId } : {}),
       amount,
       status,
       paidAt,
@@ -215,17 +412,21 @@ const upsertRazorpayPaymentTx = async (tx, {
 const markOrderAsPaidFromWebhook = async ({
   razorpayOrderId,
   razorpayPaymentId,
+  localOrderId,
   amount,
   paidAt,
   soldNote,
 }) => {
-  const order = await prisma.order.findUnique({
-    where: { razorpayOrderId },
-    include: { items: true },
+  const order = await findOrderForWebhook({
+    razorpayOrderId,
+    razorpayPaymentId,
+    localOrderId,
   });
 
   if (!order) {
-    throw new Error(`Order not found for razorpay order: ${razorpayOrderId}`);
+    throw new Error(
+      `Order not found for webhook payload (razorpayOrderId=${razorpayOrderId || 'n/a'}, razorpayPaymentId=${razorpayPaymentId || 'n/a'}, localOrderId=${localOrderId || 'n/a'})`
+    );
   }
 
   if (order.paymentStatus === 'SUCCESS') {
@@ -289,14 +490,18 @@ const markOrderAsPaidFromWebhook = async ({
 };
 
 const handlePaymentAuthorized = async (payload) => {
-  const { payment } = payload;
-  const razorpayPaymentId = payment.id;
-  const razorpayOrderId = payment.order_id;
+  const {
+    payment,
+    razorpayPaymentId,
+    razorpayOrderId,
+    localOrderId,
+  } = extractPaymentWebhookData(payload);
 
   try {
     const order = await markOrderAsPaidFromWebhook({
       razorpayOrderId,
       razorpayPaymentId,
+      localOrderId,
       amount: payment.amount / 100,
       paidAt: new Date(payment.created_at * 1000),
       soldNote: 'Payment authorized successfully',
@@ -316,18 +521,24 @@ const handlePaymentAuthorized = async (payload) => {
 };
 
 const handlePaymentFailed = async (payload) => {
-  const { payment } = payload;
-  const razorpayPaymentId = payment.id;
-  const razorpayOrderId = payment.order_id;
+  const {
+    payment,
+    razorpayPaymentId,
+    razorpayOrderId,
+    localOrderId,
+  } = extractPaymentWebhookData(payload);
 
   try {
-    const order = await prisma.order.findUnique({
-      where: { razorpayOrderId },
-      include: { items: true },
+    const order = await findOrderForWebhook({
+      razorpayOrderId,
+      razorpayPaymentId,
+      localOrderId,
     });
 
     if (!order) {
-      throw new Error(`Order not found for razorpay order: ${razorpayOrderId}`);
+      throw new Error(
+        `Order not found for failed payment webhook (razorpayOrderId=${razorpayOrderId || 'n/a'}, razorpayPaymentId=${razorpayPaymentId || 'n/a'}, localOrderId=${localOrderId || 'n/a'})`
+      );
     }
 
     if (order.paymentStatus === 'SUCCESS') {
@@ -404,14 +615,18 @@ const handlePaymentFailed = async (payload) => {
 };
 
 const handlePaymentCaptured = async (payload) => {
-  const { payment } = payload;
-  const razorpayPaymentId = payment.id;
-  const razorpayOrderId = payment.order_id;
+  const {
+    payment,
+    razorpayPaymentId,
+    razorpayOrderId,
+    localOrderId,
+  } = extractPaymentWebhookData(payload);
 
   try {
     const order = await markOrderAsPaidFromWebhook({
       razorpayOrderId,
       razorpayPaymentId,
+      localOrderId,
       amount: payment.amount / 100,
       paidAt: new Date(payment.created_at * 1000),
       soldNote: 'Payment captured successfully',
@@ -430,10 +645,35 @@ const handlePaymentCaptured = async (payload) => {
   }
 };
 
+const handleOrderPaid = async (payload) => {
+  try {
+    if (!getWebhookEntity(payload?.payment)) {
+      console.log('order.paid webhook received without payment payload');
+      return {
+        success: true,
+        message: 'Order paid webhook received without payment payload',
+      };
+    }
+
+    const result = await handlePaymentCaptured(payload);
+    return {
+      ...result,
+      message: 'Order paid processed successfully',
+    };
+  } catch (error) {
+    console.error('Error handling order paid:', error);
+    throw error;
+  }
+};
+
 const handleRefundCreated = async (payload) => {
-  const { refund } = payload;
+  const refund = getWebhookEntity(payload?.refund);
 
   try {
+    if (!refund?.payment_id) {
+      throw new Error('Webhook payload is missing refund.payment_id');
+    }
+
     const payment = await prisma.payment.findUnique({
       where: {
         gateway_gatewayPaymentId: {
@@ -465,9 +705,13 @@ const handleRefundCreated = async (payload) => {
 };
 
 const handleRefundProcessed = async (payload) => {
-  const { refund } = payload;
+  const refund = getWebhookEntity(payload?.refund);
 
   try {
+    if (!refund?.id) {
+      throw new Error('Webhook payload is missing refund id');
+    }
+
     console.log('Refund processed:', refund.id);
 
     return {
@@ -518,6 +762,7 @@ module.exports = {
   handlePaymentAuthorized,
   handlePaymentFailed,
   handlePaymentCaptured,
+  handleOrderPaid,
   handleRefundCreated,
   handleRefundProcessed,
 };

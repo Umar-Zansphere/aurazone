@@ -227,6 +227,47 @@ const rollbackOrderForPaymentInitFailure = async (orderId, reason) => {
   }
 };
 
+const upsertPendingRazorpayPayment = async ({ orderId, razorpayOrderId, amount }) => {
+  if (!orderId || !razorpayOrderId) {
+    throw new Error('orderId and razorpayOrderId are required to initialize payment');
+  }
+
+  const normalizedAmount = Number(amount);
+  if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+    throw new Error('Valid amount is required to initialize payment');
+  }
+
+  const idempotencyKey = `rzp-init-${orderId}`;
+
+  await prisma.payment.upsert({
+    where: {
+      gateway_gatewayOrderId: {
+        gateway: 'RAZORPAY',
+        gatewayOrderId: razorpayOrderId,
+      },
+    },
+    update: {
+      orderId,
+      amount: normalizedAmount,
+      status: 'PENDING',
+      paidAt: null,
+      idempotencyKey,
+      deletedAt: null,
+      deleteReason: null,
+      deletedBy: null,
+    },
+    create: {
+      orderId,
+      gateway: 'RAZORPAY',
+      gatewayOrderId: razorpayOrderId,
+      amount: normalizedAmount,
+      status: 'PENDING',
+      paidAt: null,
+      idempotencyKey,
+    },
+  });
+};
+
 const markOrderCreationFailed = async (orderId, reason) => {
   if (!orderId) {
     return;
@@ -504,6 +545,11 @@ const createOrderFromCart = async (userId, orderData) => {
           where: { id: order.id },
           data: { razorpayOrderId: razorpayOrderDetails.razorpayOrderId },
         });
+        await upsertPendingRazorpayPayment({
+          orderId: order.id,
+          razorpayOrderId: razorpayOrderDetails.razorpayOrderId,
+          amount: totalAmount,
+        });
       } catch (error) {
         console.error('Error creating Razorpay order:', error);
         await rollbackOrderForPaymentInitFailure(order.id, error.message);
@@ -712,6 +758,11 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
         await prisma.order.update({
           where: { id: order.id },
           data: { razorpayOrderId: razorpayOrderDetails.razorpayOrderId },
+        });
+        await upsertPendingRazorpayPayment({
+          orderId: order.id,
+          razorpayOrderId: razorpayOrderDetails.razorpayOrderId,
+          amount: totalAmount,
         });
       } catch (error) {
         console.error('Error creating Razorpay order:', error);
@@ -1097,6 +1148,11 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
         await prisma.order.update({
           where: { id: order.id },
           data: { razorpayOrderId: razorpayOrderDetails.razorpayOrderId },
+        });
+        await upsertPendingRazorpayPayment({
+          orderId: order.id,
+          razorpayOrderId: razorpayOrderDetails.razorpayOrderId,
+          amount: totalAmount,
         });
       } catch (error) {
         console.error('Error creating Razorpay order:', error);
