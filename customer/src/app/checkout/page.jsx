@@ -180,7 +180,7 @@ export default function CheckoutPage() {
                 const orderInfo = btoa(JSON.stringify({
                   orderId: orderData.orderId,
                   orderNumber: orderData.orderNumber,
-                  totalAmount: Number(orderData.totalAmount) + 40,
+                  totalAmount: Number(orderData.totalAmount),
                   paymentMethod: 'RAZORPAY'
                 }));
 
