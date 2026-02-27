@@ -328,19 +328,20 @@ async function notifyNewOrder(orderId, orderData) {
         });
 
         for (const admin of admins) {
+            // Save to history regardless of subscription status
+            await prisma.notificationHistory.create({
+                data: {
+                    userId: admin.id,
+                    title: payload.title,
+                    body: payload.body,
+                    url: payload.url,
+                    icon: payload.icon
+                }
+            });
+
+            // Send push only if subscribed
             if (admin.pushSubscriptions && admin.pushSubscriptions.length > 0) {
                 await sendToUser(admin.id, payload);
-
-                // Save to history
-                await prisma.notificationHistory.create({
-                    data: {
-                        userId: admin.id,
-                        title: payload.title,
-                        body: payload.body,
-                        url: payload.url,
-                        icon: payload.icon
-                    }
-                });
             }
         }
 
@@ -373,19 +374,20 @@ async function notifyOrderStatusChange(orderId, orderNumber, oldStatus, newStatu
         });
 
         for (const admin of admins) {
+            // Save to history regardless of subscription status
+            await prisma.notificationHistory.create({
+                data: {
+                    userId: admin.id,
+                    title: payload.title,
+                    body: payload.body,
+                    url: payload.url,
+                    icon: payload.icon
+                }
+            });
+
+            // Send push only if subscribed
             if (admin.pushSubscriptions && admin.pushSubscriptions.length > 0) {
                 await sendToUser(admin.id, payload);
-
-                // Save to history
-                await prisma.notificationHistory.create({
-                    data: {
-                        userId: admin.id,
-                        title: payload.title,
-                        body: payload.body,
-                        url: payload.url,
-                        icon: payload.icon
-                    }
-                });
             }
         }
 
@@ -418,19 +420,20 @@ async function notifyLowStock(productId, productName, currentStock, threshold = 
         });
 
         for (const admin of admins) {
+            // Save to history regardless of subscription status
+            await prisma.notificationHistory.create({
+                data: {
+                    userId: admin.id,
+                    title: payload.title,
+                    body: payload.body,
+                    url: payload.url,
+                    icon: payload.icon
+                }
+            });
+
+            // Send push only if subscribed
             if (admin.pushSubscriptions && admin.pushSubscriptions.length > 0) {
                 await sendToUser(admin.id, payload);
-
-                // Save to history
-                await prisma.notificationHistory.create({
-                    data: {
-                        userId: admin.id,
-                        title: payload.title,
-                        body: payload.body,
-                        url: payload.url,
-                        icon: payload.icon
-                    }
-                });
             }
         }
 

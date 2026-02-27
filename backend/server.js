@@ -42,6 +42,10 @@ app.use((err, req, res, next) => {
 
 app.get("/health", async (req, res) => {
   try {
+    // Disable caching to prevent 304 responses
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     
     await prisma.$queryRaw`SELECT 1`;
     res.json({ status: "healthy", message: "Database connection OK ✅" });

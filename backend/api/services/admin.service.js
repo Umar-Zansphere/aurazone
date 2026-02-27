@@ -622,6 +622,78 @@ const syncOrderPaymentStateTx = async (tx, orderId) => {
   };
 };
 
+const releaseReservedInventoryForOrderItemsTx = async (tx, {
+  orderId,
+  orderItems = [],
+  note,
+}) => {
+  const groupedItemsByVariant = new Map();
+
+  for (const item of orderItems) {
+    if (!item?.variantId) {
+      continue;
+    }
+
+    const quantity = Number(item.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      continue;
+    }
+
+    groupedItemsByVariant.set(
+      item.variantId,
+      (groupedItemsByVariant.get(item.variantId) || 0) + quantity
+    );
+  }
+
+  if (groupedItemsByVariant.size === 0) {
+    return {
+      releasedVariantCount: 0,
+      releasedQuantity: 0,
+    };
+  }
+
+  const inventoryLogs = [];
+  let releasedQuantity = 0;
+
+  for (const [variantId, requestedQuantity] of groupedItemsByVariant) {
+    const lockedInventory = await ensureLockedInventoryRowTx(tx, variantId);
+    const releaseQuantity = Math.min(requestedQuantity, Math.max(0, lockedInventory.reserved));
+
+    if (releaseQuantity <= 0) {
+      continue;
+    }
+
+    await tx.inventory.update({
+      where: { variantId },
+      data: {
+        reserved: {
+          decrement: releaseQuantity,
+        },
+      },
+    });
+
+    inventoryLogs.push({
+      variantId,
+      orderId,
+      type: 'RELEASE',
+      quantity: releaseQuantity,
+      note: note || null,
+    });
+    releasedQuantity += releaseQuantity;
+  }
+
+  if (inventoryLogs.length > 0) {
+    await tx.inventoryLog.createMany({
+      data: inventoryLogs,
+    });
+  }
+
+  return {
+    releasedVariantCount: inventoryLogs.length,
+    releasedQuantity,
+  };
+};
+
 const formatImage = (image) => ({
   id: image.id,
   url: image.url,
@@ -1378,6 +1450,12 @@ const updateOrderStatus = async (req, res) => {
         orderNumber: true,
         status: true,
         deletedAt: true,
+        items: {
+          select: {
+            variantId: true,
+            quantity: true,
+          },
+        },
       },
     });
 
@@ -1404,6 +1482,16 @@ const updateOrderStatus = async (req, res) => {
         fromStatus: order.status,
         toStatus: status,
         note: note || null,
+      });
+    }
+
+    if (status === 'CANCELLED' && order.status !== 'CANCELLED') {
+      await releaseReservedInventoryForOrderItemsTx(tx, {
+        orderId: order.id,
+        orderItems: order.items,
+        note: note
+          ? `Order cancelled by admin via status update. ${note}`
+          : 'Order cancelled by admin via status update.',
       });
     }
 
@@ -1889,6 +1977,14 @@ const deleteOrder = async (req, res) => {
   }
 
   const softDeletedOrder = await prisma.$transaction(async (tx) => {
+    const releaseResult = await releaseReservedInventoryForOrderItemsTx(tx, {
+      orderId: order.id,
+      orderItems: order.items,
+      note: reason
+        ? `Order cancelled by admin. ${reason}`
+        : 'Order cancelled by admin.',
+    });
+
     const activeShipments = await tx.orderShipment.findMany({
       where: {
         orderId: order.id,
@@ -1957,6 +2053,8 @@ const deleteOrder = async (req, res) => {
         totalAmount: toNumber(order.totalAmount),
         itemsCount: (order.items || []).reduce((acc, item) => acc + item.quantity, 0),
         cancelledShipmentCount: activeShipments.length,
+        releasedInventoryQuantity: releaseResult.releasedQuantity,
+        releasedInventoryVariantCount: releaseResult.releasedVariantCount,
       },
     });
 
