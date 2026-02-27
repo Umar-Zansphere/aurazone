@@ -271,29 +271,37 @@ export default function PaymentsPage() {
                                         ) : detail ? (
                                             <div className="space-y-2 text-sm">
                                                 <div className="grid grid-cols-2 gap-2">
-                                                    <div>
+                                                    {detail.payment.gateway ? (
+                                                        <div>
                                                         <span className="text-[var(--text-secondary)]">Method</span>
-                                                        <p className="font-semibold text-[var(--text-primary)]">{detail.method || detail.paymentMethod || "—"}</p>
+                                                        <p className="font-semibold text-[var(--text-primary)]">Online</p>
                                                     </div>
+                                                    ) : (
+                                                        <div>
+                                                        <span className="text-[var(--text-secondary)]">Method</span>
+                                                        <p className="font-semibold text-[var(--text-primary)]">COD</p>
+                                                    </div>
+                                                    )
+                                                    }
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Gateway</span>
-                                                        <p className="font-semibold text-[var(--text-primary)]">{detail.gateway || "—"}</p>
+                                                        <p className="font-semibold text-[var(--text-primary)]">{detail.payment.gateway || "—"}</p>
                                                     </div>
                                                 </div>
-                                                {detail.transactionId && (
+                                                {detail.payment.gatewayPaymentId && (
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Transaction ID</span>
-                                                        <p className="font-mono text-xs text-[var(--text-primary)]">{detail.transactionId}</p>
+                                                        <p className="font-mono text-xs text-[var(--text-primary)]">{detail.payment.gatewayPaymentId}</p>
                                                     </div>
                                                 )}
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Created</span>
-                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.createdAt)}</p>
+                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.payment.createdAt)}</p>
                                                     </div>
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Updated</span>
-                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.updatedAt)}</p>
+                                                        <p className="text-xs text-[var(--text-primary)]">{formatDateTime(detail.payment.updatedAt)}</p>
                                                     </div>
                                                 </div>
                                             </div>

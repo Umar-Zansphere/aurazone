@@ -802,6 +802,27 @@ const formatFullOrder = (order) => {
   const latestShipment = (order.shipments || []).sort(
     (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
   )[0] || null;
+  const sortedPayments = [...(order.payments || [])].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  const latestPayment = sortedPayments.find((payment) => !payment.deletedAt) || sortedPayments[0] || null;
+  const formattedPayments = (order.payments || []).map((payment) => ({
+    id: payment.id,
+    gateway: payment.gateway,
+    gatewayOrderId: payment.gatewayOrderId || null,
+    gatewayPaymentId: payment.gatewayPaymentId || null,
+    externalReference: payment.externalReference || null,
+    amount: toNumber(payment.amount),
+    status: payment.status,
+    paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
+    note: payment.note || null,
+    metadata: payment.metadata || null,
+    isDeleted: Boolean(payment.deletedAt),
+    deletedAt: payment.deletedAt ? payment.deletedAt.toISOString() : null,
+    deleteReason: payment.deleteReason || null,
+    createdAt: payment.createdAt ? payment.createdAt.toISOString() : null,
+    updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : null,
+  }));
 
   return {
     id: order.id,
@@ -817,6 +838,7 @@ const formatFullOrder = (order) => {
     deletedAt: order.deletedAt ? order.deletedAt.toISOString() : null,
     deleteReason: order.deleteReason || null,
     createdAt: order.createdAt.toISOString(),
+    updatedAt: order.updatedAt ? order.updatedAt.toISOString() : null,
     customer: {
       id: order.user?.id || null,
       fullName: order.user?.fullName || order.orderAddress?.name || null,
@@ -861,23 +883,29 @@ const formatFullOrder = (order) => {
         shippedAt: latestShipment.shippedAt ? latestShipment.shippedAt.toISOString() : null,
       }
       : null,
-    payments: (order.payments || []).map((payment) => ({
-      id: payment.id,
-      gateway: payment.gateway,
-      gatewayOrderId: payment.gatewayOrderId || null,
-      gatewayPaymentId: payment.gatewayPaymentId || null,
-      externalReference: payment.externalReference || null,
-      amount: toNumber(payment.amount),
-      status: payment.status,
-      paidAt: payment.paidAt ? payment.paidAt.toISOString() : null,
-      note: payment.note || null,
-      metadata: payment.metadata || null,
-      isDeleted: Boolean(payment.deletedAt),
-      deletedAt: payment.deletedAt ? payment.deletedAt.toISOString() : null,
-      deleteReason: payment.deleteReason || null,
-      createdAt: payment.createdAt ? payment.createdAt.toISOString() : null,
-      updatedAt: payment.updatedAt ? payment.updatedAt.toISOString() : null,
-    })),
+    // Backward-compatible field expected by existing admin order detail UI.
+    payment: latestPayment
+      ? {
+        id: latestPayment.id,
+        method: latestPayment.gateway,
+        gateway: latestPayment.gateway,
+        status: latestPayment.status === 'SUCCESS' ? 'PAID' : latestPayment.status,
+        amount: toNumber(latestPayment.amount),
+        transactionId: latestPayment.gatewayPaymentId || latestPayment.externalReference || null,
+        gatewayOrderId: latestPayment.gatewayOrderId || null,
+        gatewayPaymentId: latestPayment.gatewayPaymentId || null,
+        externalReference: latestPayment.externalReference || null,
+        paidAt: latestPayment.paidAt ? latestPayment.paidAt.toISOString() : null,
+        note: latestPayment.note || null,
+        metadata: latestPayment.metadata || null,
+        isDeleted: Boolean(latestPayment.deletedAt),
+        deletedAt: latestPayment.deletedAt ? latestPayment.deletedAt.toISOString() : null,
+        deleteReason: latestPayment.deleteReason || null,
+        createdAt: latestPayment.createdAt ? latestPayment.createdAt.toISOString() : null,
+        updatedAt: latestPayment.updatedAt ? latestPayment.updatedAt.toISOString() : null,
+      }
+      : null,
+    payments: formattedPayments,
     statusTimeline: buildOrderStatusTimeline(order, latestShipment),
   };
 };
