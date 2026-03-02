@@ -10,6 +10,9 @@ export const metadata = {
   description: 'Discover premium shoes with exclusive collections. Shop as a guest or create an account for exclusive benefits.',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes',
   themeColor: '#FF6B6B',
+  icons: {
+    icon: { url: "logo.png", type: "image/png" },
+  },
 };
 
 export default function RootLayout({ children }) {
