@@ -35,18 +35,24 @@ export default function LoginPage() {
     <div className="relative flex min-h-dvh items-center justify-center overflow-hidden p-6" style={{ background: "var(--bg-app)" }}>
 
       <div className="relative z-10 w-full max-w-[420px]">
-        <div className="mb-8 text-center">
+        <div className="mb-10 text-center">
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: "spring", stiffness: 260, damping: 22 }}
-            className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-3xl"
-            style={{ background: "var(--highlight-soft)" }}
+            initial={{ scale: 0.8, opacity: 0, y: -10 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 260, damping: 22, duration: 0.6 }}
+            className="mx-auto mb-6 w-64"
           >
-            <span className="text-2xl font-bold" style={{ color: "var(--highlight)" }}>AZ</span>
+            <img src="/icons/logo-full.svg" alt="AuraZone Logo" className="w-full h-auto" />
           </motion.div>
-          <h1 className="text-[28px] font-semibold" style={{ color: "var(--text-primary)" }}>AuraZone Admin</h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--text-muted)" }}>Mobile control center for your storefront</p>
+          
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15, duration: 0.5 }}
+          >
+            {/* <h1 className="text-3xl font-bold tracking-tight" style={{ color: "var(--text-primary)" }}>AuraZone Admin</h1> */}
+            <p className="mt-2 text-sm font-medium" style={{ color: "var(--text-muted)" }}>Mobile control center for your storefront</p>
+          </motion.div>
         </div>
 
         <motion.form
@@ -69,7 +75,7 @@ export default function LoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 className="form-input pr-9"
-                placeholder="admin@aurazone.com"
+                placeholder="example@email.com"
                 autoComplete="email"
                 required
                 aria-label="Email address"
