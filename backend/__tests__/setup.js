@@ -1,228 +1,263 @@
-/**
- * Global test setup and helpers for Aurazone Backend tests.
- * Provides mock factories for Prisma, req/res/next, JWT tokens, etc.
- */
-
+const path = require('node:path');
 const jwt = require('jsonwebtoken');
+const sharp = require('sharp');
+const dotenv = require('dotenv');
 
-const JWT_SECRET = 'test-jwt-secret';
-process.env.JWT_SECRET = JWT_SECRET;
-process.env.NODE_ENV = 'test';
-process.env.VAPID_PUBLIC_KEY = 'test-vapid-public';
-process.env.VAPID_PRIVATE_KEY = 'test-vapid-private';
-process.env.VAPID_EMAIL = 'test@test.com';
-process.env.RAZORPAY_KEY_ID = 'rzp_test_key';
-process.env.RAZORPAY_KEY_SECRET = 'rzp_test_secret';
-process.env.RAZORPAY_WEBHOOK_SECRET = 'rzp_webhook_secret';
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// ======================== MOCK FACTORIES ========================
+const prisma = require('../config/prisma');
 
-/**
- * Create a mock Prisma model with all common methods
- */
-const createMockModel = () => ({
-    findUnique: jest.fn(),
-    findFirst: jest.fn(),
-    findMany: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    delete: jest.fn(),
-    updateMany: jest.fn(),
-    deleteMany: jest.fn(),
-    count: jest.fn(),
-    upsert: jest.fn(),
-    aggregate: jest.fn(),
-    groupBy: jest.fn(),
-});
+let uniqueCounter = 0;
 
-/**
- * Create a complete mock Prisma client
- */
-const createMockPrisma = () => ({
-    user: createMockModel(),
-    guestSession: createMockModel(),
-    userSession: createMockModel(),
-    otpVerification: createMockModel(),
-    product: createMockModel(),
-    productVariant: createMockModel(),
-    productImage: createMockModel(),
-    inventory: createMockModel(),
-    inventoryLog: createMockModel(),
-    cart: createMockModel(),
-    cartItem: createMockModel(),
-    wishlist: createMockModel(),
-    wishlistItem: createMockModel(),
-    order: createMockModel(),
-    orderItem: createMockModel(),
-    orderAddress: createMockModel(),
-    orderShipment: createMockModel(),
-    orderLog: createMockModel(),
-    payment: createMockModel(),
-    paymentLog: createMockModel(),
-    shipmentLog: createMockModel(),
-    pushSubscription: createMockModel(),
-    notificationHistory: createMockModel(),
-    notificationPreferences: createMockModel(),
-    address: createMockModel(),
-    $transaction: jest.fn((fn) => {
-        if (typeof fn === 'function') {
-            return fn(createMockPrisma());
+const unique = (prefix = 'id') => `${prefix}-${Date.now()}-${uniqueCounter++}`;
+
+const clearDatabase = async () => {
+  await prisma.$transaction([
+    prisma.paymentLog.deleteMany(),
+    prisma.shipmentLog.deleteMany(),
+    prisma.orderLog.deleteMany(),
+    prisma.notificationHistory.deleteMany(),
+    prisma.notificationPreferences.deleteMany(),
+    prisma.pushSubscription.deleteMany(),
+    prisma.payment.deleteMany(),
+    prisma.orderShipment.deleteMany(),
+    prisma.orderItem.deleteMany(),
+    prisma.orderAddress.deleteMany(),
+    prisma.order.deleteMany(),
+    prisma.inventoryLog.deleteMany(),
+    prisma.inventory.deleteMany(),
+    prisma.productImage.deleteMany(),
+    prisma.productVariant.deleteMany(),
+    prisma.product.deleteMany(),
+    prisma.cartItem.deleteMany(),
+    prisma.cart.deleteMany(),
+    prisma.wishlistItem.deleteMany(),
+    prisma.wishlist.deleteMany(),
+    prisma.address.deleteMany(),
+    prisma.userSession.deleteMany(),
+    prisma.otpVerification.deleteMany(),
+    prisma.guestSession.deleteMany(),
+    prisma.user.deleteMany(),
+  ]);
+};
+
+const issueAccessToken = (userId) =>
+  jwt.sign({ id: userId }, process.env.JWT_SECRET || 'dev-access-secret', { expiresIn: '1h' });
+
+const createUser = async ({ role = 'CUSTOMER', email, fullName = 'Test User', isActive = true } = {}) => {
+  const user = await prisma.user.create({
+    data: {
+      email: email || `${unique(role.toLowerCase())}@test.local`,
+      fullName,
+      role,
+      is_active: isActive,
+      isGuest: false,
+      is_email_verified: new Date(),
+    },
+  });
+
+  return user;
+};
+
+const createAuthContext = async () => {
+  const admin = await createUser({ role: 'ADMIN', fullName: 'Admin User' });
+  const customer = await createUser({ role: 'CUSTOMER', fullName: 'Customer User' });
+
+  return {
+    admin,
+    customer,
+    adminToken: issueAccessToken(admin.id),
+    customerToken: issueAccessToken(customer.id),
+  };
+};
+
+const createProductFixture = async ({
+  quantity = 20,
+  reserved = 0,
+  price = 2499,
+  compareAtPrice = 2999,
+  category = 'RUNNING',
+  gender = 'UNISEX',
+} = {}) => {
+  const product = await prisma.product.create({
+    data: {
+      name: `Runner ${unique('product')}`,
+      brand: 'AuraZone',
+      category,
+      gender,
+      description: 'Integration test product',
+      shortDescription: 'Test product',
+      tags: ['test', 'integration'],
+      isActive: true,
+      isFeatured: false,
+    },
+  });
+
+  const variant = await prisma.productVariant.create({
+    data: {
+      productId: product.id,
+      size: '9',
+      color: 'Black',
+      sku: unique('SKU'),
+      price,
+      compareAtPrice,
+      isAvailable: true,
+    },
+  });
+
+  const inventory = await prisma.inventory.create({
+    data: {
+      variantId: variant.id,
+      quantity,
+      reserved,
+    },
+  });
+
+  return { product, variant, inventory };
+};
+
+const createOrderFixture = async ({
+  userId = null,
+  variantId,
+  quantity = 2,
+  paymentMethod = 'COD',
+  status = 'PENDING',
+  paymentStatus = 'PENDING',
+  totalAmount = 4998,
+  reserveInventory = false,
+} = {}) => {
+  const variant = await prisma.productVariant.findUnique({
+    where: { id: variantId },
+    include: { product: true, inventory: true },
+  });
+
+  if (!variant) {
+    throw new Error('Variant not found for createOrderFixture');
+  }
+
+  if (reserveInventory) {
+    await prisma.inventory.update({
+      where: { variantId },
+      data: {
+        reserved: {
+          increment: quantity,
+        },
+      },
+    });
+  }
+
+  const order = await prisma.order.create({
+    data: {
+      userId,
+      orderNumber: `ORD-${unique('order')}`,
+      trackingToken: `TRK-${unique('track')}`,
+      status,
+      paymentStatus,
+      paymentMethod,
+      totalAmount,
+      items: {
+        create: [
+          {
+            variantId,
+            productName: variant.product.name,
+            color: variant.color,
+            size: variant.size,
+            price: variant.price,
+            quantity,
+            subtotal: Number(variant.price) * quantity,
+          },
+        ],
+      },
+      orderAddress: {
+        create: {
+          name: 'Test Buyer',
+          phone: '9999999999',
+          email: 'buyer@test.local',
+          addressLine1: '123 Test St',
+          city: 'Test City',
+          state: 'TS',
+          postalCode: '123456',
+          country: 'IN',
+        },
+      },
+    },
+    include: {
+      items: true,
+      orderAddress: true,
+    },
+  });
+
+  return order;
+};
+
+const createPaymentFixture = async ({
+  orderId,
+  gateway = 'COD',
+  status = 'PENDING',
+  amount = 4998,
+  note = 'seed payment',
+} = {}) => {
+  return prisma.payment.create({
+    data: {
+      orderId,
+      gateway,
+      amount,
+      status,
+      note,
+      idempotencyKey: unique('idem'),
+      ...(status === 'SUCCESS' ? { paidAt: new Date() } : {}),
+      ...(gateway === 'RAZORPAY'
+        ? {
+          gatewayOrderId: unique('gord'),
+          gatewayPaymentId: unique('gpay'),
         }
-        return Promise.resolve(fn);
-    }),
-    $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
-    $executeRaw: jest.fn().mockResolvedValue(1),
-});
-
-/**
- * Create a mock Express request object
- */
-const createMockReq = (overrides = {}) => ({
-    body: {},
-    params: {},
-    query: {},
-    headers: {},
-    cookies: {},
-    user: null,
-    sessionId: null,
-    guestSessionDbId: null,
-    ...overrides,
-});
-
-/**
- * Create a mock Express response object
- */
-const createMockRes = () => {
-    const res = {
-        status: jest.fn().mockReturnThis(),
-        json: jest.fn().mockReturnThis(),
-        send: jest.fn().mockReturnThis(),
-        cookie: jest.fn().mockReturnThis(),
-        clearCookie: jest.fn().mockReturnThis(),
-        set: jest.fn().mockReturnThis(),
-        end: jest.fn().mockReturnThis(),
-    };
-    return res;
+        : {}),
+    },
+  });
 };
 
-/**
- * Create a mock next function
- */
-const createMockNext = () => jest.fn();
-
-/**
- * Generate a valid JWT token for testing
- */
-const generateTestToken = (payload = {}) => {
-    const defaults = {
-        id: 'test-user-id-123',
-        role: 'CUSTOMER',
-    };
-    return jwt.sign({ ...defaults, ...payload }, JWT_SECRET, { expiresIn: '7d' });
+const createShipmentFixture = async ({
+  orderId,
+  status = 'PENDING',
+  courierName = 'DHL',
+  trackingNumber,
+  trackingUrl,
+} = {}) => {
+  return prisma.orderShipment.create({
+    data: {
+      orderId,
+      status,
+      courierName,
+      trackingNumber: trackingNumber || unique('trkno'),
+      trackingUrl: trackingUrl || 'https://tracking.test.local',
+      ...(status === 'SHIPPED' || status === 'DELIVERED' ? { shippedAt: new Date() } : {}),
+    },
+  });
 };
 
-/**
- * Generate a valid admin JWT token
- */
-const generateAdminToken = (payload = {}) => {
-    return generateTestToken({ role: 'ADMIN', id: 'admin-user-id-456', ...payload });
-};
-
-/**
- * Generate an expired JWT token
- */
-const generateExpiredToken = (payload = {}) => {
-    const defaults = { id: 'test-user-id-123', role: 'CUSTOMER' };
-    return jwt.sign({ ...defaults, ...payload }, JWT_SECRET, { expiresIn: '-1s' });
-};
-
-/**
- * Standard mock user objects
- */
-const MOCK_USER = {
-    id: 'test-user-id-123',
-    email: 'test@example.com',
-    phone: '+1234567890',
-    fullName: 'Test User',
-    role: 'CUSTOMER',
-    is_active: true,
-    is_email_verified: new Date(),
-    is_phone_verified: new Date(),
-    password: '$2b$10$hashedpassword',
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-};
-
-const MOCK_ADMIN = {
-    id: 'admin-user-id-456',
-    email: 'admin@example.com',
-    phone: '+0987654321',
-    fullName: 'Admin User',
-    role: 'ADMIN',
-    is_active: true,
-    is_email_verified: new Date(),
-    is_phone_verified: new Date(),
-    password: '$2b$10$hashedpassword',
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-};
-
-const MOCK_PRODUCT = {
-    id: 'product-id-1',
-    name: 'Test Sneaker',
-    brand: 'TestBrand',
-    category: 'SNEAKERS',
-    gender: 'UNISEX',
-    description: 'A test product',
-    modelNumber: 'TSN-001',
-    isFeatured: true,
-    isActive: true,
-    tags: ['test'],
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-};
-
-const MOCK_VARIANT = {
-    id: 'variant-id-1',
-    productId: 'product-id-1',
-    size: '42',
-    color: 'Black',
-    sku: 'TSN-001-BLK-42',
-    price: 99.99,
-    compareAtPrice: 129.99,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-};
-
-const MOCK_ADDRESS = {
-    id: 'address-id-1',
-    userId: 'test-user-id-123',
-    name: 'Home',
-    phone: '+1234567890',
-    addressLine1: '123 Test St',
-    addressLine2: 'Apt 1',
-    city: 'Test City',
-    state: 'TS',
-    postalCode: '12345',
-    country: 'US',
-    isDefault: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
+const createTestImageBuffer = async () => {
+  return sharp({
+    create: {
+      width: 320,
+      height: 320,
+      channels: 3,
+      background: { r: 180, g: 80, b: 40 },
+    },
+  })
+    .png()
+    .toBuffer();
 };
 
 module.exports = {
-    JWT_SECRET,
-    createMockPrisma,
-    createMockModel,
-    createMockReq,
-    createMockRes,
-    createMockNext,
-    generateTestToken,
-    generateAdminToken,
-    generateExpiredToken,
-    MOCK_USER,
-    MOCK_ADMIN,
-    MOCK_PRODUCT,
-    MOCK_VARIANT,
-    MOCK_ADDRESS,
+  prisma,
+  unique,
+  clearDatabase,
+  issueAccessToken,
+  createUser,
+  createAuthContext,
+  createProductFixture,
+  createOrderFixture,
+  createPaymentFixture,
+  createShipmentFixture,
+  createTestImageBuffer,
 };
