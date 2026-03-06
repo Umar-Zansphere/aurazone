@@ -1,7 +1,7 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const prisma = require('../../config/prisma');
-const { sendEmail } = require('../utils/emailService'); // Adjust path as needed
+const { sendEmail } = require('../../config/email'); // Adjust path as needed
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({

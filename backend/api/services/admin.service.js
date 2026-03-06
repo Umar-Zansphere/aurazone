@@ -2,7 +2,7 @@ const prisma = require('../../config/prisma');
 const { createError } = require('../../utils/error');
 const { uploadBufferToS3 } = require('../services/s3.services');
 const notificationService = require('./notification.service');
-const { sendEmail } = require('../utils/emailService');
+const { sendEmail } = require('../../config/email');
 const { validateAndOptimizeImage } = require('../../utils/imageProcessor');
 const { randomUUID } = require('node:crypto');
 
