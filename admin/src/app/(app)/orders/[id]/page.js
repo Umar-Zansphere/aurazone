@@ -42,7 +42,7 @@ export default function OrderDetailPage() {
 
   // Shipment creation
   const [shipmentSheet, setShipmentSheet] = useState(false);
-  const [shipmentDraft, setShipmentDraft] = useState({ provider: "", trackingNumber: "", trackingUrl: "" });
+  const [shipmentDraft, setShipmentDraft] = useState({ courierName: "", trackingNumber: "", trackingUrl: "" });
 
   // Activity logs
   const [logsOpen, setLogsOpen] = useState(false);
@@ -60,7 +60,14 @@ export default function OrderDetailPage() {
 
   // Create shipment for order
   const [createShipmentSheet, setCreateShipmentSheet] = useState(false);
-  const [newShipmentDraft, setNewShipmentDraft] = useState({ provider: "", trackingNumber: "", trackingUrl: "" });
+  const [newShipmentDraft, setNewShipmentDraft] = useState({ 
+    courierName: "", 
+    trackingNumber: "", 
+    trackingUrl: "",
+    status: "PENDING",
+    note: "",
+    shippedAt: ""
+  });
   const [shipmentSaving, setShipmentSaving] = useState(false);
 
   // Delete order
@@ -529,10 +536,10 @@ export default function OrderDetailPage() {
       <BottomSheet open={shipmentSheet} onClose={() => setShipmentSheet(false)} title="Shipment Details" snap="half">
         <div className="space-y-3">
           <div>
-            <label className="form-label">Provider</label>
+            <label className="form-label">Courier Name</label>
             <input
-              value={shipmentDraft.provider}
-              onChange={(event) => setShipmentDraft((prev) => ({ ...prev, provider: event.target.value }))}
+              value={shipmentDraft.courierName}
+              onChange={(event) => setShipmentDraft((prev) => ({ ...prev, courierName: event.target.value }))}
               placeholder="e.g. Delhivery"
               className="form-input"
             />
@@ -673,11 +680,11 @@ export default function OrderDetailPage() {
       <BottomSheet open={createShipmentSheet} onClose={() => setCreateShipmentSheet(false)} title="Create Shipment" snap="half">
         <div className="space-y-3">
           <div>
-            <label className="form-label">Provider</label>
+            <label className="form-label">Courier Name</label>
             <input
-              value={newShipmentDraft.provider}
-              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, provider: e.target.value }))}
-              placeholder="e.g. Delhivery"
+              value={newShipmentDraft.courierName}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, courierName: e.target.value }))}
+              placeholder="e.g. Delhivery, FedEx, DPL"
               className="form-input"
             />
           </div>
@@ -695,8 +702,41 @@ export default function OrderDetailPage() {
             <input
               value={newShipmentDraft.trackingUrl}
               onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, trackingUrl: e.target.value }))}
-              placeholder="https://..."
+              placeholder="https://track.delhivery.com/..."
               className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Status</label>
+            <select
+              value={newShipmentDraft.status}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, status: e.target.value }))}
+              className="form-input"
+            >
+              <option value="PENDING">Pending</option>
+              <option value="SHIPPED">Shipped</option>
+              <option value="DELIVERED">Delivered</option>
+              <option value="RETURNED">Returned</option>
+              <option value="LOST">Lost</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Shipped At (optional)</label>
+            <input
+              type="datetime-local"
+              value={newShipmentDraft.shippedAt}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, shippedAt: e.target.value }))}
+              className="form-input"
+            />
+          </div>
+          <div>
+            <label className="form-label">Note (optional)</label>
+            <textarea
+              value={newShipmentDraft.note}
+              onChange={(e) => setNewShipmentDraft((prev) => ({ ...prev, note: e.target.value }))}
+              placeholder="Add any notes about this shipment"
+              className="form-input"
+              rows="3"
             />
           </div>
           <button

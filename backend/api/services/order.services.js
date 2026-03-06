@@ -25,7 +25,7 @@ const normalizePaymentMethod = (paymentMethod) => {
 };
 
 const getInitialOrderStatusForPaymentMethod = (paymentMethod) =>
-  paymentMethod === 'COD' ? 'SUCCESS' : 'PENDING';
+  paymentMethod === 'COD' ? 'RECEIVED' : 'PENDING';
 
 const generateOrderNumber = () =>
   `ORD-${Date.now()}-${Math.random().toString(36).slice(2, 11).toUpperCase()}`;
@@ -568,40 +568,44 @@ const createOrderFromCart = async (userId, orderData) => {
 
   await clearCheckedOutCartItems(cart.id, cart.items);
 
-  try {
-    await sendEmail(
-      user.email,
-      'Order Confirmation - ' + order.orderNumber,
-      'order-confirmation',
-      {
-        customerName: user.fullName,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        status: order.status,
-        paymentMethod: order.paymentMethod,
-        totalAmount: order.totalAmount,
-        shippingFee: SHIPPING_FEE,
-        createdAt: order.createdAt,
-        items: order.items.map((item) => ({
-          productName: item.productName,
-          color: item.color,
-          size: item.size,
-          quantity: item.quantity,
-          price: item.price,
-          subtotal: item.subtotal,
-        })),
-        addressLine1: orderAddress?.addressLine1 || '',
-        addressLine2: orderAddress?.addressLine2 || '',
-        city: orderAddress?.city || '',
-        state: orderAddress?.state || '',
-        postalCode: orderAddress?.postalCode || '',
-        country: orderAddress?.country || '',
-        phone: orderAddress?.phone || user.phone || '',
-        trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/orders/${order.id}`,
-      }
-    );
-  } catch (emailError) {
-    console.error('Error sending order confirmation email:', emailError);
+  // Send order confirmation email only for COD orders
+  // For Razorpay, confirmation will be sent after payment verification
+  if (normalizedPaymentMethod === 'COD') {
+    try {
+      await sendEmail(
+        user.email,
+        'Order Confirmation - ' + order.orderNumber,
+        'order-confirmation',
+        {
+          customerName: user.fullName,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: order.status,
+          paymentMethod: order.paymentMethod,
+          totalAmount: order.totalAmount,
+          shippingFee: SHIPPING_FEE,
+          createdAt: order.createdAt,
+          items: order.items.map((item) => ({
+            productName: item.productName,
+            color: item.color,
+            size: item.size,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.subtotal,
+          })),
+          addressLine1: orderAddress?.addressLine1 || '',
+          addressLine2: orderAddress?.addressLine2 || '',
+          city: orderAddress?.city || '',
+          state: orderAddress?.state || '',
+          postalCode: orderAddress?.postalCode || '',
+          country: orderAddress?.country || '',
+          phone: orderAddress?.phone || user.phone || '',
+          trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/orders/${order.id}`,
+        }
+      );
+    } catch (emailError) {
+      console.error('Error sending order confirmation email:', emailError);
+    }
   }
 
   try {
@@ -782,41 +786,45 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
 
   await clearCheckedOutCartItems(cart.id, cart.items);
 
-  try {
-    await sendEmail(
-      address.email,
-      'Order Confirmation - ' + order.orderNumber,
-      'order-confirmation',
-      {
-        customerName: address.name,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-        trackingToken: order.trackingToken,
-        status: order.status,
-        paymentMethod: order.paymentMethod,
-        totalAmount: order.totalAmount,
-        shippingFee: SHIPPING_FEE,
-        createdAt: order.createdAt,
-        items: order.items.map((item) => ({
-          productName: item.productName,
-          color: item.color,
-          size: item.size,
-          quantity: item.quantity,
-          price: item.price,
-          subtotal: item.subtotal,
-        })),
-        addressLine1: orderAddress?.addressLine1 || '',
-        addressLine2: orderAddress?.addressLine2 || '',
-        city: orderAddress?.city || '',
-        state: orderAddress?.state || '',
-        postalCode: orderAddress?.postalCode || '',
-        country: orderAddress?.country || '',
-        phone: orderAddress?.phone || address.phone || '',
-        trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/track-order/${order.trackingToken}`,
-      }
-    );
-  } catch (emailError) {
-    console.error('Error sending order confirmation email:', emailError);
+  // Send order confirmation email only for COD orders
+  // For Razorpay, confirmation will be sent after payment verification
+  if (normalizedPaymentMethod === 'COD') {
+    try {
+      await sendEmail(
+        address.email,
+        'Order Confirmation - ' + order.orderNumber,
+        'order-confirmation',
+        {
+          customerName: address.name,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          trackingToken: order.trackingToken,
+          status: order.status,
+          paymentMethod: order.paymentMethod,
+          totalAmount: order.totalAmount,
+          shippingFee: SHIPPING_FEE,
+          createdAt: order.createdAt,
+          items: order.items.map((item) => ({
+            productName: item.productName,
+            color: item.color,
+            size: item.size,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.subtotal,
+          })),
+          addressLine1: orderAddress?.addressLine1 || '',
+          addressLine2: orderAddress?.addressLine2 || '',
+          city: orderAddress?.city || '',
+          state: orderAddress?.state || '',
+          postalCode: orderAddress?.postalCode || '',
+          country: orderAddress?.country || '',
+          phone: orderAddress?.phone || address.phone || '',
+          trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/track-order/${order.trackingToken}`,
+        }
+      );
+    } catch (emailError) {
+      console.error('Error sending order confirmation email:', emailError);
+    }
   }
 
   try {

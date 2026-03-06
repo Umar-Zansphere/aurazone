@@ -2,13 +2,14 @@ const prisma = require('../../config/prisma');
 const { createError } = require('../../utils/error');
 const { uploadBufferToS3 } = require('../services/s3.services');
 const notificationService = require('./notification.service');
+const { sendEmail } = require('../utils/emailService');
 const { validateAndOptimizeImage } = require('../../utils/imageProcessor');
 const { randomUUID } = require('node:crypto');
 
 const ORDER_STATUSES = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const PAYMENT_STATUSES = ['PENDING', 'SUCCESS', 'FAILED'];
 const PAYMENT_GATEWAYS = ['RAZORPAY', 'COD'];
-const SHIPMENT_STATUSES = ['PENDING', 'SHIPPED', 'DELIVERED', 'RETURNED', 'LOST'];
+const SHIPMENT_STATUSES = ['PENDING', 'SHIPPED', 'IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RETURNED', 'LOST', 'FAILED'];
 const INVENTORY_LOG_TYPES = ['HOLD', 'RELEASE', 'SOLD', 'MANUAL', 'RESTOCK', 'RETURN'];
 const INVENTORY_ADJUST_OPERATIONS = ['SET', 'RESTOCK', 'REDUCE', 'HOLD', 'RELEASE', 'RETURN'];
 const PRODUCT_CATEGORIES = ['RUNNING', 'CASUAL', 'FORMAL', 'SNEAKERS'];
@@ -1041,6 +1042,74 @@ const formatPaymentLog = (log) => ({
     }
     : null,
 });
+
+// ======================== SHIPMENT EMAIL HELPER ========================
+
+const sendShipmentUpdateEmail = async (shipment, order) => {
+  try {
+    const orderAddress = await prisma.orderAddress.findFirst({
+      where: { orderId: order.id },
+    });
+
+    let email = null;
+    let customerName = 'Valued Customer';
+
+    if (order.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: order.userId },
+      });
+      if (user) {
+        email = user.email;
+        customerName = user.fullName;
+      }
+    } else if (order.sessionId) {
+      email = orderAddress?.email;
+      customerName = orderAddress?.name || 'Valued Customer';
+    }
+
+    if (!email) {
+      console.error('Email not found for shipment update:', shipment.id);
+      return;
+    }
+
+    const statusLabels = {
+      PENDING: 'Pending',
+      SHIPPED: 'Shipped',
+      DELIVERED: 'Delivered',
+      RETURNED: 'Returned',
+      LOST: 'Lost',
+      FAILED: 'Delivery Failed',
+    };
+
+    await sendEmail(
+      email,
+      `Shipment Update - ${order.orderNumber}`,
+      'shipment-update',
+      {
+        customerName,
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        trackingNumber: shipment.trackingNumber,
+        courierName: shipment.courierName,
+        trackingUrl: shipment.trackingUrl,
+        status: shipment.status,
+        statusLabel: statusLabels[shipment.status] || shipment.status,
+        shippedDate: shipment.shippedAt,
+        updatedDate: new Date(),
+        note: shipment.note || '',
+        addressLine1: orderAddress?.addressLine1 || '',
+        addressLine2: orderAddress?.addressLine2 || '',
+        city: orderAddress?.city || '',
+        state: orderAddress?.state || '',
+        postalCode: orderAddress?.postalCode || '',
+        country: orderAddress?.country || '',
+        phone: orderAddress?.phone || '',
+      }
+    );
+  } catch (error) {
+    console.error('Error sending shipment update email:', error);
+  }
+};
 
 const getDashboard = async (req, res) => {
   const todayStart = startOfUtcDay(new Date());
@@ -2423,6 +2492,21 @@ const createShipmentForOrder = async (req, res) => {
     throw createError(500, 'Shipment could not be loaded after creation');
   }
 
+  // Send shipment update email
+  const fullOrder = await prisma.order.findUnique({
+    where: { id: shipment.orderId },
+    select: {
+      id: true,
+      userId: true,
+      sessionId: true,
+      orderNumber: true,
+    },
+  });
+  
+  if (fullOrder) {
+    await sendShipmentUpdateEmail(shipment, fullOrder);
+  }
+
   return res.status(201).json({
     message: 'Shipment created successfully',
     shipment: formatShipment(shipment, true),
@@ -2562,6 +2646,21 @@ const updateShipmentById = async (req, res) => {
 
   if (!updatedShipment) {
     throw createError(500, 'Shipment could not be loaded after update');
+  }
+
+  // Send shipment update email
+  const fullOrder = await prisma.order.findUnique({
+    where: { id: updatedShipment.orderId },
+    select: {
+      id: true,
+      userId: true,
+      sessionId: true,
+      orderNumber: true,
+    },
+  });
+  
+  if (fullOrder) {
+    await sendShipmentUpdateEmail(updatedShipment, fullOrder);
   }
 
   return res.status(200).json({

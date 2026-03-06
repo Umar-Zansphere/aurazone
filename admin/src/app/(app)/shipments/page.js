@@ -290,14 +290,14 @@ export default function ShipmentsPage() {
                                                 {detail.shipment.trackingNumber && (
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Tracking Number</span>
-                                                        <span className="block font-mono text-xs text-[var(--text-primary)]">{detail.trackingNumber}</span>
+                                                        <span className="block font-mono text-xs text-[var(--text-primary)]">{detail.shipment.trackingNumber}</span>
                                                     </div>
                                                 )}
                                                 {detail.shipment.trackingUrl && (
                                                     <div>
                                                         <span className="text-[var(--text-secondary)]">Tracking URL</span>
                                                         <a href={detail.trackingUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs text-[var(--highlight)] underline">
-                                                            {detail.trackingUrl}
+                                                            {detail.shipment.trackingUrl}
                                                         </a>
                                                     </div>
                                                 )}

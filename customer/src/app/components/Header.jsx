@@ -62,9 +62,13 @@ export default function Header({
             </button>
             <a
               href="/"
-              className="text-xl sm:text-2xl font-black tracking-tighter text-slate-900 hover:opacity-80 transition-opacity"
+              className="hover:opacity-80 transition-opacity"
             >
-              Aurazone<span className="text-orange-500 text-2xl sm:text-3xl leading-none">.</span>
+              <img 
+                src="/logo-full.svg" 
+                alt="Aurazone"
+                className="h-8 sm:h-10 w-auto scale-150"
+              />
             </a>
           </div>
 

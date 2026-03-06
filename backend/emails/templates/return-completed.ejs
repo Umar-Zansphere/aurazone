@@ -1,0 +1,68 @@
+<h2>Return Completed & Refund Processed</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Your returned items have been received and verified. Your refund has been processed!</p>
+
+<div style="background-color: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+    <h3 style="color: #155724; margin-top: 0;">✓ Return Completed</h3>
+    <p style="color: #155724; margin: 0;"><strong>Verification Date:</strong> <%= new Date(completedDate).toLocaleDateString() %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Return Summary</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Return Number:</strong> <%= returnNumber %></p>
+    <p><strong>Return Status:</strong> <span style="color: #28a745; font-weight: bold;">✓ Completed</span></p>
+    <p><strong>Items Received:</strong> <%= itemsReceived %></p>
+    <p><strong>Items Verified:</strong> <%= itemsVerified %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Refund Details</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Description</th>
+                <th style="text-align: right; padding: 10px;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">Product Refund</td>
+                <td style="text-align: right; padding: 10px;">₹<%= parseFloat(productRefund).toFixed(2) %></td>
+            </tr>
+            <% if (shippingRefund && shippingRefund > 0) { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">Shipping Refund</td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(shippingRefund).toFixed(2) %></td>
+                </tr>
+            <% } %>
+            <% if (deduction && deduction > 0) { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">Deduction (if any)</td>
+                    <td style="text-align: right; padding: 10px; color: #dc3545;">-₹<%= parseFloat(deduction).toFixed(2) %></td>
+                </tr>
+            <% } %>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <td style="padding: 10px; font-weight: bold;">Total Refund Amount</td>
+                <td style="text-align: right; padding: 10px; font-weight: bold;">₹<%= parseFloat(totalRefundAmount).toFixed(2) %></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Refund Processing</h3>
+    <p><strong>Payment Method:</strong> <%= paymentMethod === 'RAZORPAY' ? 'Online Payment' : paymentMethod === 'COD' ? 'Cash on Delivery' : paymentMethod %></p>
+    <p><strong>Refund Processed Date:</strong> <%= new Date(refundProcessedDate).toLocaleDateString() %></p>
+    <p><strong>Expected Arrival:</strong> <%= expectedArrivalDate ? new Date(expectedArrivalDate).toLocaleDateString() : '3-5 business days' %></p>
+    <p><strong>Reference ID:</strong> <%= refundReferenceId %></p>
+</div>
+
+<div style="background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #004085;">
+    <p style="color: #004085; margin: 0;">
+        <strong>Note:</strong> If you don't see the refund in your account within the expected timeframe, please contact your bank. It may take up to 7 business days for some payment methods.
+    </p>
+</div>
+
+<p>We appreciate your patience and understanding. Have a great day ahead!</p>
+<p>Thank you for shopping with Aurazone!</p>

@@ -1,6 +1,7 @@
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const prisma = require('../../config/prisma');
+const { sendEmail } = require('../utils/emailService'); // Adjust path as needed
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({
@@ -439,7 +440,7 @@ const markOrderAsPaidFromWebhook = async ({
       data: {
         razorpayPaymentId,
         paymentStatus: 'SUCCESS',
-        status: 'SUCCESS',
+        status: 'RECEIVED',
       },
     });
 
@@ -508,6 +509,21 @@ const handlePaymentAuthorized = async (payload) => {
     });
 
     console.log('Payment authorized for order:', order.orderNumber);
+
+    // Send payment confirmation email
+    const paymentRecord = await prisma.payment.findFirst({
+      where: { orderId: order.id },
+    });
+    if (paymentRecord) {
+      await sendPaymentConfirmationEmail(order, paymentRecord);
+    }
+
+    // Send order confirmation email
+    if (order.userId) {
+      await sendOrderConfirmationEmailForRazorpay(order);
+    } else if (order.sessionId) {
+      await sendOrderConfirmationEmailForGuestRazorpay(order);
+    }
 
     return {
       success: true,
@@ -603,6 +619,10 @@ const handlePaymentFailed = async (payload) => {
 
     console.log('Payment failed for order:', order.orderNumber);
 
+    // Send order failed email
+    const failureReason = payment.error_description || payment.error_reason || 'Payment could not be processed. Please try again.';
+    await sendOrderFailedEmail(order, failureReason);
+
     return {
       success: false,
       orderNumber: order.orderNumber,
@@ -634,6 +654,21 @@ const handlePaymentCaptured = async (payload) => {
 
     console.log('Payment captured for order:', order.orderNumber);
 
+    // Send payment confirmation email
+    const paymentRecord = await prisma.payment.findFirst({
+      where: { orderId: order.id },
+    });
+    if (paymentRecord) {
+      await sendPaymentConfirmationEmail(order, paymentRecord);
+    }
+
+    // Send order confirmation email
+    if (order.userId) {
+      await sendOrderConfirmationEmailForRazorpay(order);
+    } else if (order.sessionId) {
+      await sendOrderConfirmationEmailForGuestRazorpay(order);
+    }
+
     return {
       success: true,
       orderNumber: order.orderNumber,
@@ -663,6 +698,208 @@ const handleOrderPaid = async (payload) => {
   } catch (error) {
     console.error('Error handling order paid:', error);
     throw error;
+  }
+};
+
+// ======================== EMAIL SENDING HELPERS ========================
+
+const sendPaymentConfirmationEmail = async (order, payment) => {
+  try {
+    const orderAddress = await prisma.orderAddress.findFirst({
+      where: { orderId: order.id },
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { id: order.userId },
+    });
+
+    if (!user) {
+      console.error('User not found for payment confirmation email:', order.id);
+      return;
+    }
+
+    await sendEmail(
+      user.email,
+      'Payment Confirmed - ' + order.orderNumber,
+      'payment-confirmation',
+      {
+        customerName: user.fullName,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        transactionId: payment.gatewayPaymentId,
+        paymentDate: payment.paidAt || new Date(),
+        paymentMethod: order.paymentMethod,
+        totalAmount: order.totalAmount,
+        subtotal: order.items.reduce((sum, item) => sum + parseFloat(item.subtotal), 0),
+        shippingCost: 40, // This should match SHIPPING_FEE
+        tax: 0, // Adjust if your system calculates tax
+        discount: 0, // Adjust if your system has discounts
+      }
+    );
+  } catch (error) {
+    console.error('Error sending payment confirmation email:', error);
+  }
+};
+
+const sendOrderConfirmationEmailForRazorpay = async (order) => {
+  try {
+    const orderAddress = await prisma.orderAddress.findFirst({
+      where: { orderId: order.id },
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { id: order.userId },
+    });
+
+    if (!user) {
+      console.error('User not found for order confirmation email:', order.id);
+      return;
+    }
+
+    await sendEmail(
+      user.email,
+      'Order Confirmation - ' + order.orderNumber,
+      'order-confirmation',
+      {
+        customerName: user.fullName,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        totalAmount: order.totalAmount,
+        shippingFee: 40,
+        createdAt: order.createdAt,
+        items: order.items.map((item) => ({
+          productName: item.productName,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+        })),
+        addressLine1: orderAddress?.addressLine1 || '',
+        addressLine2: orderAddress?.addressLine2 || '',
+        city: orderAddress?.city || '',
+        state: orderAddress?.state || '',
+        postalCode: orderAddress?.postalCode || '',
+        country: orderAddress?.country || '',
+        phone: orderAddress?.phone || user.phone || '',
+        trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/orders/${order.id}`,
+      }
+    );
+  } catch (error) {
+    console.error('Error sending order confirmation email for Razorpay:', error);
+  }
+};
+
+const sendOrderConfirmationEmailForGuestRazorpay = async (order) => {
+  try {
+    const orderAddress = await prisma.orderAddress.findFirst({
+      where: { orderId: order.id },
+    });
+
+    const email = orderAddress?.email;
+    if (!email) {
+      console.error('Email not found in order address for guest payment confirmation:', order.id);
+      return;
+    }
+
+    await sendEmail(
+      email,
+      'Order Confirmation - ' + order.orderNumber,
+      'order-confirmation',
+      {
+        customerName: orderAddress?.name || 'Valued Customer',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        trackingToken: order.trackingToken,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        totalAmount: order.totalAmount,
+        shippingFee: 40,
+        createdAt: order.createdAt,
+        items: order.items.map((item) => ({
+          productName: item.productName,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+        })),
+        addressLine1: orderAddress?.addressLine1 || '',
+        addressLine2: orderAddress?.addressLine2 || '',
+        city: orderAddress?.city || '',
+        state: orderAddress?.state || '',
+        postalCode: orderAddress?.postalCode || '',
+        country: orderAddress?.country || '',
+        phone: orderAddress?.phone || '',
+        trackingUrl: `${process.env.CLIENT_URL || 'http://localhost:3000'}/track-order/${order.trackingToken}`,
+      }
+    );
+  } catch (error) {
+    console.error('Error sending order confirmation email for guest Razorpay:', error);
+  }
+};
+
+const sendOrderFailedEmail = async (order, failureReason = 'Payment could not be processed') => {
+  try {
+    const orderAddress = await prisma.orderAddress.findFirst({
+      where: { orderId: order.id },
+    });
+
+    let email = null;
+    let customerName = 'Valued Customer';
+
+    if (order.userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: order.userId },
+      });
+      if (user) {
+        email = user.email;
+        customerName = user.fullName;
+      }
+    } else if (order.sessionId) {
+      email = orderAddress?.email;
+      customerName = orderAddress?.name || 'Valued Customer';
+    }
+
+    if (!email) {
+      console.error('Email not found to send order failed notification:', order.id);
+      return;
+    }
+
+    const expiryDate = new Date();
+    expiryDate.setHours(expiryDate.getHours() + 24);
+
+    await sendEmail(
+      email,
+      'Order Payment Failed - ' + order.orderNumber,
+      'order-failed',
+      {
+        customerName,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        failedDate: new Date(),
+        createdAt: order.createdAt,
+        paymentMethod: order.paymentMethod,
+        failureReason,
+        totalAmount: order.totalAmount,
+        items: order.items.map((item) => ({
+          productName: item.productName,
+          color: item.color,
+          size: item.size,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+        })),
+        retryUrl: order.userId 
+          ? `${process.env.CLIENT_URL || 'http://localhost:3000'}/orders/${order.id}/retry-payment`
+          : `${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout?orderId=${order.id}`,
+        expiryDate: expiryDate.toLocaleDateString(),
+      }
+    );
+  } catch (error) {
+    console.error('Error sending order failed email:', error);
   }
 };
 
@@ -765,4 +1002,9 @@ module.exports = {
   handleOrderPaid,
   handleRefundCreated,
   handleRefundProcessed,
+  // Email helpers
+  sendPaymentConfirmationEmail,
+  sendOrderConfirmationEmailForRazorpay,
+  sendOrderConfirmationEmailForGuestRazorpay,
+  sendOrderFailedEmail,
 };

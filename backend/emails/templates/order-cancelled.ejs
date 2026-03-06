@@ -1,0 +1,63 @@
+<h2>Order Cancelled</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Your order has been cancelled as requested. Here are the details:</p>
+
+<div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
+    <h3 style="color: #721c24; margin-top: 0;">Order Cancelled</h3>
+    <p style="color: #721c24; margin: 0;"><strong>Cancellation Date:</strong> <%= new Date(cancelledDate).toLocaleDateString() %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Cancellation Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Order ID:</strong> <%= orderId %></p>
+    <p><strong>Original Order Date:</strong> <%= new Date(createdAt).toLocaleDateString() %></p>
+    <p><strong>Cancellation Reason:</strong> <%= reason || 'Requested by customer' %></p>
+    <p><strong>Status:</strong> <span style="color: #dc3545; font-weight: bold;">Cancelled</span></p>
+</div>
+
+<% if (refundStatus) { %>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <h3>Refund Information</h3>
+        <p><strong>Refund Status:</strong> <%= refundStatus %></p>
+        <p><strong>Refund Amount:</strong> ₹<%= parseFloat(refundAmount).toFixed(2) %></p>
+        <p><strong>Original Payment Method:</strong> <%= paymentMethod === 'RAZORPAY' ? 'Online Payment' : paymentMethod === 'COD' ? 'Cash on Delivery' : paymentMethod %></p>
+        <p><strong>Refund Processing Time:</strong> <%= refundProcessingTime || '5-7 business days' %></p>
+        <p><strong>Expected Refund Date:</strong> <%= expectedRefundDate ? new Date(expectedRefundDate).toLocaleDateString() : 'To be updated' %></p>
+    </div>
+<% } %>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Cancelled Items</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Product</th>
+                <th style="text-align: center; padding: 10px;">Qty</th>
+                <th style="text-align: right; padding: 10px;">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% items.forEach(item => { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">
+                        <strong><%= item.productName %></strong><br/>
+                        <small>Color: <%= item.color %> | Size: <%= item.size %></small>
+                    </td>
+                    <td style="text-align: center; padding: 10px;"><%= item.quantity %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.price).toFixed(2) %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</div>
+
+<div style="background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #004085;">
+    <p style="color: #004085; margin: 0;">
+        <strong>Note:</strong> If you cancelled before shipment, your refund will be processed immediately. If the order was already shipped, please return the items for a refund.
+    </p>
+</div>
+
+<p>If you have any questions or if this was done by mistake, please contact our support team and we'll be happy to help.</p>
+<p>We'd love to have you back! Check out our latest collections.</p>
+<p>Thank you for shopping with Aurazone!</p>

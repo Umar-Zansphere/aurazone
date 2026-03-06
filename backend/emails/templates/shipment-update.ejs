@@ -1,0 +1,74 @@
+<h2>Shipment Update</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Your shipment has been updated. Here are the latest details:</p>
+
+<div style="background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #2196F3;">
+    <h3 style="color: #1976D2; margin-top: 0;">Current Status: <strong><%= statusLabel %></strong></h3>
+    <p style="color: #1976D2; margin: 0;"><strong>Last Updated:</strong> <%= new Date(updatedDate).toLocaleString() %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Shipment Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Tracking Number:</strong> <% if (trackingNumber) { %><strong><%= trackingNumber %></strong><% } else { %>Not available yet<% } %></p>
+    <% if (courierName) { %>
+        <p><strong>Courier:</strong> <%= courierName %></p>
+    <% } %>
+    <% if (shippedDate) { %>
+        <p><strong>Shipped Date:</strong> <%= new Date(shippedDate).toLocaleDateString() %></p>
+    <% } %>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Delivery Address</h3>
+    <p><strong><%= addressLine1 %></strong></p>
+    <% if (addressLine2) { %>
+        <p><%= addressLine2 %></p>
+    <% } %>
+    <p><%= city %>, <%= state %> <%= postalCode %></p>
+    <p><%= country %></p>
+    <p><strong>Phone:</strong> <%= phone %></p>
+</div>
+
+<% if (status === 'SHIPPED') { %>
+    <div style="background-color: #f0f4ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #FF6B6B;">
+        <h3 style="color: #FF6B6B; margin-top: 0;">Your order is on the way!</h3>
+        <p style="margin: 0;">Your package has been picked up and is now in transit. You can track your shipment using the tracking number provided.</p>
+    </div>
+<% } else if (status === 'OUT_FOR_DELIVERY') { %>
+    <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+        <h3 style="color: #856404; margin-top: 0;">Out for Delivery Today!</h3>
+        <p style="margin: 0;">Your package is out for delivery today. Please ensure someone is available to receive it.</p>
+    </div>
+<% } else if (status === 'DELIVERED') { %>
+    <div style="background-color: #d4edda; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+        <h3 style="color: #155724; margin-top: 0;">✓ Delivered!</h3>
+        <p style="margin: 0;">Your package has been successfully delivered. Thank you for shopping with us!</p>
+    </div>
+<% } else if (status === 'FAILED') { %>
+    <div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
+        <h3 style="color: #721c24; margin-top: 0;">Delivery Attempted</h3>
+        <p style="margin: 0;">We were unable to deliver your package at this time. Please contact our support team for more information.</p>
+    </div>
+<% } else if (status === 'IN_TRANSIT') { %>
+    <div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4CAF50;">
+        <h3 style="color: #2E7D32; margin-top: 0;">In Transit</h3>
+        <p style="margin: 0;">Your package is currently in transit and will be delivered soon. Keep tracking for updates.</p>
+    </div>
+<% } %>
+
+<div style="text-align: center; margin: 30px 0;">
+    <% if (trackingNumber && trackingUrl) { %>
+        <a href="<%= trackingUrl %>" style="background-color: #FF6B6B; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Track Your Package</a>
+    <% } %>
+</div>
+
+<% if (note) { %>
+    <div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <h3>Additional Notes</h3>
+        <p><%= note %></p>
+    </div>
+<% } %>
+
+<p>For any questions or concerns, please feel free to contact our support team.</p>
+<p>Thank you for shopping with Aurazone!</p>

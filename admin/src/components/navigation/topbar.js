@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Search, Menu, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRef, useEffect } from "react";
 import { useSidebarStore } from "@/stores/use-sidebar-store";
@@ -35,8 +36,15 @@ export default function Topbar() {
                         <Menu size={18} />
                     </button>
                     {/* Logo */}
-                    <Link href="/" className="text-lg font-bold text-[var(--text-primary)]">
-                        AuraZone
+                    <Link href="/">
+                        <Image 
+                            src="/icons/logo.svg" 
+                            alt="AuraZone" 
+                            width={32}
+                            height={32}
+                            priority
+                            className="h-8 w-auto"
+                        />
                     </Link>
                 </div>
 

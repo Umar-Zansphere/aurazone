@@ -345,25 +345,6 @@ export default function ProductDetailsPage() {
                 </div>
               </div>
 
-              {/* Rating */}
-              <div className="flex items-center gap-4 mt-4">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        size={18}
-                        className={i < Math.floor(ratingValue) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}
-                      />
-                    ))}
-                  </div>
-                  <span className="font-bold text-gray-900">{ratingValue}</span>
-                </div>
-                <span className="text-sm text-gray-500">
-                  {reviewCount} reviews
-                </span>
-              </div>
-
               {/* Price */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <p className="text-xs text-gray-500 font-medium mb-1">Price</p>
@@ -416,7 +397,7 @@ export default function ProductDetailsPage() {
             )}
 
             {/* Size Selection */}
-            {uniqueSizes.length > 0 && (
+            {currentVariants.length > 0 && (
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-[#1E293B] uppercase tracking-wide">
@@ -425,16 +406,16 @@ export default function ProductDetailsPage() {
                 </div>
 
                 <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-                  {uniqueSizes.map((size) => (
+                  {currentVariants.map((variant) => (
                     <button
-                      key={size}
-                      onClick={() => setSelectedSize(size)}
-                      className={`py-3 rounded-lg font-semibold text-sm transition-all duration-200 border-2 ${selectedSize === size
+                      key={variant.id}
+                      onClick={() => setSelectedSize(variant.size)}
+                      className={`py-3 rounded-lg font-semibold text-sm transition-all duration-200 border-2 ${selectedSize === variant.size
                         ? 'border-[#FF6B6B] bg-[#FF6B6B] text-white shadow-lg shadow-[#FF6B6B]/30'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50'
                         }`}
                     >
-                      {size}
+                      {variant.size}
                     </button>
                   ))}
                 </div>

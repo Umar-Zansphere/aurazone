@@ -13,6 +13,7 @@ const createApp = () => {
   app.use(cors({
     origin: [
       'http://localhost:3000',
+      'http://localhost:3001',
       'https://shoe-shop-25gx.vercel.app',
       'https://shoe-shop-8tbmbxp8p-umar-mohameds-projects-5295067c.vercel.app',
     ],

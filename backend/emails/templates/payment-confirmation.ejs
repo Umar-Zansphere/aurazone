@@ -1,0 +1,64 @@
+<h2>Payment Confirmed</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Your payment has been successfully received and processed. Your order is now confirmed!</p>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Payment Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Order ID:</strong> <%= orderId %></p>
+    <p><strong>Payment Method:</strong> <%= paymentMethod === 'RAZORPAY' ? 'Online Payment' : paymentMethod === 'COD' ? 'Cash on Delivery' : paymentMethod %></p>
+    <p><strong>Transaction ID:</strong> <%= transactionId || 'N/A' %></p>
+    <p><strong>Payment Date:</strong> <%= new Date(paymentDate).toLocaleDateString() %></p>
+    <p><strong>Amount Paid:</strong> ₹<%= parseFloat(totalAmount).toFixed(2) %></p>
+    <p><strong>Status:</strong> <span style="color: #28a745; font-weight: bold;">✓ Paid</span></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Summary</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Description</th>
+                <th style="text-align: right; padding: 10px;">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="padding: 10px;">Subtotal</td>
+                <td style="text-align: right; padding: 10px;">₹<%= parseFloat(subtotal).toFixed(2) %></td>
+            </tr>
+            <% if (discount && discount > 0) { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">Discount</td>
+                    <td style="text-align: right; padding: 10px; color: #28a745;">-₹<%= parseFloat(discount).toFixed(2) %></td>
+                </tr>
+            <% } %>
+            <% if (shippingCost && shippingCost > 0) { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">Shipping</td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(shippingCost).toFixed(2) %></td>
+                </tr>
+            <% } %>
+            <% if (tax && tax > 0) { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">Tax</td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(tax).toFixed(2) %></td>
+                </tr>
+            <% } %>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <td style="padding: 10px; font-weight: bold;">Total Amount</td>
+                <td style="text-align: right; padding: 10px; font-weight: bold;">₹<%= parseFloat(totalAmount).toFixed(2) %></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<div style="background-color: #e8f5e9; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+    <p style="color: #1b5e20;">
+        <strong>✓ Your payment is secure</strong><br/>
+        Your payment has been processed securely with encryption.
+    </p>
+</div>
+
+<p>Your order will be prepared and shipped soon. You'll receive a shipment notification with tracking details.</p>
+<p>Thank you for shopping with Aurazone!</p>

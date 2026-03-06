@@ -39,6 +39,7 @@ enum CartStatus {
 }
 
 enum OrderStatus {
+  RECEIVED
   PENDING
   SUCCESS
   FAILED

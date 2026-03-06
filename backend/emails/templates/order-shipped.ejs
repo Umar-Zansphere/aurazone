@@ -1,0 +1,57 @@
+<h2>Order Shipped</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Great news! Your order has been shipped and is on its way to you.</p>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Shipment Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Order ID:</strong> <%= orderId %></p>
+    <p><strong>Tracking Number:</strong> <% if (trackingNumber) { %><%= trackingNumber %><% } else { %>Not available yet<% } %></p>
+    <p><strong>Shipped Date:</strong> <%= new Date(shippedDate).toLocaleDateString() %></p>
+    <p><strong>Carrier:</strong> <%= carrier || 'Standard Shipping' %></p>
+    <p><strong>Estimated Delivery:</strong> <%= estimatedDelivery ? new Date(estimatedDelivery).toLocaleDateString() : 'To be updated' %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Shipping Address</h3>
+    <p><strong><%= addressLine1 %></strong></p>
+    <% if (addressLine2) { %>
+        <p><%= addressLine2 %></p>
+    <% } %>
+    <p><%= city %>, <%= state %> <%= postalCode %></p>
+    <p><%= country %></p>
+    <p><strong>Phone:</strong> <%= phone %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Items</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Product</th>
+                <th style="text-align: center; padding: 10px;">Qty</th>
+                <th style="text-align: right; padding: 10px;">Price</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% items.forEach(item => { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">
+                        <strong><%= item.productName %></strong><br/>
+                        <small>Color: <%= item.color %> | Size: <%= item.size %></small>
+                    </td>
+                    <td style="text-align: center; padding: 10px;"><%= item.quantity %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.price).toFixed(2) %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <% if (trackingNumber && trackingUrl) { %>
+        <a href="<%= trackingUrl %>" style="background-color: #FF6B6B; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Track Your Package</a>
+    <% } %>
+</div>
+
+<p>Thank you for shopping with Aurazone! If you have any questions, feel free to contact us.</p>

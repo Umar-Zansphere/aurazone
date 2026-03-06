@@ -1,0 +1,85 @@
+<h2>Order Payment Failed</h2>
+<p>Hello <strong><%= customerName %></strong>,</p>
+<p>Unfortunately, your payment could not be processed. Your order has been temporarily cancelled.</p>
+
+<div style="background-color: #f8d7da; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #dc3545;">
+    <h3 style="color: #721c24; margin-top: 0;">✗ Payment Failed</h3>
+    <p style="color: #721c24; margin: 0;"><strong>Failed Date:</strong> <%= new Date(failedDate).toLocaleString() %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Details</h3>
+    <p><strong>Order Number:</strong> <%= orderNumber %></p>
+    <p><strong>Order ID:</strong> <%= orderId %></p>
+    <p><strong>Order Date:</strong> <%= new Date(createdAt).toLocaleDateString() %></p>
+    <p><strong>Status:</strong> <span style="color: #dc3545; font-weight: bold;">Failed</span></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Failure Details</h3>
+    <p><strong>Payment Method:</strong> <%= paymentMethod === 'RAZORPAY' ? 'Online Payment' : paymentMethod %></p>
+    <p><strong>Failure Reason:</strong> <%= failureReason || 'Payment could not be processed. Please try again.' %></p>
+    <p><strong>Total Amount:</strong> ₹<%= parseFloat(totalAmount).toFixed(2) %></p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Order Items</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+                <th style="text-align: left; padding: 10px;">Product</th>
+                <th style="text-align: center; padding: 10px;">Qty</th>
+                <th style="text-align: right; padding: 10px;">Price</th>
+                <th style="text-align: right; padding: 10px;">Subtotal</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% items.forEach(item => { %>
+                <tr style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 10px;">
+                        <strong><%= item.productName %></strong><br/>
+                        <small>Color: <%= item.color %> | Size: <%= item.size %></small>
+                    </td>
+                    <td style="text-align: center; padding: 10px;"><%= item.quantity %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.price).toFixed(2) %></td>
+                    <td style="text-align: right; padding: 10px;">₹<%= parseFloat(item.subtotal).toFixed(2) %></td>
+                </tr>
+            <% }); %>
+        </tbody>
+    </table>
+</div>
+
+<div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107;">
+    <h3 style="color: #856404; margin-top: 0;">What Happened?</h3>
+    <p style="color: #856404; margin: 0;">
+        The payment for your order could not be processed. This might be due to:
+    </p>
+    <ul style="margin: 10px 0; padding-left: 20px; color: #856404;">
+        <li>Insufficient balance in your account</li>
+        <li>Card/payment method declined</li>
+        <li>Transaction timeout</li>
+        <li>Incorrect payment details</li>
+        <li>Network connectivity issues</li>
+    </ul>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+    <a href="<%= retryUrl %>" style="background-color: #FF6B6B; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block;">Retry Payment</a>
+</div>
+
+<div style="background-color: #e7f3ff; padding: 15px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #004085;">
+    <h3 style="color: #004085; margin-top: 0;">What Happens Next?</h3>
+    <p style="color: #004085; margin: 0;">
+        Your order and inventory are still reserved. You have until <strong><%= expiryDate ? new Date(expiryDate).toLocaleDateString() : '24 hours' %></strong> to retry the payment. After that, the inventory will be released and your order will be cancelled.
+    </p>
+</div>
+
+<div style="background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3>Need Help?</h3>
+    <p>If the problem persists or you need assistance, please contact our support team. We're here to help!</p>
+    <p><strong>Support Email:</strong> support@aurazone.com</p>
+    <p><strong>Support Phone:</strong> +91 XXXX-XXXX-XXXX</p>
+</div>
+
+<p>We look forward to completing your order!</p>
+<p>Thank you for shopping with Aurazone!</p>
