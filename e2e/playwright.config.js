@@ -7,12 +7,18 @@ module.exports = defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : 1, // Sequential execution for checkout -> admin flow
-    reporter: 'html',
+    reporter: [['html', { open: 'never' }], ['list']],
+    timeout: 120_000,
+    expect: {
+        timeout: 15_000,
+    },
     use: {
+        baseURL: process.env.CUSTOMER_BASE_URL || 'https://www.aurazone.shop',
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',
         actionTimeout: 15_000,
+        navigationTimeout: 45_000,
     },
     projects: [
         {

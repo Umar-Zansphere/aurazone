@@ -578,7 +578,13 @@ export default function TrackOrderPage() {
                 <div className="text-center mt-8 text-sm text-slate-600">
                     <p>
                         Need help with delivery? Contact us at{' '}
-                        <span className="font-semibold">support@aurazone.com</span>
+                        <a href="mailto:support@aurazone.com" className="font-semibold text-orange-600 hover:text-orange-700">
+                            support@aurazone.com
+                        </a>{' '}
+                        or visit{' '}
+                        <a href="/contact-us" className="font-semibold text-orange-600 hover:text-orange-700">
+                            Contact Us
+                        </a>
                     </p>
                 </div>
             </main>

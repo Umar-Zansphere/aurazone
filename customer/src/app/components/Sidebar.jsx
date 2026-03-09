@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { productApi } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
+import { LEGAL_LINKS } from '@/lib/legal';
 
 const Sidebar = ({ isOpen, onClose, onAuthRequest }) => {
   const [filterOptions, setFilterOptions] = useState(null);
@@ -182,6 +183,21 @@ const Sidebar = ({ isOpen, onClose, onAuthRequest }) => {
               </div>
             </div>
           )}
+
+          <div className="mt-auto pt-6 border-t border-white/10">
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Support & Policies</p>
+            <div className="space-y-2">
+              {LEGAL_LINKS.map((link) => (
+                <button
+                  key={link.href}
+                  onClick={() => handleNavigate(link.href)}
+                  className="w-full text-left py-3 px-4 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/10 transition-all active:scale-98 touch-manipulation"
+                >
+                  {link.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
         </div>
       </div>

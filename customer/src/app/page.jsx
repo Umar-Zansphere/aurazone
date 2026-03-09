@@ -10,6 +10,7 @@ import { productApi } from '@/lib/api';
 import { useToast } from '@/components/ToastContext';
 import { LoadingSkeleton } from '@/components/LoadingSkeleton';
 import Link from 'next/link';
+import LegalFooterLinks from './components/LegalFooterLinks';
 
 export default function Home() {
   const { showToast } = useToast();
@@ -128,6 +129,10 @@ export default function Home() {
             </Link>
           </div>
         )}
+
+        <footer className="mt-16 mb-8 border-t border-slate-200 pt-6">
+          <LegalFooterLinks />
+        </footer>
       </main>
     </div>
   );

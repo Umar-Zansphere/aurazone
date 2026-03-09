@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { ArrowLeft, AlertCircle, Plus, CreditCard, Truck, CheckCircle, Edit2 } from 'lucide-react';
 import Header from '@/app/components/Header';
 import { cartApi, orderApi, addressApi, paymentApi } from '@/lib/api';
@@ -384,7 +385,7 @@ export default function CheckoutPage() {
               {isGuest ? (
                 /* Guest Address Form */
                 <div className="space-y-5">
-                  <p className="text-sm text-slate-600">Please provide your delivery details. We'll use this information to confirm your order and coordinate delivery.</p>
+                  <p className="text-sm text-slate-600">Please provide your delivery details. We&apos;ll use this information to confirm your order and coordinate delivery.</p>
 
                   {/* Contact Information Section */}
                   <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl p-5 border border-slate-200">
@@ -417,7 +418,7 @@ export default function CheckoutPage() {
                             onChange={(e) => setGuestAddress({ ...guestAddress, email: e.target.value })}
                             className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
                           />
-                          <p className="text-xs text-slate-500 mt-1">📧 We'll send order confirmation and tracking updates here</p>
+                          <p className="text-xs text-slate-500 mt-1">📧 We&apos;ll send order confirmation and tracking updates here</p>
                         </div>
                       </div>
 
@@ -693,7 +694,23 @@ export default function CheckoutPage() {
 
               <p className="text-xs text-slate-500 text-center mt-4">
                 By placing an order, you agree to our<br />
-                <span className="font-semibold">Terms & Conditions</span>
+                <span className="font-semibold">
+                  <Link href="/terms-and-conditions" className="hover:text-orange-600 transition-colors">
+                    Terms & Conditions
+                  </Link>
+                  {' '}|{' '}
+                  <Link href="/shipping" className="hover:text-orange-600 transition-colors">
+                    Shipping
+                  </Link>
+                  {' '}|{' '}
+                  <Link href="/cancellations-and-refunds" className="hover:text-orange-600 transition-colors">
+                    Cancellations & Refunds
+                  </Link>
+                  {' '}|{' '}
+                  <Link href="/privacy" className="hover:text-orange-600 transition-colors">
+                    Privacy
+                  </Link>
+                </span>
               </p>
             </div>
           </div>

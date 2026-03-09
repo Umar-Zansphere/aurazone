@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CheckCircle, Package, Truck, Mail, Home } from 'lucide-react';
 import Header from '@/app/components/Header';
+import { SUPPORT_DETAILS } from '@/lib/legal';
 
 function OrderConfirmationContent() {
   const router = useRouter();
@@ -74,7 +75,7 @@ function OrderConfirmationContent() {
           </div>
 
           <h1 className="text-4xl font-black text-slate-900 mb-2">Order Confirmed!</h1>
-          <p className="text-lg text-slate-600 mb-8">Thank you for your order. We're preparing your shoes with care.</p>
+          <p className="text-lg text-slate-600 mb-8">Thank you for your order. We&apos;re preparing your shoes with care.</p>
 
           {/* Order Number */}
           <div className="bg-linear-to-br from-orange-50 to-orange-100 rounded-2xl p-6 mb-8">
@@ -100,7 +101,7 @@ function OrderConfirmationContent() {
 
           {/* Next Steps */}
           <div className="border-t-2 border-slate-200 pt-8">
-            <h2 className="text-2xl font-bold text-slate-900 mb-6">What's Next?</h2>
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">What&apos;s Next?</h2>
 
             <div className="grid md:grid-cols-2 gap-4 text-left">
               {/* Order Confirmation */}
@@ -190,14 +191,14 @@ function OrderConfirmationContent() {
           </p>
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <a
-              href="mailto:support@shoeShop.com"
+              href={`mailto:${SUPPORT_DETAILS.email}`}
               className="text-orange-600 font-semibold hover:text-orange-700 transition-colors"
             >
               📧 Email Support
             </a>
             <span className="text-slate-400">•</span>
             <a
-              href="tel:+919876543210"
+              href={`tel:${SUPPORT_DETAILS.phoneHref}`}
               className="text-orange-600 font-semibold hover:text-orange-700 transition-colors"
             >
               📞 Call Us
