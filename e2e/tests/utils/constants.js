@@ -20,7 +20,7 @@ const TEST_DATA = {
   variantSize: process.env.E2E_VARIANT_SIZE || 'US 9',
 };
 
-const WEBHOOK_SECRET = process.env.E2E_RAZORPAY_WEBHOOK_SECRET || '';
+const WEBHOOK_SECRET = process.env.E2E_RAZORPAY_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
 
 const hasCustomerCreds = () => Boolean(CUSTOMER_EMAIL && CUSTOMER_PASSWORD);
 const hasAdminCreds = () => Boolean(ADMIN_EMAIL && ADMIN_PASSWORD);

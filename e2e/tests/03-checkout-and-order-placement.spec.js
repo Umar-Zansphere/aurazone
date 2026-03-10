@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_DATA, hasCustomerCreds } = require('./utils/constants');
+const { CUSTOMER_BASE_URL, TEST_DATA, hasCustomerCreds } = require('./utils/constants');
 const {
   ensureProductsPage,
   clearCart,
+  gotoCart,
   gotoCheckout,
   ensureGuestAddressFilled,
   ensureCustomerLogin,
@@ -10,11 +11,24 @@ const {
   findProductByName,
 } = require('./utils/helpers');
 
+const joinUrl = (base, path = '/') => `${base}${path.startsWith('/') ? path : `/${path}`}`;
+
 function parseAmountFromBlock(text, label) {
   const regex = new RegExp(`${label}[^₹]*₹\\s*([\\d,]+(?:\\.\\d+)?)`, 'i');
   const match = String(text || '').match(regex);
   if (!match) return null;
   return Number.parseFloat(match[1].replace(/,/g, ''));
+}
+
+async function addToCartAndWaitForUi(page, variantId, quantity = 1) {
+  const response = await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
+    data: { variantId, quantity },
+  });
+  expect(response.ok()).toBeTruthy();
+
+  // Sync UI (cart is hydrated client-side via store fetch), then continue with checkout assertions.
+  await gotoCart(page);
+  await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
 }
 
 test.describe('3. Checkout & Order Placement', () => {
@@ -27,9 +41,7 @@ test.describe('3. Checkout & Order Placement', () => {
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
     expect(product).toBeTruthy();
 
-    await page.request.post('https://www.aurazone.shop/api/cart', {
-      data: { variantId: product.variants[0].id, quantity: 1 },
-    });
+    await addToCartAndWaitForUi(page, product.variants[0].id, 1);
 
     await gotoCheckout(page);
     await expect(page.getByText(/faster checkout with login/i)).toBeVisible();
@@ -42,9 +54,7 @@ test.describe('3. Checkout & Order Placement', () => {
     await ensureCustomerLogin(page);
 
     const authProduct = await findProductByName(page.request, TEST_DATA.secondaryProductName);
-    await page.request.post('https://www.aurazone.shop/api/cart', {
-      data: { variantId: authProduct.variants[0].id, quantity: 1 },
-    });
+    await addToCartAndWaitForUi(page, authProduct.variants[0].id, 1);
 
     await ensureCustomerAddress(page);
     await gotoCheckout(page);
@@ -55,9 +65,7 @@ test.describe('3. Checkout & Order Placement', () => {
 
   test('3.2 Address Validation (Success): valid shipping address is accepted for order payload', async ({ page }) => {
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    await page.request.post('https://www.aurazone.shop/api/cart', {
-      data: { variantId: product.variants[0].id, quantity: 1 },
-    });
+    await addToCartAndWaitForUi(page, product.variants[0].id, 1);
 
     await gotoCheckout(page);
     const address = await ensureGuestAddressFilled(page);
@@ -87,9 +95,7 @@ test.describe('3. Checkout & Order Placement', () => {
 
   test('3.3 Address Validation (Failure): missing required fields show validation feedback', async ({ page }) => {
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    await page.request.post('https://www.aurazone.shop/api/cart', {
-      data: { variantId: product.variants[0].id, quantity: 1 },
-    });
+    await addToCartAndWaitForUi(page, product.variants[0].id, 1);
 
     await gotoCheckout(page);
     await page.getByRole('button', { name: /place order/i }).click();
@@ -101,14 +107,20 @@ test.describe('3. Checkout & Order Placement', () => {
     const p1 = await findProductByName(page.request, TEST_DATA.exactProductName);
     const p2 = await findProductByName(page.request, TEST_DATA.secondaryProductName);
 
-    await page.request.post('https://www.aurazone.shop/api/cart', {
+    const seed1 = await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
       data: { variantId: p1.variants[0].id, quantity: 2 },
     });
-    await page.request.post('https://www.aurazone.shop/api/cart', {
+    expect(seed1.ok()).toBeTruthy();
+    const seed2 = await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
       data: { variantId: p2.variants[0].id, quantity: 1 },
     });
+    expect(seed2.ok()).toBeTruthy();
 
-    const cartRes = await page.request.get('https://www.aurazone.shop/api/cart');
+    await gotoCart(page);
+    await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
+
+    const cartRes = await page.request.get(joinUrl(CUSTOMER_BASE_URL, '/api/cart'));
+    expect(cartRes.ok()).toBeTruthy();
     const cart = await cartRes.json();
     const expectedSubtotal = cart.items.reduce(
       (sum, item) => sum + Number.parseFloat(item.unitPrice) * item.quantity,

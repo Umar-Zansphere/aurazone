@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { expect, APIRequest } = require('@playwright/test');
+const { expect, request: pwRequest } = require('@playwright/test');
 const {
   CUSTOMER_BASE_URL,
   ADMIN_BASE_URL,
@@ -66,11 +66,25 @@ async function openProductByName(page, name) {
 }
 
 async function addCurrentProductToCart(page) {
-  const addButton = page.getByRole('button', { name: /add to cart/i });
-  await expect(addButton).toBeVisible();
+  const addButton = page.getByRole('button', { name: /add to cart/i }).first();
+  const quantitySelector = page.getByLabel(/quantity selector/i).first();
+
+  await expect(addButton).toBeVisible({ timeout: 30_000 });
+  await expect(addButton).toBeEnabled({ timeout: 30_000 });
+  await addButton.scrollIntoViewIfNeeded();
   await addButton.click();
-  await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible();
-  await expect(addButton).toBeHidden();
+
+  // This is a client-driven UI update that can take time (hydration + API + store refresh).
+  // Wait for the success state, but fail fast if the page shows an error toast.
+  const errorToast = page.locator('.toast-message').filter({ hasText: /insufficient|failed|error/i }).first();
+  await expect(quantitySelector.or(errorToast)).toBeVisible({ timeout: 45_000 });
+  if (await errorToast.isVisible().catch(() => false)) {
+    const message = ((await errorToast.textContent().catch(() => '')) || '').trim();
+    throw new Error(`Add to cart failed${message ? `: ${message}` : ''}`);
+  }
+
+  await expect(quantitySelector).toBeVisible({ timeout: 45_000 });
+  await expect(addButton).toBeHidden({ timeout: 45_000 });
 }
 
 async function gotoCart(page) {
@@ -161,7 +175,7 @@ async function ensureGuestAddressFilled(page, overrides = {}) {
 }
 
 async function createAdminApiContext(request) {
-  const api = await APIRequest.newContext({
+  const api = await pwRequest.newContext({
     baseURL: ADMIN_BASE_URL,
     extraHTTPHeaders: { 'ngrok-skip-browser-warning': 'true' },
   });
@@ -178,7 +192,7 @@ async function createAdminApiContext(request) {
 }
 
 async function createGuestApiContext(request) {
-  const api = await APIRequest.newContext({
+  const api = await pwRequest.newContext({
     baseURL: CUSTOMER_BASE_URL,
     extraHTTPHeaders: { 'ngrok-skip-browser-warning': 'true' },
   });
@@ -189,7 +203,12 @@ async function createGuestApiContext(request) {
 
 async function findProductByName(apiContext, productName) {
   const response = await apiContext.get(
-    joinUrl(CUSTOMER_BASE_URL, `/api/products/search?search=${encodeURIComponent(productName)}&take=20`)
+    joinUrl(CUSTOMER_BASE_URL, `/api/products/search?search=${encodeURIComponent(productName)}&take=20`),
+    {
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
+    }
   );
   expect(response.ok()).toBeTruthy();
   const data = await response.json();
@@ -201,6 +220,9 @@ async function findProductByName(apiContext, productName) {
 
 async function addVariantToCart(apiContext, variantId, quantity = 1) {
   const response = await apiContext.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
+      headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
     data: { variantId, quantity },
   });
   return response;
@@ -208,6 +230,9 @@ async function addVariantToCart(apiContext, variantId, quantity = 1) {
 
 async function createGuestOrder(apiContext, address, paymentMethod = 'RAZORPAY') {
   const response = await apiContext.post(joinUrl(CUSTOMER_BASE_URL, '/api/orders'), {
+    headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
     data: {
       address,
       paymentMethod,
@@ -226,6 +251,9 @@ async function fetchAdminInventoryByVariant(adminApi, variantId) {
 
 async function updateAdminVariant(adminApi, variantId, payload) {
   const response = await adminApi.put(joinUrl(ADMIN_BASE_URL, `/api/admin/variants/${variantId}`), {
+    headers: {
+        "ngrok-skip-browser-warning": "true",
+      },
     data: payload,
   });
   expect(response.ok()).toBeTruthy();
@@ -234,6 +262,10 @@ async function updateAdminVariant(adminApi, variantId, payload) {
 
 async function updateAdminInventory(adminApi, variantId, quantity, note = 'E2E stock update') {
   const response = await adminApi.put(joinUrl(ADMIN_BASE_URL, `/api/admin/variants/${variantId}/inventory`), {
+    headers: {
+        credentials: "include",
+        "ngrok-skip-browser-warning": "true",
+      },
     data: { quantity, note },
   });
   expect(response.ok()).toBeTruthy();
@@ -242,6 +274,10 @@ async function updateAdminInventory(adminApi, variantId, quantity, note = 'E2E s
 
 async function updateAdminProduct(adminApi, productId, payload) {
   const response = await adminApi.put(joinUrl(ADMIN_BASE_URL, `/api/admin/products/${productId}`), {
+    headers: {
+        credentials: "include",
+        "ngrok-skip-browser-warning": "true",
+      },
     data: payload,
   });
   expect(response.ok()).toBeTruthy();
