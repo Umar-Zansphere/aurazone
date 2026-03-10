@@ -386,7 +386,10 @@ export default function ProductDetailsPage() {
                   {uniqueColors.map((color) => (
                     <button
                       key={color}
+                      type="button"
                       onClick={() => handleColorChange(color)}
+                      aria-pressed={selectedColor === color}
+                      data-selected={selectedColor === color ? 'true' : 'false'}
                       className={`relative group transition-all`}
                     >
                       <div className={`w-16 h-16 rounded-xl border-2 overflow-hidden transition-all flex items-center justify-center ${selectedColor === color
@@ -417,7 +420,10 @@ export default function ProductDetailsPage() {
                   {currentVariants.map((variant) => (
                     <button
                       key={variant.id}
+                      type="button"
                       onClick={() => setSelectedSize(variant.size)}
+                      aria-pressed={selectedSize === variant.size}
+                      data-selected={selectedSize === variant.size ? 'true' : 'false'}
                       className={`py-3 rounded-lg font-semibold text-sm transition-all duration-200 border-2 ${selectedSize === variant.size
                         ? 'border-[#FF6B6B] bg-[#FF6B6B] text-white shadow-lg shadow-[#FF6B6B]/30'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-gray-400 hover:bg-gray-50'

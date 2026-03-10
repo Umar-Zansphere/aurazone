@@ -18,12 +18,16 @@ const joinUrl = (base, path = '/') => `${base}${path.startsWith('/') ? path : `/
 async function selectVariant(page, color, size) {
   const colorButton = page.getByRole('button', { name: new RegExp(color, 'i') }).first();
   if (await colorButton.isVisible().catch(() => false)) {
+    await colorButton.scrollIntoViewIfNeeded();
     await colorButton.click();
+    await expect(colorButton).toHaveAttribute('aria-pressed', 'true');
   }
 
   const sizeButton = page.getByRole('button', { name: new RegExp(size.replace(/\s+/g, '\\s*'), 'i') }).first();
   if (await sizeButton.isVisible().catch(() => false)) {
+    await sizeButton.scrollIntoViewIfNeeded();
     await sizeButton.click();
+    await expect(sizeButton).toHaveAttribute('aria-pressed', 'true');
   }
 }
 
