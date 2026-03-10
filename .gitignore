@@ -9,3 +9,10 @@ backend/generated/prisma
 backend/node_modules/
 admin/node_modules/
 customer/node_modules/
+
+
+# E2E Tests
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/playwright-report

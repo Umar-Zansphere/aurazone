@@ -168,7 +168,10 @@ export default function CartPage() {
 
                           {/* Quantity Selector */}
                           <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                            <div
+                              className="flex items-center gap-1 bg-slate-100 rounded-xl p-1"
+                              aria-label="Quantity selector"
+                            >
                               <button
                                 onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
                                 className="p-1 hover:bg-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"

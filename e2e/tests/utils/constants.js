@@ -1,8 +1,10 @@
 const CUSTOMER_BASE_URL = process.env.CUSTOMER_BASE_URL || 'https://www.aurazone.shop';
 const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || 'https://admin.aurazone.shop';
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@aurazone.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123456';
+// Intentionally blank by default so stock-mutation scenarios don't run against shared environments
+// unless credentials are explicitly provided.
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || '';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const CUSTOMER_EMAIL = process.env.CUSTOMER_EMAIL || '';
 const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD || '';

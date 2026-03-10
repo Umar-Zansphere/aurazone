@@ -69,11 +69,19 @@ async function addCurrentProductToCart(page) {
   const addButton = page.getByRole('button', { name: /add to cart/i });
   await expect(addButton).toBeVisible();
   await addButton.click();
+  await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible();
+  await expect(addButton).toBeHidden();
 }
 
 async function gotoCart(page) {
   await gotoCustomer(page, '/cart');
-  await page.waitForLoadState('networkidle');
+  // Cart is a client page that fetches cart state after hydration; wait for a stable UI marker.
+  await expect(
+    page
+      .getByRole('heading', { name: /order summary/i })
+      .or(page.getByRole('heading', { name: /your cart is empty/i }))
+      .first()
+  ).toBeVisible();
 }
 
 async function gotoCheckout(page) {

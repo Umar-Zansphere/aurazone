@@ -119,7 +119,7 @@ test.describe('1. Product Searching & Browsing', () => {
   test('1.8 Product Details Accuracy: title, description, price, images, variants render correctly', async ({ page }) => {
     await openProductByName(page, TEST_DATA.exactProductName);
 
-    await expect(page.getByRole('heading', { name: TEST_DATA.exactProductName })).toBeVisible();
+    await expect(page.getByRole('heading', { name: TEST_DATA.exactProductName, level: 1 })).toBeVisible();
     await expect(page.getByText(/color variant/i)).toBeVisible();
     await expect(page.getByText(/select size/i)).toBeVisible();
 

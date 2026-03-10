@@ -234,7 +234,11 @@ export default function ProductDetailsPage() {
               />
             </button>
 
-            <Link href="/cart" className="p-2 hover:bg-gray-100 rounded-full transition-colors relative">
+            <Link
+              href="/cart"
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
+              aria-label="Shopping cart"
+            >
               <ShoppingCart size={24} className="text-gray-800" />
               {cartCount > 0 && (
                 <span className="absolute top-0 right-0 bg-[#FF6B6B] text-white text-[10px] font-bold w-5 h-5 flex items-center justify-center rounded-full border-2 border-white">
@@ -249,10 +253,12 @@ export default function ProductDetailsPage() {
       <main className="max-w-7xl mx-auto px-4 py-8 pb-32 sm:pb-8">
         {/* Feedback Messages */}
         {cartMessage && (
-          <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${cartMessage.type === 'success'
-            ? 'bg-green-50 border border-green-200'
-            : 'bg-red-50 border border-red-200'
-            }`}>
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-center gap-3 toast-message ${cartMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+              }`}
+          >
             <AlertCircle size={20} className={cartMessage.type === 'success' ? 'text-green-600' : 'text-red-600'} />
             <p className={cartMessage.type === 'success' ? 'text-green-700' : 'text-red-700'}>
               {cartMessage.text}
@@ -261,10 +267,12 @@ export default function ProductDetailsPage() {
         )}
 
         {wishlistMessage && (
-          <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${wishlistMessage.type === 'success'
-            ? 'bg-green-50 border border-green-200'
-            : 'bg-red-50 border border-red-200'
-            }`}>
+          <div
+            className={`mb-6 p-4 rounded-lg flex items-center gap-3 toast-message ${wishlistMessage.type === 'success'
+              ? 'bg-green-50 border border-green-200'
+              : 'bg-red-50 border border-red-200'
+              }`}
+          >
             <AlertCircle size={20} className={wishlistMessage.type === 'success' ? 'text-green-600' : 'text-red-600'} />
             <p className={wishlistMessage.type === 'success' ? 'text-green-700' : 'text-red-700'}>
               {wishlistMessage.text}
@@ -429,7 +437,10 @@ export default function ProductDetailsPage() {
 
             {/* Add to Cart Button or Quantity Selector */}
             {isInCart ? (
-              <div className="w-fit bg-linear-to-r from-[#FF6B6B] to-[#FF5252] text-white rounded-xl py-2 px-4 shadow-xl shadow-[#FF6B6B]/30">
+              <div
+                className="w-fit bg-linear-to-r from-[#FF6B6B] to-[#FF5252] text-white rounded-xl py-2 px-4 shadow-xl shadow-[#FF6B6B]/30"
+                aria-label="Quantity selector"
+              >
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => handleUpdateQuantity(cartItemQuantity - 1)}
