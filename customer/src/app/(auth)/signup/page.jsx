@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Smartphone, Mail, Lock, ArrowRight } from 'lucide-react';
 import Input from '../../components/ui/Input';
@@ -147,7 +147,15 @@ function SignupContent() {
 export default function SignupPage() {
   return (
     <PublicRoute>
-      <SignupContent />
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-(--background) flex items-center justify-center">
+            Loading...
+          </div>
+        }
+      >
+        <SignupContent />
+      </Suspense>
     </PublicRoute>
   );
 }
