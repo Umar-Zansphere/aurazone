@@ -14,7 +14,6 @@ import {
 } from '@/lib/auth-validation';
 import PublicRoute from '@/components/PublicRoute';
 
-import PublicRoute from '@/components/PublicRoute';
 import { useSearchParams } from 'next/navigation';
 
 function SignupContent() {
