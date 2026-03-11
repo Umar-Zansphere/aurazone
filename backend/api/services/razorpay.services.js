@@ -487,7 +487,13 @@ const markOrderAsPaidFromWebhook = async ({
     }
   });
 
-  return order;
+  // Fetch the updated order to ensure email gets the latest status
+  const updatedOrder = await prisma.order.findUnique({
+    where: { id: order.id },
+    include: { items: true },
+  });
+
+  return updatedOrder;
 };
 
 const handlePaymentAuthorized = async (payload) => {
@@ -512,7 +518,7 @@ const handlePaymentAuthorized = async (payload) => {
 
     // Send payment confirmation email
     const paymentRecord = await prisma.payment.findFirst({
-      where: { orderId: order.id },
+      where: { orderId: order.id }, 
     });
     if (paymentRecord) {
       await sendPaymentConfirmationEmail(order, paymentRecord);
@@ -709,21 +715,12 @@ const sendPaymentConfirmationEmail = async (order, payment) => {
       where: { orderId: order.id },
     });
 
-    const user = await prisma.user.findUnique({
-      where: { id: order.userId },
-    });
-
-    if (!user) {
-      console.error('User not found for payment confirmation email:', order.id);
-      return;
-    }
-
     await sendEmail(
-      user.email,
+      orderAddress?.email,
       'Payment Confirmed - ' + order.orderNumber,
       'payment-confirmation',
       {
-        customerName: user.fullName,
+        customerName: orderAddress?.name || 'Valued Customer',
         orderId: order.id,
         orderNumber: order.orderNumber,
         transactionId: payment.gatewayPaymentId,
