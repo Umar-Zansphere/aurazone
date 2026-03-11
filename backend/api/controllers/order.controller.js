@@ -51,6 +51,60 @@ const createOrderFromCart = async (req, res, next) => {
   }
 };
 
+const createDirectOrder = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    const sessionId = req.sessionId;
+    const { addressId, address, paymentMethod, variantId, quantity } = req.body;
+
+    if (!variantId || !quantity) {
+      return res.status(400).json({ message: 'Variant ID and quantity are required for direct order' });
+    }
+
+    if (userId && addressId) {
+      if (!paymentMethod) {
+        return res.status(400).json({ message: 'Payment method is required' });
+      }
+      const result = await orderService.createDirectOrder(userId, {
+        addressId,
+        paymentMethod,
+        variantId,
+        quantity
+      });
+      return res.status(201).json({
+        success: true,
+        data: result
+      });
+    }
+
+    if (!userId && sessionId && address) {
+      if (!address.email || !address.phone) {
+        return res.status(400).json({ message: 'Email and phone are required for guest checkout' });
+      }
+      if (!paymentMethod) {
+        return res.status(400).json({ message: 'Payment method is required' });
+      }
+
+      const result = await orderService.createDirectOrderAsGuest(sessionId, {
+        address,
+        paymentMethod,
+        variantId,
+        quantity
+      });
+      return res.status(201).json({
+        success: true,
+        data: result
+      });
+    }
+
+    return res.status(400).json({
+      message: 'Invalid request. Provide either addressId (authenticated) or address + sessionId (guest)'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getCustomerOrders = async (req, res, next) => {
   try {
     const userId = req.user.id; // From auth middleware
@@ -274,6 +328,7 @@ const razorpayWebhook = async (req, res, next) => {
 module.exports = {
   // Customer-facing endpoints
   createOrderFromCart,
+  createDirectOrder,
   getCustomerOrders,
   getCustomerOrderDetail,
   trackOrder,

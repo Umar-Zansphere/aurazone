@@ -1,4 +1,5 @@
 const authService = require('../services/auth.services');
+const sessionServices = require('../services/session.services');
 
 // signup controller
 const signup = async (req, res, next) => {
@@ -7,7 +8,7 @@ const signup = async (req, res, next) => {
     const result = await authService.signup(email, password);
     res.status(201).json({ message: result.message });
   } catch (error) {
-      next(error);
+    next(error);
   }
 };
 
@@ -36,11 +37,26 @@ const login = async (req, res, next) => {
     const result = await authService.login(email, password, req);
     const user = result.user;
     res.cookie('accessToken', result.accessToken, {
-      httpOnly: true, 
+      httpOnly: true,
       secure: true,
-      sameSite: 'none', 
-      maxAge: 7 * 24 * 60 * 60 * 1000, 
+      sameSite: 'none',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
+
+    const sessionId = req.headers['x-session-id'] || req.cookies.guestSessionId;
+    if (sessionId) {
+      try {
+        await sessionServices.migrateSessionToUser(sessionId, user.id);
+        res.clearCookie('guestSessionId', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+        });
+      } catch (err) {
+        console.error('Error migrating guest session to user:', err);
+      }
+    }
+
     // Send back user data (excluding sensitive fields) along with the token
     const userData = {
       id: user.id,
@@ -49,10 +65,10 @@ const login = async (req, res, next) => {
       email: user.email,
       phone: user.phone,
     };
-    
+
     res.json({ user: userData });
   } catch (error) {
-      next(error);
+    next(error);
   }
 };
 
@@ -61,7 +77,7 @@ const forgotPassword = async (req, res, next) => {
     const result = await authService.forgotPassword(req.body.email);
     res.json(result);
   } catch (error) {
-      next(error);
+    next(error);
   }
 };
 
@@ -96,7 +112,7 @@ const logout = async (req, res, next) => {
       httpOnly: true,
       secure: true,
       sameSite: 'none',
-      path: '/' 
+      path: '/'
     });
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
@@ -163,7 +179,7 @@ const phoneSignupVerify = async (req, res, next) => {
     }
 
     const result = await authService.phoneSignupVerify(phoneNumber, otp);
-    
+
     // Set cookies for tokens
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,
@@ -172,6 +188,20 @@ const phoneSignupVerify = async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/'
     });
+
+    const sessionId = req.headers['x-session-id'] || req.cookies.guestSessionId;
+    if (sessionId && result.user?.id) {
+      try {
+        await sessionServices.migrateSessionToUser(sessionId, result.user.id);
+        res.clearCookie('guestSessionId', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+        });
+      } catch (err) {
+        console.error('Error migrating guest session to user:', err);
+      }
+    }
 
     res.status(201).json({
       message: result.message,
@@ -217,6 +247,21 @@ const phoneLoginVerify = async (req, res, next) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/'
     });
+
+    const sessionId = req.headers['x-session-id'] || req.cookies.guestSessionId;
+    if (sessionId && result.user?.id) {
+      try {
+        await sessionServices.migrateSessionToUser(sessionId, result.user.id);
+        res.clearCookie('guestSessionId', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+        });
+      } catch (err) {
+        console.error('Error migrating guest session to user:', err);
+      }
+    }
+
     const userData = {
       id: result.user.id,
       phone: result.user.phone,

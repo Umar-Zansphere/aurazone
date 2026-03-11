@@ -13,6 +13,7 @@ function VerifyContent() {
   const phone = searchParams.get('phone');
   const email = searchParams.get('email');
   const mode = searchParams.get('mode'); // 'login' or 'signup'
+  const redirectParams = searchParams.get('redirect');
 
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [timer, setTimer] = useState(53); // Matching image approximately
@@ -70,7 +71,7 @@ function VerifyContent() {
 
       // Authentication state is now managed via cookies set by the backend
 
-      router.push('/');
+      router.push(redirectParams || '/');
     } catch (err) {
       setError(err.message);
     } finally {

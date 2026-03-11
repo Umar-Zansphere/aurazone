@@ -8,11 +8,11 @@ const prisma = require('../../config/prisma');
  */
 const getGuestSessionId = async (sessionId) => {
   if (!sessionId) return null;
-  
+
   const session = await prisma.guestSession.findUnique({
     where: { sessionId }
   });
-  
+
   return session?.id || null;
 };
 
@@ -117,7 +117,9 @@ const addToCart = async (userId = null, sessionId = null, variantId, quantity = 
   }
 
   // Check inventory
-  if (!variant.inventory || variant.inventory.quantity < quantity) {
+  const available = variant.inventory.quantity - variant.inventory.reserved;
+
+  if (available < quantity) {
     throw new Error('Insufficient inventory');
   }
 
@@ -163,7 +165,7 @@ const addToCart = async (userId = null, sessionId = null, variantId, quantity = 
   if (cartItem) {
     // Update quantity
     const newQuantity = cartItem.quantity + quantity;
-    if (variant.inventory.quantity < newQuantity) {
+    if (available < newQuantity) {
       throw new Error('Insufficient inventory for this quantity');
     }
 
@@ -248,7 +250,9 @@ const updateCartItem = async (userId = null, sessionId = null, cartItemId, quant
   }
 
   // Check inventory
-  if (cartItem.variant.inventory.quantity < quantity) {
+  const available = cartItem.variant.inventory.quantity - cartItem.variant.inventory.reserved;
+
+  if (available < quantity) {
     throw new Error('Insufficient inventory');
   }
 

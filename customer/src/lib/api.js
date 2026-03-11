@@ -233,6 +233,24 @@ export const orderApi = {
     });
   },
 
+  // Create direct order (Buy Now)
+  createDirectOrder: async (addressId, paymentMethod, variantId, quantity) => {
+    return makeRequest('/api/orders/direct', {
+      method: 'POST',
+      credentials: 'include',
+      body: JSON.stringify({ addressId, paymentMethod, variantId, quantity })
+    });
+  },
+
+  // Create guest direct order (Buy Now)
+  createGuestDirectOrder: async (addressData, paymentMethod, variantId, quantity) => {
+    return makeRequest('/api/orders/direct', {
+      method: 'POST',
+      credentials: 'include',
+      body: JSON.stringify({ address: addressData, paymentMethod, variantId, quantity })
+    });
+  },
+
   // Get all orders for user
   getOrders: async (status = null, skip = 0, take = 10) => {
     const params = new URLSearchParams();

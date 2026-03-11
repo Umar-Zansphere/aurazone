@@ -136,7 +136,7 @@ export default function AddressesPage() {
         response = await addressApi.createAddress(formData);
       }
 
-      if (response.success) {
+      if (response && response.error === undefined) {
         setSuccessMessage(
           editingId ? 'Address updated successfully' : 'Address added successfully'
         );
@@ -164,7 +164,7 @@ export default function AddressesPage() {
       setError(null);
       const response = await addressApi.deleteAddress(addressId);
 
-      if (response.success) {
+      if (response && response.error === undefined) {
         setSuccessMessage('Address deleted successfully');
         await fetchAddresses();
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -183,7 +183,7 @@ export default function AddressesPage() {
       setError(null);
       const response = await addressApi.setDefaultAddress(addressId);
 
-      if (response.success) {
+      if (response && response.error === undefined) {
         setSuccessMessage('Default address updated');
         await fetchAddresses();
         setTimeout(() => setSuccessMessage(''), 3000);

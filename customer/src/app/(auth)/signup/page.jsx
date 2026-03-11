@@ -14,11 +14,16 @@ import {
 } from '@/lib/auth-validation';
 import PublicRoute from '@/components/PublicRoute';
 
+import PublicRoute from '@/components/PublicRoute';
+import { useSearchParams } from 'next/navigation';
+
 function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParams = searchParams.get('redirect');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+
   const [formData, setFormData] = useState({
     phone: '',
     email: '',
@@ -55,9 +60,8 @@ function SignupContent() {
 
       if (!res.ok) throw new Error(data.message || 'Failed to send code');
 
-      router.push(
-        `/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&email=${encodeURIComponent(normalizedEmail)}&mode=signup`
-      );
+      const verifyUrl = `/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&email=${encodeURIComponent(normalizedEmail)}&mode=signup${redirectParams ? `&redirect=${encodeURIComponent(redirectParams)}` : ''}`;
+      router.push(verifyUrl);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -68,7 +72,7 @@ function SignupContent() {
   return (
     <div className="min-h-screen bg-(--background) flex items-center justify-center px-4">
       <div className="w-full max-w-md space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
+
         {/* Illustration */}
         <div className="flex justify-center mb-4">
           <SignupIllustration />
@@ -128,8 +132,8 @@ function SignupContent() {
         <div className="text-center pt-4">
           <p className="text-(--text-secondary) text-sm">
             Already have an account?{' '}
-            <button 
-              onClick={() => router.push('/login')}
+            <button
+              onClick={() => router.push(`/login${redirectParams ? `?redirect=${encodeURIComponent(redirectParams)}` : ''}`)}
               className="text-(--accent) font-bold hover:underline transition-colors duration-300"
             >
               Log In
@@ -153,16 +157,16 @@ const SignupIllustration = () => (
   <svg width="200" height="180" viewBox="0 0 200 180" fill="none" xmlns="http://www.w3.org/2000/svg">
     {/* Background circle */}
     <circle cx="100" cy="90" r="85" fill="#F3F4F6" opacity="0.5" />
-    
+
     {/* Welcome hand gesture and shoe */}
     <g transform="translate(35, 50)">
       {/* Hand */}
       <circle cx="25" cy="25" r="8" fill="#1F2937" />
       <path d="M 25 33 L 22 45 M 25 33 L 25 48 M 25 33 L 28 45" stroke="#1F2937" strokeWidth="2" strokeLinecap="round" />
-      
+
       {/* Waving motion - curved line */}
       <path d="M 35 15 Q 40 10 45 15" stroke="#FF6B6B" strokeWidth="2" fill="none" strokeLinecap="round" opacity="0.6" />
-      
+
       {/* Shoe with shine */}
       <g transform="translate(40, 25)">
         <path d="M 5 20 Q 2 15 8 8 Q 15 5 25 6 Q 32 8 35 15 Q 35 20 30 25 L 28 35 Q 25 38 15 40 Q 5 38 8 35 Z" fill="#FF6B6B" />

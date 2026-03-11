@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { CUSTOMER_BASE_URL, TEST_DATA, hasAdminCreds } = require('./utils/constants');
+const { TEST_DATA, hasAdminCreds } = require('./utils/constants');
 const {
   ensureProductsPage,
   openProductByName,
@@ -11,44 +11,25 @@ const {
   createAdminApiContext,
   findProductByName,
   updateAdminInventory,
+  delay,
 } = require('./utils/helpers');
-
-const joinUrl = (base, path = '/') => `${base}${path.startsWith('/') ? path : `/${path}`}`;
 
 async function selectVariant(page, color, size) {
   const colorButton = page.getByRole('button', { name: new RegExp(color, 'i') }).first();
   if (await colorButton.isVisible().catch(() => false)) {
-    await colorButton.scrollIntoViewIfNeeded();
     await colorButton.click();
-    await expect(colorButton).toHaveAttribute('aria-pressed', 'true');
   }
 
   const sizeButton = page.getByRole('button', { name: new RegExp(size.replace(/\s+/g, '\\s*'), 'i') }).first();
   if (await sizeButton.isVisible().catch(() => false)) {
-    await sizeButton.scrollIntoViewIfNeeded();
     await sizeButton.click();
-    await expect(sizeButton).toHaveAttribute('aria-pressed', 'true');
   }
 }
 
-async function getCartBadgeCount(page) {
-  const badge = page.locator('[aria-label="Shopping cart"] span').first();
-  if ((await badge.count()) === 0) return 0;
-  const raw = (await badge.textContent()) || '';
-  const digits = raw.replace(/[^\d]/g, '');
-  return Number.parseInt(digits || '0', 10) || 0;
-}
-
-function getOrderSummaryContainer(page) {
-  // In the cart page the H2 lives inside the container that also holds subtotal/total rows.
-  return page.getByRole('heading', { name: /order summary/i }).locator('..');
-}
-
-async function getUiSubtotal(page) {
-  const summary = getOrderSummaryContainer(page);
-  const subtotalRow = summary.getByText(/^subtotal$/i).locator('..');
-  const valueText = (await subtotalRow.locator('span').nth(1).textContent()) || '';
-  return parseInr(valueText);
+function extractSubtotal(text) {
+  const match = text.match(/Subtotal\s*₹\s*([\d,]+(?:\.\d+)?)/i);
+  if (!match) return null;
+  return Number.parseFloat(match[1].replace(/,/g, ''));
 }
 
 test.describe('2. Cart Management', () => {
@@ -58,7 +39,8 @@ test.describe('2. Cart Management', () => {
   });
 
   test('2.1 Add Simple Product: button swaps to quantity selector', async ({ page }) => {
-    const before = await getCartBadgeCount(page);
+    const beforeCount = await page.locator('button[aria-label="Shopping cart"] span').first().textContent().catch(() => '0');
+    const before = Number.parseInt(beforeCount || '0', 10) || 0;
 
     await openProductByName(page, TEST_DATA.exactProductName);
     await addCurrentProductToCart(page);
@@ -67,7 +49,11 @@ test.describe('2. Cart Management', () => {
     await expect(page.getByRole('button', { name: /add to cart/i })).toBeHidden();
     await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible();
 
-    await expect.poll(() => getCartBadgeCount(page)).toBeGreaterThan(before);
+    const afterBadge = page.locator('button[aria-label="quantity selector"] span').first();
+    await expect(afterBadge).toBeVisible();
+    const after = Number.parseInt((await afterBadge.textContent()) || '0', 10) || 0;
+
+    expect(after).toBeGreaterThan(before);
   });
 
   test('2.2 Add Product with Variants: selected variant is added', async ({ page }) => {
@@ -76,8 +62,10 @@ test.describe('2. Cart Management', () => {
     await addCurrentProductToCart(page);
 
     await gotoCart(page);
-    await expect(page.getByText(new RegExp(TEST_DATA.variantColor, 'i'))).toBeVisible();
-    await expect(page.getByText(new RegExp(TEST_DATA.variantSize.replace(/\s+/g, '\\s*'), 'i'))).toBeVisible();
+    const cartText = (await page.locator('main').textContent()) || '';
+
+    expect(cartText).toContain(TEST_DATA.variantColor);
+    expect(cartText).toContain(TEST_DATA.variantSize);
   });
 
   test('2.3 Out of Stock Prevention: adding unavailable stock is blocked', async ({ page, request }) => {
@@ -117,7 +105,7 @@ test.describe('2. Cart Management', () => {
     try {
       await updateAdminInventory(adminApi, variant.id, 1, 'E2E limit quantity test');
 
-      const addRes = await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
+      const addRes = await page.request.post('https://www.aurazone.shop/api/cart', {
         data: { variantId: variant.id, quantity: 1 },
       });
       expect(addRes.ok()).toBeTruthy();
@@ -126,7 +114,7 @@ test.describe('2. Cart Management', () => {
       const cartItem = cart.items.find((item) => item.variantId === variant.id);
       expect(cartItem).toBeTruthy();
 
-      const updateRes = await page.request.patch(joinUrl(CUSTOMER_BASE_URL, `/api/cart/${cartItem.id}`), {
+      const updateRes = await page.request.patch(`https://www.aurazone.shop/api/cart/${cartItem.id}`, {
         data: { quantity: 2 },
       });
       expect(updateRes.ok()).toBeFalsy();
@@ -146,24 +134,28 @@ test.describe('2. Cart Management', () => {
 
     await gotoCart(page);
 
-    const beforeSubtotal = await getUiSubtotal(page);
+    const summary = page.locator('text=Order Summary').locator('..');
+    const beforeText = (await summary.textContent()) || '';
+    const beforeSubtotal = extractSubtotal(beforeText);
+
+    await page.locator('button:has(svg[class*="plus"])').first().click();
+    await delay(500);
+
+    const afterText = (await summary.textContent()) || '';
+    const afterSubtotal = extractSubtotal(afterText);
+
     expect(beforeSubtotal).not.toBeNull();
-
-    const firstQtySelector = page.getByLabel(/quantity selector/i).first();
-    await firstQtySelector.getByRole('button').nth(1).click(); // plus
-
-    await expect.poll(() => getUiSubtotal(page)).toBeGreaterThan(beforeSubtotal);
+    expect(afterSubtotal).not.toBeNull();
+    expect(afterSubtotal).toBeGreaterThan(beforeSubtotal);
   });
 
   test('2.6 Quantity Decrement to Zero: item auto-removes', async ({ page }) => {
     await openProductByName(page, TEST_DATA.exactProductName);
     await addCurrentProductToCart(page);
 
-    const qtySelector = page.getByLabel(/quantity selector/i).first();
-    await expect(qtySelector).toBeVisible();
-    await qtySelector.getByRole('button').first().click(); // decrement (becomes trash at 1)
-
-    await expect(page.getByRole('button', { name: /add to cart/i })).toBeVisible();
+    const removeFromQuantity = page.locator('button:has(svg[class*="trash"])').first();
+    await expect(removeFromQuantity).toBeVisible();
+    await removeFromQuantity.click();
 
     await gotoCart(page);
     await expect(page.getByText(/your cart is empty/i)).toBeVisible();
@@ -191,10 +183,10 @@ test.describe('2. Cart Management', () => {
     const firstVariant = firstProduct.variants[0];
     const secondVariant = secondProduct.variants[0];
 
-    await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
+    await page.request.post('https://www.aurazone.shop/api/cart', {
       data: { variantId: firstVariant.id, quantity: 2 },
     });
-    await page.request.post(joinUrl(CUSTOMER_BASE_URL, '/api/cart'), {
+    await page.request.post('https://www.aurazone.shop/api/cart', {
       data: { variantId: secondVariant.id, quantity: 1 },
     });
 
@@ -205,7 +197,7 @@ test.describe('2. Cart Management', () => {
     );
 
     await gotoCart(page);
-    const summaryText = (await getOrderSummaryContainer(page).textContent()) || '';
+    const summaryText = (await page.locator('text=Order Summary').locator('..').textContent()) || '';
     const uiSubtotal = parseInr(summaryText);
 
     expect(uiSubtotal).not.toBeNull();

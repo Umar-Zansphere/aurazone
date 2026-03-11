@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, AlertCircle, Plus, CreditCard, Truck, CheckCircle, Edit2 } from 'lucide-react';
 import Header from '@/app/components/Header';
-import { cartApi, orderApi, addressApi, paymentApi } from '@/lib/api';
+import { cartApi, orderApi, addressApi, paymentApi, productApi } from '@/lib/api';
 import { useToast } from '@/components/ToastContext';
 import { CartLoadingSkeleton } from '@/components/LoadingSkeleton';
 import { useAuth } from '@/context/AuthContext';
 
 export default function CheckoutPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const { isAuthenticated } = useAuth();
   const [cart, setCart] = useState([]);
@@ -22,6 +23,12 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('cart');
+
+  // Direct checkout params
+  const isBuyNow = searchParams.get('buyNow') === 'true';
+  const buyNowProductId = searchParams.get('productId');
+  const buyNowVariantId = searchParams.get('variantId');
+  const buyNowQty = parseInt(searchParams.get('qty') || '1', 10);
 
   // Guest user fields
   const [isGuest, setIsGuest] = useState(false);
@@ -63,15 +70,42 @@ export default function CheckoutPage() {
           }
         }
 
-        // Get cart items (works for both guest and logged-in users)
+        // Get cart items OR Direct Buy item
         try {
-          const cartResponse = await cartApi.getCart();
-          if (cartResponse) {
-            setCart(cartResponse?.items || []);
+          if (isBuyNow && buyNowProductId && buyNowVariantId) {
+            // Fetch product to build a pseudo-cart
+            const productRes = await productApi.getProductDetail(buyNowProductId);
+            const productData = productRes.data || productRes;
+            const singleVariant = productData.variants?.find(v => v.id === buyNowVariantId);
+
+            if (singleVariant) {
+              setCart([{
+                id: 'direct-buy',
+                variantId: singleVariant.id,
+                quantity: buyNowQty,
+                unitPrice: singleVariant.price,
+                variant: {
+                  ...singleVariant,
+                  product: {
+                    id: productData.id,
+                    name: productData.name,
+                    category: productData.category
+                  }
+                }
+              }]);
+            } else {
+              showToast('Product variant not found', 'error');
+            }
+          } else {
+            // Standard cart fetching
+            const cartResponse = await cartApi.getCart();
+            if (cartResponse) {
+              setCart(cartResponse?.items || []);
+            }
           }
         } catch (err) {
-          console.error('Error fetching cart:', err);
-          showToast('Failed to load cart', 'error');
+          console.error('Error fetching cart/product:', err);
+          showToast('Failed to load items', 'error');
         }
       } catch (err) {
         showToast(err.message || 'Failed to load checkout data', 'error');
@@ -121,12 +155,20 @@ export default function CheckoutPage() {
       console.log('Creating order...');
       let response;
 
-      if (isGuest) {
-        // Guest order with address data
-        response = await orderApi.createGuestOrder(guestAddress, paymentMethod);
+      if (isBuyNow) {
+        if (isGuest) {
+          response = await orderApi.createGuestDirectOrder(guestAddress, paymentMethod, buyNowVariantId, buyNowQty);
+        } else {
+          response = await orderApi.createDirectOrder(selectedAddressId, paymentMethod, buyNowVariantId, buyNowQty);
+        }
       } else {
-        // Logged-in user order
-        response = await orderApi.createOrder(selectedAddressId, paymentMethod);
+        if (isGuest) {
+          // Guest order with address data
+          response = await orderApi.createGuestOrder(guestAddress, paymentMethod);
+        } else {
+          // Logged-in user order
+          response = await orderApi.createOrder(selectedAddressId, paymentMethod);
+        }
       }
 
       if (!response.success) {
@@ -301,13 +343,13 @@ export default function CheckoutPage() {
                 </p>
                 <div className="flex gap-3 flex-wrap">
                   <button
-                    onClick={() => router.push('/login')}
+                    onClick={() => router.push('/login?redirect=/checkout')}
                     className="px-6 py-2 min-h-10 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors touch-manipulation active:scale-95"
                   >
                     Login
                   </button>
                   <button
-                    onClick={() => router.push('/signup')}
+                    onClick={() => router.push('/signup?redirect=/checkout')}
                     className="px-6 py-2 min-h-10 bg-white hover:bg-blue-50 text-blue-600 font-semibold rounded-xl border-2 border-blue-200 transition-colors touch-manipulation active:scale-95"
                   >
                     Create Account

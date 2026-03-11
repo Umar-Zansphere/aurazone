@@ -70,18 +70,11 @@ function ProductsContent() {
       if (filters.maxPrice) params.maxPrice = filters.maxPrice;
 
       let data;
-      if (searchTerm) {
+      const hasDetailedFilters = filters.category || filters.gender || filters.brand ||
+        filters.color || filters.size || filters.minPrice || filters.maxPrice;
+
+      if (searchTerm || hasDetailedFilters) {
         data = await productApi.searchProducts(params);
-      } else if (filters.category) {
-        data = await productApi.getProductsByCategory(filters.category, params);
-      } else if (filters.gender) {
-        data = await productApi.getProductsByGender(filters.gender, params);
-      } else if (filters.brand) {
-        data = await productApi.getProductsByBrand(filters.brand, params);
-      } else if (filters.color) {
-        data = await productApi.getProductsByColor(filters.color, params);
-      } else if (filters.size) {
-        data = await productApi.getProductsBySize(filters.size, params);
       } else {
         data = await productApi.getProducts(params);
       }
@@ -259,7 +252,7 @@ function ProductsContent() {
           )}
 
           {/* Sidebar Filters */}
-          <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white shadow-xl transform transition-transform duration-300 lg:relative lg:inset-auto lg:z-auto lg:w-64 lg:shadow-none lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
+          <aside className={`fixed inset-y-0 left-0 z-70 w-72 bg-white shadow-xl transform transition-transform duration-300 lg:relative lg:inset-auto lg:z-auto lg:w-64 lg:shadow-none lg:transform-none ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}>
             <div className="h-full overflow-y-auto p-6 sticky top-0">
               {/* Close Button for Mobile */}
               <button

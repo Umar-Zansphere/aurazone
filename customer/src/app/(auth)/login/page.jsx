@@ -8,8 +8,12 @@ import { authApi } from '@/lib/api';
 import { isValidEmail, isValidPhone, normalizeEmail, normalizePhone } from '@/lib/auth-validation';
 import PublicRoute from '@/components/PublicRoute';
 
+import { useSearchParams } from 'next/navigation';
+
 function LoginContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectParams = searchParams.get('redirect');
   const [method, setMethod] = useState('phone'); // 'phone' | 'email'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +43,8 @@ function LoginContent() {
         if (!res.ok) throw new Error(data.message || 'Failed to send code');
 
         // Redirect to OTP verification
-        router.push(`/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&mode=login`);
+        const verifyUrl = `/verify-otp?phone=${encodeURIComponent(normalizedPhone)}&mode=login${redirectParams ? `&redirect=${encodeURIComponent(redirectParams)}` : ''}`;
+        router.push(verifyUrl);
       } else {
         const normalizedEmail = normalizeEmail(formData.email);
         if (!isValidEmail(normalizedEmail)) {
@@ -65,7 +70,7 @@ function LoginContent() {
         if (data.user.userRole === 'ADMIN') {
           router.push('/admin'); // Go to admin dashboard
         } else {
-          router.push('/'); // Go to home
+          router.push(redirectParams || '/'); // Go to home or redirect url
         }
       }
     } catch (err) {
@@ -172,7 +177,7 @@ function LoginContent() {
           <p className="text-(--text-secondary) text-sm">
             Don't have an account?{' '}
             <button
-              onClick={() => router.push('/signup')}
+              onClick={() => router.push(`/signup${redirectParams ? `?redirect=${encodeURIComponent(redirectParams)}` : ''}`)}
               className="text-(--accent) font-bold hover:underline transition-colors duration-300"
             >
               Register Now

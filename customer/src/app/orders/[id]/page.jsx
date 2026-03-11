@@ -29,6 +29,7 @@ const statusConfig = {
     SHIPPED: { label: 'Shipped', color: 'bg-purple-100 text-purple-800 border-purple-200', icon: Truck },
     DELIVERED: { label: 'Delivered', color: 'bg-green-100 text-green-800 border-green-200', icon: CheckCircle },
     CANCELLED: { label: 'Cancelled', color: 'bg-red-100 text-red-800 border-red-200', icon: XCircle },
+    FAILED: { label: 'Failed', color: 'bg-red-100 text-red-800 border-red-200', icon: AlertCircle },
 };
 
 const orderTimeline = {
@@ -37,6 +38,7 @@ const orderTimeline = {
     SHIPPED: ['Order Placed', 'Processing', 'Shipped'],
     DELIVERED: ['Order Placed', 'Processing', 'Shipped', 'Delivered'],
     CANCELLED: ['Order Placed', 'Cancelled'],
+    FAILED: ['Order Placed', 'Payment Failed'],
 };
 
 export default function OrderDetailPage() {
@@ -92,7 +94,7 @@ export default function OrderDetailPage() {
     };
 
     const handleTrackOrder = () => {
-        router.push(`/track-order/${order.trackingToken || order.id}`);
+        router.push(`/track-order/${order.trackingToken}`);
     };
 
     const formatDate = (dateString) => {
@@ -196,7 +198,7 @@ export default function OrderDetailPage() {
 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
-                        {order.status !== 'CANCELLED' && (
+                        {order.status !== 'CANCELLED' && order.status !== 'FAILED' && (
                             <button
                                 onClick={handleTrackOrder}
                                 className="flex-1 bg-orange-500 text-white px-4 py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors flex items-center justify-center gap-2"
@@ -348,7 +350,7 @@ export default function OrderDetailPage() {
                                 Payment Method: <span className="font-medium text-slate-900">{order.paymentMethod || 'Razorpay'}</span>
                             </p>
                             <p className="text-sm text-slate-600 mt-1">
-                                Payment Status: <span className={`font-medium ${order.paymentStatus === 'PAID' ? 'text-green-600' : 'text-orange-600'}`}>
+                                Payment Status: <span className={`font-medium ${order.paymentStatus === 'PAID' || order.paymentStatus === 'SUCCESS' ? 'text-green-600' : order.paymentStatus === 'FAILED' ? 'text-red-600' : 'text-orange-600'}`}>
                                     {order.paymentStatus || 'Pending'}
                                 </span>
                             </p>

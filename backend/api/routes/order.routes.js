@@ -8,6 +8,9 @@ const { verifyToken, optionalAuth, manageGuestSession } = require('../middleware
 // Create order from cart (checkout) - supports both authenticated and guest users
 router.post('/', optionalAuth, manageGuestSession, orderController.createOrderFromCart);
 
+// Create direct order (Buy Now) - supports both authenticated and guest users
+router.post('/direct', optionalAuth, manageGuestSession, orderController.createDirectOrder);
+
 // Get all orders for logged-in customer
 router.get('/', verifyToken, orderController.getCustomerOrders);
 

@@ -9,8 +9,12 @@ import { AlertCircle, Loader, Package, Heart, MapPin, ChevronLeft, Sliders, LogO
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, isLoading, error, logout: authLogout } = useAuth();
+  const { user, isLoading, error, logout: authLogout, refreshUser } = useAuth();
   const [logoutModal, setLogoutModal] = useState({ isOpen: false, type: null, message: '' });
+
+  useEffect(() => {
+    refreshUser();
+  }, [refreshUser]);
 
   const handleLogout = async () => {
     try {

@@ -892,7 +892,7 @@ const sendOrderFailedEmail = async (order, failureReason = 'Payment could not be
           price: item.price,
           subtotal: item.subtotal,
         })),
-        retryUrl: order.userId 
+        retryUrl: order.userId
           ? `${process.env.CLIENT_URL || 'http://localhost:3000'}/orders/${order.id}/retry-payment`
           : `${process.env.CLIENT_URL || 'http://localhost:3000'}/checkout?orderId=${order.id}`,
         expiryDate: expiryDate.toLocaleDateString(),
