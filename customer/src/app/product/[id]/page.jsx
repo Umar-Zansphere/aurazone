@@ -287,55 +287,107 @@ export default function ProductDetailsPage() {
 
           {/* LEFT: Image Gallery */}
           <div className="flex flex-col gap-4">
-            {/* Main Image */}
-            <div className="relative w-full aspect-square bg-linear-to-br from-gray-100 to-gray-200 rounded-2xl overflow-hidden flex items-center justify-center group">
-              {currentImage ? (
-                <img
-                  src={currentImage}
-                  alt={`${product.name} - ${selectedColor}`}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
+            {/* Main Image Slider */}
+            <div className="relative w-full aspect-square bg-linear-to-br from-gray-50 to-gray-100 rounded-2xl sm:rounded-3xl overflow-hidden flex items-center justify-center group shadow-sm border border-gray-100">
+              {currentImages.length > 0 ? (
+                <div 
+                  className="w-full h-full flex overflow-x-auto snap-x snap-mandatory scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                  onScroll={(e) => {
+                    const scrollLeft = e.currentTarget.scrollLeft;
+                    const width = e.currentTarget.offsetWidth;
+                    const index = Math.round(scrollLeft / width);
+                    if (index !== selectedImageIndex) {
+                      setSelectedImageIndex(index);
+                    }
+                  }}
+                  ref={(el) => {
+                    if (el && el.children[selectedImageIndex]) {
+                      const child = el.children[selectedImageIndex];
+                      if (Math.abs(el.scrollLeft - child.offsetLeft) > 10) {
+                        el.scrollTo({ left: child.offsetLeft, behavior: 'smooth' });
+                      }
+                    }
+                  }}
+                >
+                  {currentImages.map((img, idx) => (
+                    <div key={idx} className="w-full h-full shrink-0 snap-center relative flex items-center justify-center bg-white cursor-grab active:cursor-grabbing">
+                      <img
+                        src={img.url}
+                        alt={`${product.name} - ${selectedColor} - ${idx + 1}`}
+                        className="w-full h-full object-contain sm:object-cover transition-transform duration-700 ease-out hover:scale-105"
+                      />
+                    </div>
+                  ))}
+                </div>
               ) : (
-                <div className="text-gray-400">No image available</div>
+                <div className="flex flex-col items-center justify-center text-gray-400 gap-2">
+                  <span className="text-sm font-medium">No image available</span>
+                </div>
               )}
 
               {/* Navigation Arrows */}
               {currentImages.length > 1 && (
                 <>
                   <button
-                    onClick={prevImage}
-                    className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-white"
+                    onClick={(e) => { e.preventDefault(); prevImage(); }}
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center opacity-0 sm:group-hover:opacity-100 transition-all duration-300 shadow-lg hover:bg-white hover:scale-110 active:scale-95 z-10 ${selectedImageIndex === 0 ? 'invisible opacity-0' : 'visible'}`}
                   >
-                    <ChevronLeft size={22} className="text-gray-800" />
+                    <ChevronLeft size={24} className="text-gray-800" />
                   </button>
                   <button
-                    onClick={nextImage}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-white"
+                    onClick={(e) => { e.preventDefault(); nextImage(); }}
+                    className={`absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 sm:w-12 sm:h-12 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center opacity-0 sm:group-hover:opacity-100 transition-all duration-300 shadow-lg hover:bg-white hover:scale-110 active:scale-95 z-10 ${selectedImageIndex === currentImages.length - 1 ? 'invisible opacity-0' : 'visible'}`}
                   >
-                    <ChevronRight size={22} className="text-gray-800" />
+                    <ChevronRight size={24} className="text-gray-800" />
                   </button>
 
-                  {/* Image Counter */}
-                  <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs font-semibold">
-                    {selectedImageIndex + 1}/{currentImages.length}
+                  {/* Bullet Indicators for Mobile */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 bg-black/20 backdrop-blur-sm px-3 py-2 rounded-full sm:hidden">
+                    {currentImages.map((_, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${selectedImageIndex === idx ? 'bg-white w-4' : 'bg-white/50 w-1.5'}`}
+                        onClick={() => setSelectedImageIndex(idx)}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* Enhanced Image Counter Pill */}
+                  <div className="hidden sm:block absolute top-4 right-4 bg-black/60 backdrop-blur-md px-4 py-1.5 rounded-full text-white text-xs font-bold tracking-wide shadow-sm border border-white/10 z-10">
+                    {selectedImageIndex + 1} / {currentImages.length}
                   </div>
                 </>
               )}
             </div>
 
-            {/* Thumbnail Gallery */}
+            {/* Thumbnail Gallery with Slider */}
             {currentImages.length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-2">
+              <div 
+                className="flex gap-3 overflow-x-auto pb-4 pt-2 snap-x snap-mandatory [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] px-1"
+                ref={(el) => {
+                  if (el && el.children[selectedImageIndex]) {
+                     const child = el.children[selectedImageIndex];
+                     const containerRect = el.getBoundingClientRect();
+                     const childRect = child.getBoundingClientRect();
+                     if (childRect.left < containerRect.left || childRect.right > containerRect.right) {
+                       child.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                     }
+                  }
+                }}
+              >
                 {currentImages.map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setSelectedImageIndex(idx)}
-                    className={`shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${selectedImageIndex === idx
-                      ? 'border-[#FF6B6B] shadow-md scale-105'
-                      : 'border-gray-200 hover:border-gray-300'
+                    className={`shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border-2 transition-all duration-300 snap-center relative focus:outline-none ${selectedImageIndex === idx
+                      ? 'border-[#FF6B6B] shadow-md shadow-[#FF6B6B]/20 scale-[1.02] z-10'
+                      : 'border-transparent bg-gray-100 hover:border-gray-300 focus:border-gray-300 opacity-70 hover:opacity-100'
                       }`}
                   >
                     <img src={img.url} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                    {selectedImageIndex === idx && (
+                      <div className="absolute inset-0 bg-black/5 ring-1 ring-inset ring-[#FF6B6B]/20"></div>
+                    )}
                   </button>
                 ))}
               </div>
