@@ -32,7 +32,8 @@ export default function ProductCard({ product }) {
   const availableQuantity = firstVariant?.inventory
     ? Math.max(0, Number(firstVariant.inventory.quantity) - Number(firstVariant.inventory.reserved || 0))
     : 0;
-  const isOutOfStock = !firstVariant || !firstVariant.isAvailable || availableQuantity <= 0;
+  const isVariantUnavailable = firstVariant?.isAvailable === false;
+  const isOutOfStock = !firstVariant || isVariantUnavailable || availableQuantity <= 0;
   const isLimitedStock = !isOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
 
   // Check if product is in wishlist directly from store state
@@ -100,10 +101,7 @@ export default function ProductCard({ product }) {
 
   return (
     <Link href={`/product/${product.id}`} className="block h-full">
-      <div className={`group relative flex flex-col h-full w-full rounded-xl border p-3 sm:p-4 shadow-sm transition-all duration-300 cursor-pointer ${isOutOfStock
-        ? 'bg-slate-100 border-slate-200'
-        : 'bg-white border-gray-100 hover:shadow-xl hover:border-gray-200'
-        }`}>
+      <div className="group relative flex flex-col h-full w-full rounded-xl border p-3 sm:p-4 shadow-sm transition-all duration-300 cursor-pointer bg-white border-gray-100 hover:shadow-xl hover:border-gray-200">
         <div className="relative w-full aspect-square rounded-lg overflow-hidden flex items-center justify-center mb-3 bg-gray-50">
           <button
             onClick={handleToggleLike}
@@ -125,7 +123,7 @@ export default function ProductCard({ product }) {
                 src={imageUrl}
                 alt={product.name}
                 fill
-                className={`object-contain drop-shadow-2xl transition-all duration-500 ease-out ${isOutOfStock ? 'grayscale opacity-60' : 'group-hover:scale-110'} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`object-contain drop-shadow-2xl transition-all duration-500 ease-out group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 loading="lazy"
                 onLoad={() => setImageLoaded(true)}
               />
@@ -136,13 +134,6 @@ export default function ProductCard({ product }) {
             </div>
           )}
 
-          {isOutOfStock && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/35 backdrop-blur-[1px]">
-              <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-700">
-                Out of stock
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="flex flex-col flex-1 px-1">
@@ -166,33 +157,41 @@ export default function ProductCard({ product }) {
             </p>
           )}
 
-          <div className="mt-auto flex items-center justify-between gap-3">
-            <p className="text-slate-900 font-black text-lg sm:text-xl">
-              ₹{parseFloat(price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
+          {isOutOfStock ? (
+            <div className="mt-auto rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center">
+              <p className="text-sm font-bold uppercase tracking-wide text-red-700">
+                Out of stock
+              </p>
+            </div>
+          ) : (
+            <div className="mt-auto flex items-center justify-between gap-3">
+              <p className="text-slate-900 font-black text-lg sm:text-xl">
+                ₹{parseFloat(price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
 
-            <button
-              onClick={handleAddToCart}
-              disabled={isAddingToCart || isOutOfStock}
-              className={`-shrink-0 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${inCart
-                ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
-                : cartAdded
-                  ? 'bg-green-500 hover:bg-green-600 shadow-green-500/20 scale-110'
-                  : 'bg-slate-900 hover:bg-slate-800 active:scale-95 shadow-slate-900/20 text-white'
-                }`}
-              aria-label={isOutOfStock ? "Out of stock" : inCart ? "Remove from cart" : cartAdded ? "Added to cart" : "Add to cart"}
-            >
-              {inCart ? (
-                <Check size={20} className="text-white" />
-              ) : cartAdded ? (
-                <Check size={20} className="animate-in zoom-in-50 duration-200" />
-              ) : isAddingToCart ? (
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <ShoppingCart size={20} />
-              )}
-            </button>
-          </div>
+              <button
+                onClick={handleAddToCart}
+                disabled={isAddingToCart}
+                className={`-shrink-0 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${inCart
+                  ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
+                  : cartAdded
+                    ? 'bg-green-500 hover:bg-green-600 shadow-green-500/20 scale-110'
+                    : 'bg-slate-900 hover:bg-slate-800 active:scale-95 shadow-slate-900/20 text-white'
+                  }`}
+                aria-label={inCart ? "Remove from cart" : cartAdded ? "Added to cart" : "Add to cart"}
+              >
+                {inCart ? (
+                  <Check size={20} className="text-white" />
+                ) : cartAdded ? (
+                  <Check size={20} className="animate-in zoom-in-50 duration-200" />
+                ) : isAddingToCart ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <ShoppingCart size={20} />
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </Link>

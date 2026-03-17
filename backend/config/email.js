@@ -19,7 +19,7 @@ const sendEmail = async (to, subject, template, data) => {
     const { data: emailData, error } = await resend.emails.send({
       from: process.env.EMAIL_FROM,
       to,
-      subject,
+      subject, 
       html,
     });
 

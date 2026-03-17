@@ -47,7 +47,8 @@ export default function ProductDetailsPage() {
     ? Math.max(0, Number(currentVariant.inventory.quantity) - Number(currentVariant.inventory.reserved || 0))
     : 0;
   const maxSelectableQuantity = Math.max(0, Math.min(MAX_VARIANT_QUANTITY, availableQuantity));
-  const isVariantOutOfStock = !currentVariant || !currentVariant.isAvailable || availableQuantity <= 0;
+  const isVariantUnavailable = currentVariant?.isAvailable === false;
+  const isVariantOutOfStock = !currentVariant || isVariantUnavailable || availableQuantity <= 0;
   const isLimitedStock = !isVariantOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
   const currentVariantId = currentVariant?.id || null;
   const quantity = currentVariantId ? (variantQuantities[currentVariantId] || 1) : 1;
