@@ -1111,6 +1111,131 @@ const sendShipmentUpdateEmail = async (shipment, order) => {
   }
 };
 
+const sendOrderStatusUpdateEmail = async (order, { status, note } = {}) => {
+  try {
+    if (!['SHIPPED', 'DELIVERED', 'CANCELLED'].includes(status)) {
+      return;
+    }
+
+    const email = order.user?.email || order.orderAddress?.email || null;
+    const customerName = order.user?.fullName || order.orderAddress?.name || 'Valued Customer';
+
+    if (!email) {
+      console.error(`Email not found for order status update: ${order.id}`);
+      return;
+    }
+
+    const latestShipment = (order.shipments || []).sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    )[0] || null;
+    const trackingNumber = latestShipment?.trackingNumber || 'Not available';
+    const shippedDate = latestShipment?.shippedAt || new Date();
+    const estimatedDelivery = latestShipment?.shippedAt ? addDaysUtc(new Date(latestShipment.shippedAt), 5) : null;
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+    const trackingUrl = latestShipment?.trackingUrl
+      || (order.userId ? `${clientUrl}/orders/${order.id}` : order.trackingToken ? `${clientUrl}/track-order/${order.trackingToken}` : `${clientUrl}/orders/${order.id}`);
+    const reviewUrl = order.userId
+      ? `${clientUrl}/orders/${order.id}`
+      : order.trackingToken
+        ? `${clientUrl}/track-order/${order.trackingToken}`
+        : `${clientUrl}/orders/${order.id}`;
+    const items = (order.items || []).map((item) => ({
+      productName: item.productName,
+      color: item.color,
+      size: item.size,
+      quantity: item.quantity,
+      price: toNumber(item.price) || 0,
+      subtotal: toNumber(item.subtotal) || ((toNumber(item.price) || 0) * item.quantity),
+    }));
+    const deliveredAddress = [
+      order.orderAddress?.addressLine1,
+      order.orderAddress?.addressLine2,
+      order.orderAddress?.city,
+      order.orderAddress?.state,
+      order.orderAddress?.postalCode,
+      order.orderAddress?.country,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    if (status === 'SHIPPED') {
+      await sendEmail(
+        email,
+        `Order Shipped - ${order.orderNumber}`,
+        'order-shipped',
+        {
+          customerName,
+          orderNumber: order.orderNumber,
+          orderId: order.id,
+          trackingNumber: latestShipment?.trackingNumber || null,
+          shippedDate,
+          carrier: latestShipment?.courierName || null,
+          estimatedDelivery,
+          addressLine1: order.orderAddress?.addressLine1 || '',
+          addressLine2: order.orderAddress?.addressLine2 || '',
+          city: order.orderAddress?.city || '',
+          state: order.orderAddress?.state || '',
+          postalCode: order.orderAddress?.postalCode || '',
+          country: order.orderAddress?.country || '',
+          phone: order.orderAddress?.phone || order.user?.phone || '',
+          items,
+          trackingUrl,
+        }
+      );
+      return;
+    }
+
+    if (status === 'DELIVERED') {
+      await sendEmail(
+        email,
+        `Order Delivered - ${order.orderNumber}`,
+        'delivery-confirmed',
+        {
+          customerName,
+          orderNumber: order.orderNumber,
+          orderId: order.id,
+          trackingNumber,
+          deliveryDate: new Date(),
+          deliveredAddress: deliveredAddress || 'Your specified address',
+          receivedBy: customerName,
+          signature: false,
+          items,
+          totalAmount: toNumber(order.totalAmount) || 0,
+          reviewUrl,
+        }
+      );
+      return;
+    }
+
+    const shouldIncludeRefund = order.paymentMethod === 'RAZORPAY' && order.paymentStatus === 'SUCCESS';
+    await sendEmail(
+      email,
+      `Order Cancelled - ${order.orderNumber}`,
+      'order-cancelled',
+      {
+        customerName,
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        createdAt: order.createdAt,
+        cancelledDate: new Date(),
+        reason: note || 'Cancelled by admin',
+        paymentMethod: order.paymentMethod,
+        items,
+        ...(shouldIncludeRefund
+          ? {
+            refundStatus: 'Processing',
+            refundAmount: toNumber(order.totalAmount) || 0,
+            refundProcessingTime: '5-7 business days',
+            expectedRefundDate: addDaysUtc(new Date(), 7),
+          }
+          : {}),
+      }
+    );
+  } catch (error) {
+    console.error('Error sending order status update email:', error);
+  }
+};
+
 const getDashboard = async (req, res) => {
   const todayStart = startOfUtcDay(new Date());
   const todayEnd = endOfUtcDay(new Date());
@@ -1534,6 +1659,7 @@ const updateOrderStatus = async (req, res) => {
   const status = ensureEnumValue(req.body?.status, ORDER_STATUSES, 'status');
   const note = typeof req.body?.note === 'string' ? req.body.note.trim() : undefined;
   const { adminId } = getAdminActor(req);
+  let previousStatus;
 
   if (!status) {
     throw createError(400, 'status is required');
@@ -1562,6 +1688,7 @@ const updateOrderStatus = async (req, res) => {
     if (order.deletedAt) {
       throw createError(409, 'Cannot update a cancelled order');
     }
+    previousStatus = order.status;
 
     await tx.order.update({
       where: { id: orderId },
@@ -1656,10 +1783,21 @@ const updateOrderStatus = async (req, res) => {
           name: true,
           email: true,
           phone: true,
+          addressLine1: true,
+          addressLine2: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          country: true,
         },
       },
       items: {
         select: {
+          productName: true,
+          color: true,
+          size: true,
+          price: true,
+          subtotal: true,
           quantity: true,
         },
       },
@@ -1677,6 +1815,10 @@ const updateOrderStatus = async (req, res) => {
 
   if (!updatedOrder) {
     throw createError(404, 'Order not found');
+  }
+
+  if (previousStatus !== status) {
+    await sendOrderStatusUpdateEmail(updatedOrder, { status, note });
   }
 
   return res.status(200).json({

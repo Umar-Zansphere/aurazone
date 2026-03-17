@@ -3,6 +3,14 @@ import { Home, ShoppingBag, Heart, User, Search } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+export const BOTTOM_NAV_ITEMS = [
+    { href: '/', icon: Home, label: 'Home' },
+    { href: '/explore', icon: Search, label: 'Explore' },
+    { href: '/cart', icon: ShoppingBag, label: 'Cart' },
+    { href: '/wishlist', icon: Heart, label: 'Wishlist' },
+    { href: '/profile', icon: User, label: 'Profile' },
+];
+
 export default function BottomNav() {
     const pathname = usePathname();
 
@@ -14,14 +22,6 @@ export default function BottomNav() {
         return null;
     }
 
-    const navItems = [
-        { href: '/', icon: Home, label: 'Home' },
-        { href: '/explore', icon: Search, label: 'Explore' },
-        { href: '/cart', icon: ShoppingBag, label: 'Cart' },
-        { href: '/wishlist', icon: Heart, label: 'Wishlist' },
-        { href: '/profile', icon: User, label: 'Profile' },
-    ];
-
     const isActive = (href) => {
         if (href === '/') return pathname === '/';
         return pathname?.startsWith(href);
@@ -30,7 +30,7 @@ export default function BottomNav() {
     return (
         <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 md:hidden safe-area-bottom">
             <div className="flex items-center justify-around h-16 px-2">
-                {navItems.map(({ href, icon: Icon, label }) => {
+                {BOTTOM_NAV_ITEMS.map(({ href, icon: Icon, label }) => {
                     const active = isActive(href);
                     return (
                         <Link

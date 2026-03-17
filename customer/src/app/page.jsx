@@ -48,6 +48,7 @@ export default function Home() {
       <Header
         onSidebarOpen={() => setSidebarOpen(true)}
         onCartOpen={() => setCartOpen(true)}
+        onProfileOpen={() => setProfileMenuOpen(true)}
         user={user}
       />
 

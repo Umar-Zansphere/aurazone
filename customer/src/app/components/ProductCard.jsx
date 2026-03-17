@@ -3,22 +3,22 @@
 import { Heart, Check, ShoppingCart } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import useCartStore from '@/store/cartStore';
 import useWishlistStore from '@/store/wishlistStore';
 import { useToast } from '@/components/ToastContext';
 
+const LOW_STOCK_THRESHOLD = 5;
+
 export default function ProductCard({ product }) {
-  const router = useRouter();
   const { showToast } = useToast();
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [cartAdded, setCartAdded] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
   // Use stores
-  const { addToCart, isInCart } = useCartStore();
-  const { addToWishlist, removeItem, isInWishlist } = useWishlistStore();
+  const { items: cartItems, addToCart, removeItem: removeCartItem, isInCart } = useCartStore();
+  const { addToWishlist, removeItem: removeWishlistItem, isInWishlist } = useWishlistStore();
 
   if (!product) return null;
 
@@ -29,29 +29,44 @@ export default function ProductCard({ product }) {
   const discount = product.discount || "10% OFF";
   const category = product.category || "SHOES";
   const imageUrl = firstVariant?.images?.[0]?.url || product.image;
+  const availableQuantity = firstVariant?.inventory
+    ? Math.max(0, Number(firstVariant.inventory.quantity) - Number(firstVariant.inventory.reserved || 0))
+    : 0;
+  const isOutOfStock = !firstVariant || !firstVariant.isAvailable || availableQuantity <= 0;
+  const isLimitedStock = !isOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
 
   // Check if product is in wishlist directly from store state
   const wishlistAdded = isInWishlist(product.id, firstVariant?.id);
 
   // Check if product is in cart directly from store state
   const inCart = firstVariant ? isInCart(firstVariant.id) : false;
+  const cartItem = firstVariant
+    ? cartItems.find((item) => item.variantId === firstVariant.id)
+    : null;
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!firstVariant || isAddingToCart || inCart) return;
+    if (!firstVariant || isAddingToCart || isOutOfStock) return;
 
     setIsAddingToCart(true);
 
     try {
-      await addToCart(firstVariant.id, 1);
-      setCartAdded(true);
-      // showToast('Added to cart', 'success');
-      setTimeout(() => setCartAdded(false), 2000);
+      if (inCart) {
+        if (!cartItem?.id) {
+          throw new Error('Unable to find cart item to remove');
+        }
+        await removeCartItem(cartItem.id);
+        setCartAdded(false);
+      } else {
+        await addToCart(firstVariant.id, 1);
+        setCartAdded(true);
+        setTimeout(() => setCartAdded(false), 2000);
+      }
     } catch (error) {
-      console.error('Error adding to cart:', error);
-      showToast(error.message || 'Failed to add to cart', 'error');
+      console.error('Error updating cart from product card:', error);
+      showToast(error.message || 'Failed to update cart', 'error');
     } finally {
       setIsAddingToCart(false);
     }
@@ -70,7 +85,7 @@ export default function ProductCard({ product }) {
           w => w.productId === product.id && w.variantId === firstVariant.id
         );
         if (item) {
-          await removeItem(item.id);
+          await removeWishlistItem(item.id);
           // showToast('Removed from wishlist', 'info');
         }
       } else {
@@ -85,7 +100,10 @@ export default function ProductCard({ product }) {
 
   return (
     <Link href={`/product/${product.id}`} className="block h-full">
-      <div className="group flex flex-col h-full w-full bg-white rounded-xl border border-gray-100 p-3 sm:p-4 shadow-sm hover:shadow-xl hover:border-gray-200 transition-all duration-300 cursor-pointer">
+      <div className={`group relative flex flex-col h-full w-full rounded-xl border p-3 sm:p-4 shadow-sm transition-all duration-300 cursor-pointer ${isOutOfStock
+        ? 'bg-slate-100 border-slate-200'
+        : 'bg-white border-gray-100 hover:shadow-xl hover:border-gray-200'
+        }`}>
         <div className="relative w-full aspect-square rounded-lg overflow-hidden flex items-center justify-center mb-3 bg-gray-50">
           <button
             onClick={handleToggleLike}
@@ -107,7 +125,7 @@ export default function ProductCard({ product }) {
                 src={imageUrl}
                 alt={product.name}
                 fill
-                className={`object-contain drop-shadow-2xl transition-all duration-500 ease-out group-hover:scale-110 ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
+                className={`object-contain drop-shadow-2xl transition-all duration-500 ease-out ${isOutOfStock ? 'grayscale opacity-60' : 'group-hover:scale-110'} ${imageLoaded ? 'opacity-100' : 'opacity-0'}`}
                 loading="lazy"
                 onLoad={() => setImageLoaded(true)}
               />
@@ -115,6 +133,14 @@ export default function ProductCard({ product }) {
           ) : (
             <div className="w-full h-full bg-gray-200 flex items-center justify-center rounded-xl">
               <span className="text-gray-400 text-sm">No image</span>
+            </div>
+          )}
+
+          {isOutOfStock && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/35 backdrop-blur-[1px]">
+              <span className="rounded-full bg-white/95 px-3 py-1 text-xs font-bold uppercase tracking-wide text-slate-700">
+                Out of stock
+              </span>
             </div>
           )}
         </div>
@@ -134,6 +160,12 @@ export default function ProductCard({ product }) {
             </p>
           )}
 
+          {isLimitedStock && (
+            <p className="mb-2 inline-flex w-fit rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-bold text-amber-700">
+              Limited stock
+            </p>
+          )}
+
           <div className="mt-auto flex items-center justify-between gap-3">
             <p className="text-slate-900 font-black text-lg sm:text-xl">
               ₹{parseFloat(price).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -141,14 +173,14 @@ export default function ProductCard({ product }) {
 
             <button
               onClick={handleAddToCart}
-              disabled={isAddingToCart || inCart}
+              disabled={isAddingToCart || isOutOfStock}
               className={`-shrink-0 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${inCart
                 ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
                 : cartAdded
                   ? 'bg-green-500 hover:bg-green-600 shadow-green-500/20 scale-110'
                   : 'bg-slate-900 hover:bg-slate-800 active:scale-95 shadow-slate-900/20 text-white'
                 }`}
-              aria-label={inCart ? "In cart" : cartAdded ? "Added to cart" : "Add to cart"}
+              aria-label={isOutOfStock ? "Out of stock" : inCart ? "Remove from cart" : cartAdded ? "Added to cart" : "Add to cart"}
             >
               {inCart ? (
                 <Check size={20} className="text-white" />

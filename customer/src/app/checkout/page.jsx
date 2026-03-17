@@ -11,6 +11,20 @@ import { useToast } from '@/components/ToastContext';
 import { CartLoadingSkeleton } from '@/components/LoadingSkeleton';
 import { useAuth } from '@/context/AuthContext';
 
+const MAX_VARIANT_QUANTITY = 5;
+const BULK_ORDER_MODAL_MESSAGE = 'please contact store for bulk orders';
+
+const parsePositiveInteger = (value, fallback = 1) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+};
+
+const clampToVariantLimit = (quantity) =>
+  Math.min(MAX_VARIANT_QUANTITY, Math.max(1, parsePositiveInteger(quantity, 1)));
+
 function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -28,7 +42,9 @@ function CheckoutPageContent() {
   const isBuyNow = searchParams.get('buyNow') === 'true';
   const buyNowProductId = searchParams.get('productId');
   const buyNowVariantId = searchParams.get('variantId');
-  const buyNowQty = parseInt(searchParams.get('qty') || '1', 10);
+  const requestedBuyNowQty = parsePositiveInteger(searchParams.get('qty') || '1', 1);
+  const [buyNowQuantity, setBuyNowQuantity] = useState(requestedBuyNowQty);
+  const [showBulkOrderModal, setShowBulkOrderModal] = useState(false);
 
   // Guest user fields
   const [isGuest, setIsGuest] = useState(false);
@@ -82,7 +98,7 @@ function CheckoutPageContent() {
               setCart([{
                 id: 'direct-buy',
                 variantId: singleVariant.id,
-                quantity: buyNowQty,
+                quantity: buyNowQuantity,
                 unitPrice: singleVariant.price,
                 variant: {
                   ...singleVariant,
@@ -108,15 +124,61 @@ function CheckoutPageContent() {
           showToast('Failed to load items', 'error');
         }
       } catch (err) {
-        showToast(err.message || 'Failed to load checkout data', 'error');
-        console.error('Error fetching checkout data:', err);
+        showToast('Failed to load checkout data', 'error');
+        // console.error('Error fetching checkout data:', err);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [router, showToast, isAuthenticated]);
+  }, [router, showToast, isAuthenticated, buyNowProductId, buyNowVariantId, isBuyNow, buyNowQuantity]);
+
+  const enforceCheckoutQuantityLimit = async () => {
+    const oversizedItems = (cart || []).filter((item) => Number(item.quantity) > MAX_VARIANT_QUANTITY);
+    if (oversizedItems.length === 0) {
+      return false;
+    }
+
+    if (isBuyNow) {
+      const reducedQuantity = clampToVariantLimit(oversizedItems[0]?.quantity || buyNowQuantity);
+      setBuyNowQuantity(reducedQuantity);
+      setCart((previous) =>
+        previous.map((item) => ({
+          ...item,
+          quantity: clampToVariantLimit(item.quantity),
+        }))
+      );
+    } else {
+      const nextCart = [...cart];
+
+      for (const item of oversizedItems) {
+        const reducedQuantity = clampToVariantLimit(item.quantity);
+
+        if (item.id) {
+          try {
+            await cartApi.updateCartItem(item.id, reducedQuantity);
+          } catch (error) {
+            console.error('Failed to sync clamped cart quantity:', error);
+          }
+        }
+
+        const index = nextCart.findIndex((entry) => entry.id === item.id);
+        if (index >= 0) {
+          nextCart[index] = {
+            ...nextCart[index],
+            quantity: reducedQuantity,
+          };
+        }
+      }
+
+      setCart(nextCart);
+    }
+
+    setShowBulkOrderModal(true);
+    showToast(`Maximum quantity per variant is ${MAX_VARIANT_QUANTITY}`, 'warning');
+    return true;
+  };
 
   const validateGuestAddress = () => {
     if (!guestAddress.name || !guestAddress.email || !guestAddress.phone || !guestAddress.addressLine1 ||
@@ -138,6 +200,11 @@ function CheckoutPageContent() {
   };
 
   const handleCreateOrder = async () => {
+    const adjustedForLimit = await enforceCheckoutQuantityLimit();
+    if (adjustedForLimit) {
+      return;
+    }
+
     // Validation
     if (isGuest) {
       if (!validateGuestAddress()) return;
@@ -157,9 +224,9 @@ function CheckoutPageContent() {
 
       if (isBuyNow) {
         if (isGuest) {
-          response = await orderApi.createGuestDirectOrder(guestAddress, paymentMethod, buyNowVariantId, buyNowQty);
+          response = await orderApi.createGuestDirectOrder(guestAddress, paymentMethod, buyNowVariantId, buyNowQuantity);
         } else {
-          response = await orderApi.createDirectOrder(selectedAddressId, paymentMethod, buyNowVariantId, buyNowQty);
+          response = await orderApi.createDirectOrder(selectedAddressId, paymentMethod, buyNowVariantId, buyNowQuantity);
         }
       } else {
         if (isGuest) {
@@ -172,14 +239,14 @@ function CheckoutPageContent() {
       }
 
       if (!response.success) {
-        showToast(response.message || 'Failed to create order', 'error');
+        showToast('Failed to create order', 'error');
         setSubmitting(false);
         return;
       }
 
       const orderData = response.data;
-      console.log('Order created:', orderData);
-      showToast('Order created successfully!', 'success');
+      // console.log('Order created:', orderData);
+      // showToast('Order created successfully!', 'success');
 
       // Step 2: Determine next action based on payment method
       if (paymentMethod === 'COD') {
@@ -216,7 +283,7 @@ function CheckoutPageContent() {
               );
 
               if (verifyResponse.success) {
-                console.log('Payment verified successfully');
+                // console.log('Payment verified successfully');
                 showToast('Payment successful!', 'success');
 
                 // Redirect to confirmation page
@@ -239,7 +306,7 @@ function CheckoutPageContent() {
               }
             } catch (error) {
               console.error('Payment verification error:', error);
-              showToast(error.message || 'Payment verification failed', 'error');
+              showToast('Payment verification failed', 'error');
               setSubmitting(false);
             }
           },
@@ -275,7 +342,7 @@ function CheckoutPageContent() {
         }
       }
     } catch (err) {
-      showToast(err.message || 'Error creating order', 'error');
+      showToast('Error creating order', 'error');
       console.error('Error creating order:', err);
       setSubmitting(false);
     }
@@ -758,6 +825,30 @@ function CheckoutPageContent() {
           </div>
         </div>
       </main>
+
+      {showBulkOrderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 text-orange-600" size={24} />
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Bulk Order Notice</h3>
+                <p className="mt-2 text-slate-700">{BULK_ORDER_MODAL_MESSAGE}</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Quantity has been reduced to {MAX_VARIANT_QUANTITY} for this variant.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowBulkOrderModal(false)}
+              className="mt-6 w-full rounded-2xl bg-orange-600 px-4 py-3 font-bold text-white transition-colors hover:bg-orange-700"
+            >
+              Okay
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

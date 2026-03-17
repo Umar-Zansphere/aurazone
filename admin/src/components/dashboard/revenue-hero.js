@@ -2,6 +2,7 @@
 
 import { motion, animate, useMotionValue, useTransform } from "framer-motion";
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Sparkline from "@/components/charts/sparkline";
 
 const toInr = (amount) =>
@@ -12,6 +13,7 @@ const toInr = (amount) =>
   }).format(amount);
 
 export default function RevenueHero({ revenue = 0, timeseries = [], todayOrders = 0, pendingOrders = 0 }) {
+  const router = useRouter();
   const value = useMotionValue(0);
   const display = useTransform(value, (latest) => toInr(Math.round(latest)));
 
@@ -35,12 +37,18 @@ export default function RevenueHero({ revenue = 0, timeseries = [], todayOrders 
           {display}
         </motion.p>
         <div className="mt-5 flex gap-2.5">
-          <span className="app-chip rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-white">
+          <button
+            onClick={() => router.push('/orders')}
+            className="app-chip rounded-full bg-[var(--accent)] px-3.5 py-1.5 text-xs font-semibold text-white cursor-pointer hover:opacity-80 transition-opacity active:scale-95"
+          >
             {todayOrders} orders today
-          </span>
-          <span className="app-chip rounded-full bg-[var(--highlight-soft)] px-3.5 py-1.5 text-xs font-semibold text-[var(--highlight)]">
+          </button>
+          <button
+            onClick={() => router.push('/orders?status=PENDING')}
+            className="app-chip rounded-full bg-[var(--highlight-soft)] px-3.5 py-1.5 text-xs font-semibold text-[var(--highlight)] cursor-pointer hover:opacity-80 transition-opacity active:scale-95"
+          >
             {pendingOrders} pending
-          </span>
+          </button>
         </div>
       </div>
     </section>

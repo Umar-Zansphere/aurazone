@@ -9,6 +9,10 @@ import useCartStore from '@/store/cartStore';
 import useWishlistStore from '@/store/wishlistStore';
 // import RelatedProducts from '@/app/components/RelatedProducts';
 
+const MAX_VARIANT_QUANTITY = 5;
+const LOW_STOCK_THRESHOLD = 5;
+const CONTACT_STORE_MESSAGE = 'Please contact store for bulk orders';
+
 export default function ProductDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -20,7 +24,7 @@ export default function ProductDetailsPage() {
   const [selectedSize, setSelectedSize] = useState(null);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [quantity, setQuantity] = useState(1);
+  const [variantQuantities, setVariantQuantities] = useState({});
   const [region, setRegion] = useState('EU');
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [cartMessage, setCartMessage] = useState(null);
@@ -39,12 +43,40 @@ export default function ProductDetailsPage() {
   // Calculate current variant first (needed for derived state)
   const currentVariants = product?.variants?.filter(v => v.color === selectedColor) || [];
   const currentVariant = currentVariants.find(v => v.size === selectedSize) || currentVariants[0];
+  const availableQuantity = currentVariant?.inventory
+    ? Math.max(0, Number(currentVariant.inventory.quantity) - Number(currentVariant.inventory.reserved || 0))
+    : 0;
+  const maxSelectableQuantity = Math.max(0, Math.min(MAX_VARIANT_QUANTITY, availableQuantity));
+  const isVariantOutOfStock = !currentVariant || !currentVariant.isAvailable || availableQuantity <= 0;
+  const isLimitedStock = !isVariantOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
+  const currentVariantId = currentVariant?.id || null;
+  const quantity = currentVariantId ? (variantQuantities[currentVariantId] || 1) : 1;
 
   // Derived state
   const isLiked = wishlistItems.some(item => item.productId === productId);
   const cartItem = currentVariant ? cartItems.find(item => item.variantId === currentVariant.id) : null;
   const isInCart = !!cartItem;
-  const cartItemQuantity = cartItem?.quantity || 0;
+
+  useEffect(() => {
+    if (!currentVariantId) {
+      return;
+    }
+
+    const nextMax = Math.max(1, maxSelectableQuantity);
+    setVariantQuantities((prev) => {
+      const currentQuantity = prev[currentVariantId] || 1;
+      const nextQuantity = Math.max(1, Math.min(currentQuantity, nextMax));
+
+      if (currentQuantity === nextQuantity && prev[currentVariantId] !== undefined) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [currentVariantId]: nextQuantity,
+      };
+    });
+  }, [currentVariantId, maxSelectableQuantity]);
 
   // Fetch product details
   useEffect(() => {
@@ -55,6 +87,7 @@ export default function ProductDetailsPage() {
         const data = await productApi.getProductDetail(productId);
         const productData = data.data || data;
         setProduct(productData);
+        setVariantQuantities({});
 
         // Set initial color and size
         if (productData.variants && productData.variants.length > 0) {
@@ -148,10 +181,22 @@ export default function ProductDetailsPage() {
       return;
     }
 
+    if (isVariantOutOfStock) {
+      setCartMessage({ type: 'error', text: 'This variant is out of stock' });
+      return;
+    }
+
+    if (quantity > maxSelectableQuantity) {
+      const cappedMessage = maxSelectableQuantity === MAX_VARIANT_QUANTITY
+        ? `Maximum quantity per variant is ${MAX_VARIANT_QUANTITY}. ${CONTACT_STORE_MESSAGE}`
+        : `Only ${maxSelectableQuantity} item(s) are currently available`;
+      setCartMessage({ type: 'error', text: cappedMessage });
+      return;
+    }
+
     setIsAddingToCart(true);
     setCartMessage(null);
     try {
-      console.log('Adding to cart via Store:', { variantId: currentVariant.id, quantity });
       await addToCart(currentVariant.id, quantity);
       setCartMessage({ type: 'success', text: 'Added to cart!' });
       setTimeout(() => setCartMessage(null), 3000);
@@ -171,6 +216,19 @@ export default function ProductDetailsPage() {
 
     if (!currentVariant) {
       setCartMessage({ type: 'error', text: 'Selected variant is unavailable' });
+      return;
+    }
+
+    if (isVariantOutOfStock) {
+      setCartMessage({ type: 'error', text: 'This variant is out of stock' });
+      return;
+    }
+
+    if (quantity > maxSelectableQuantity) {
+      const cappedMessage = maxSelectableQuantity === MAX_VARIANT_QUANTITY
+        ? `Maximum quantity per variant is ${MAX_VARIANT_QUANTITY}. ${CONTACT_STORE_MESSAGE}`
+        : `Only ${maxSelectableQuantity} item(s) are currently available`;
+      setCartMessage({ type: 'error', text: cappedMessage });
       return;
     }
 
@@ -501,8 +559,17 @@ export default function ProductDetailsPage() {
               <div className="flex items-center w-fit border-2 border-gray-200 rounded-xl overflow-hidden bg-white">
                 <button
                   type="button"
-                  onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    if (!currentVariantId) {
+                      return;
+                    }
+                    setVariantQuantities((prev) => ({
+                      ...prev,
+                      [currentVariantId]: Math.max(1, quantity - 1),
+                    }));
+                  }}
+                  className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={quantity <= 1}
                 >
                   <Minus size={18} />
                 </button>
@@ -511,12 +578,50 @@ export default function ProductDetailsPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setQuantity(quantity + 1)}
-                  className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    if (isVariantOutOfStock || maxSelectableQuantity <= 0) {
+                      setCartMessage({ type: 'error', text: 'This variant is out of stock' });
+                      return;
+                    }
+
+                    if (quantity >= maxSelectableQuantity) {
+                      const cappedMessage = maxSelectableQuantity === MAX_VARIANT_QUANTITY
+                        ? `Maximum quantity per variant is ${MAX_VARIANT_QUANTITY}. ${CONTACT_STORE_MESSAGE}`
+                        : `Only ${maxSelectableQuantity} item(s) are currently available`;
+                      setCartMessage({ type: 'error', text: cappedMessage });
+                      return;
+                    }
+
+                    if (!currentVariantId) {
+                      return;
+                    }
+                    setVariantQuantities((prev) => ({
+                      ...prev,
+                      [currentVariantId]: quantity + 1,
+                    }));
+                  }}
+                  className="w-12 h-12 flex items-center justify-center text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={isVariantOutOfStock || maxSelectableQuantity <= 0 || quantity >= maxSelectableQuantity}
                 >
                   <Plus size={18} />
                 </button>
               </div>
+
+              {isVariantOutOfStock ? (
+                <p className="mt-2 text-xs font-medium text-red-600">Out of stock</p>
+              ) : isLimitedStock ? (
+                <p className="mt-2 text-xs font-medium text-amber-700">
+                  Limited stock: {availableQuantity} left
+                </p>
+              ) : null}
+
+              {!isVariantOutOfStock && quantity >= maxSelectableQuantity && (
+                <p className="mt-1 text-xs font-medium text-amber-700">
+                  {maxSelectableQuantity === MAX_VARIANT_QUANTITY
+                    ? `Max ${MAX_VARIANT_QUANTITY} per variant. ${CONTACT_STORE_MESSAGE}`
+                    : `Only ${maxSelectableQuantity} item(s) currently available`}
+                </p>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -532,7 +637,7 @@ export default function ProductDetailsPage() {
               ) : (
                 <button
                   onClick={handleAddToCart}
-                  disabled={isAddingToCart}
+                  disabled={isAddingToCart || isVariantOutOfStock}
                   className="flex-1 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] py-4 rounded-xl font-bold text-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <ShoppingCart size={22} strokeWidth={2.5} className={isAddingToCart ? 'animate-spin' : 'group-hover:animate-bounce'} />
@@ -542,7 +647,8 @@ export default function ProductDetailsPage() {
 
               <button
                 onClick={handleBuyNow}
-                className="flex-1 bg-linear-to-r from-[#FF6B6B] to-[#FF5252] text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-[#FF6B6B]/30 hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-1 transition-all flex items-center justify-center gap-2"
+                disabled={isVariantOutOfStock}
+                className="flex-1 bg-linear-to-r from-[#FF6B6B] to-[#FF5252] text-white py-4 rounded-xl font-bold text-lg shadow-xl shadow-[#FF6B6B]/30 hover:shadow-2xl hover:-translate-y-0.5 active:translate-y-1 transition-all flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-xl disabled:hover:translate-y-0"
               >
                 Buy Now
               </button>

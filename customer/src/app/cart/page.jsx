@@ -10,6 +10,10 @@ import useCartStore from '@/store/cartStore';
 import { useToast } from '@/components/ToastContext';
 import { CartLoadingSkeleton } from '@/components/LoadingSkeleton';
 
+const MAX_VARIANT_QUANTITY = 5;
+const CONTACT_STORE_MESSAGE = 'Please contact store for bulk orders';
+const LOW_STOCK_THRESHOLD = 5;
+
 export default function CartPage() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -22,16 +26,61 @@ export default function CartPage() {
     fetchCart();
   }, [fetchCart]);
 
+  const getAvailableQuantity = (item) => {
+    const quantity = Number(item?.variant?.inventory?.quantity || 0);
+    const reserved = Number(item?.variant?.inventory?.reserved || 0);
+    return Math.max(0, quantity - reserved);
+  };
+
+  const getMaxAllowedQuantity = (item) =>
+    Math.max(0, Math.min(MAX_VARIANT_QUANTITY, getAvailableQuantity(item)));
+
+  const isItemOutOfStock = (item) =>
+    !item?.variant?.isAvailable || getAvailableQuantity(item) <= 0;
+
+  const normalizeCartQuantities = async () => {
+    const itemsToAdjust = cartItems.filter((item) => {
+      const maxAllowed = getMaxAllowedQuantity(item);
+      return maxAllowed > 0 && item.quantity > maxAllowed;
+    });
+
+    if (itemsToAdjust.length === 0) {
+      return false;
+    }
+
+    for (const item of itemsToAdjust) {
+      const maxAllowed = getMaxAllowedQuantity(item);
+      await updateQuantity(item.id, maxAllowed);
+    }
+
+    showToast(`Cart quantity adjusted to allowed limits. ${CONTACT_STORE_MESSAGE}`, 'warning');
+    return true;
+  };
+
   // Update quantity
-  const handleUpdateQuantity = async (itemId, newQuantity) => {
+  const handleUpdateQuantity = async (item, newQuantity) => {
     if (newQuantity < 1) return;
 
+    const maxAllowed = getMaxAllowedQuantity(item);
+    if (maxAllowed <= 0) {
+      showToast('This variant is out of stock. Remove it from cart to continue.', 'warning');
+      return;
+    }
+
+    if (newQuantity > maxAllowed) {
+      const cappedMessage = maxAllowed === MAX_VARIANT_QUANTITY
+        ? `Maximum quantity per variant is ${MAX_VARIANT_QUANTITY}. ${CONTACT_STORE_MESSAGE}`
+        : `Only ${maxAllowed} item(s) are currently available`;
+      showToast(cappedMessage, 'warning');
+      return;
+    }
+
     try {
-      await updateQuantity(itemId, newQuantity);
+      await updateQuantity(item.id, newQuantity);
       showToast('Quantity updated', 'success');
     } catch (err) {
       console.error('Error updating quantity:', err);
-      showToast('Failed to update quantity', 'error');
+      showToast(err.message || 'Failed to update quantity', 'error');
     }
   };
 
@@ -57,7 +106,25 @@ export default function CartPage() {
       showToast('Your cart is empty', 'warning');
       return;
     }
-    router.push('/checkout');
+
+    normalizeCartQuantities()
+      .then((adjusted) => {
+        if (adjusted) {
+          return;
+        }
+
+        const outOfStockItems = cartItems.filter(isItemOutOfStock);
+        if (outOfStockItems.length > 0) {
+          showToast('Remove out-of-stock items before checkout', 'warning');
+          return;
+        }
+
+        router.push('/checkout');
+      })
+      .catch((error) => {
+        console.error('Error validating cart before checkout:', error);
+        showToast(error.message || 'Failed to validate cart', 'error');
+      });
   };
 
   if (loading) {
@@ -110,8 +177,18 @@ export default function CartPage() {
                 </div>
 
                 <div className="space-y-4 px-6 pb-6">
-                  {cartItems.map(item => (
-                    <div key={item.id} className="flex gap-4 p-4 rounded-xl hover:bg-slate-50 transition-colors">
+                  {cartItems.map(item => {
+                    const availableQuantity = getAvailableQuantity(item);
+                    const maxAllowedQuantity = getMaxAllowedQuantity(item);
+                    const isOutOfStock = isItemOutOfStock(item);
+                    const isLimitedStock = !isOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
+                    const hasReachedQuantityCap = !isOutOfStock && item.quantity >= maxAllowedQuantity;
+
+                    return (
+                    <div
+                      key={item.id}
+                      className={`flex gap-4 p-4 rounded-xl transition-colors ${isOutOfStock ? 'bg-slate-100/80' : 'hover:bg-slate-50'}`}
+                    >
                       {/* Product Image */}
                       <Link href={`/product/${item.productId}`}>
                         <div className="w-24 h-24 bg-slate-100 rounded-xl overflow-hidden shrink-0 cursor-pointer hover:shadow-md transition relative">
@@ -121,7 +198,7 @@ export default function CartPage() {
                               alt={item.product?.name || 'Product'}
                               fill
                               sizes="96px"
-                              className="object-contain p-2"
+                              className={`object-contain p-2 ${isOutOfStock ? 'grayscale opacity-60' : ''}`}
                               loading="lazy"
                             />
                           ) : (
@@ -153,6 +230,18 @@ export default function CartPage() {
                           </span>
                         </div>
 
+                        <div className="mt-2">
+                          {isOutOfStock ? (
+                            <span className="inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
+                              Out of stock
+                            </span>
+                          ) : isLimitedStock ? (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                              Limited stock: {availableQuantity} left
+                            </span>
+                          ) : null}
+                        </div>
+
                         {/* Price & Quantity */}
                         <div className="flex items-center justify-between mt-4">
                           <div>
@@ -173,7 +262,7 @@ export default function CartPage() {
                               aria-label="Quantity selector"
                             >
                               <button
-                                onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                                onClick={() => handleUpdateQuantity(item, item.quantity - 1)}
                                 className="p-1 hover:bg-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={item.quantity <= 1}
                               >
@@ -183,8 +272,9 @@ export default function CartPage() {
                                 {item.quantity}
                               </span>
                               <button
-                                onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
-                                className="p-1 hover:bg-white rounded-lg transition"
+                                onClick={() => handleUpdateQuantity(item, item.quantity + 1)}
+                                className="p-1 hover:bg-white rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={isOutOfStock || maxAllowedQuantity <= 0 || item.quantity >= maxAllowedQuantity}
                               >
                                 <Plus size={16} />
                               </button>
@@ -200,9 +290,18 @@ export default function CartPage() {
                             </button>
                           </div>
                         </div>
+
+                        {hasReachedQuantityCap && (
+                          <p className="mt-2 text-xs font-medium text-amber-700">
+                            {maxAllowedQuantity === MAX_VARIANT_QUANTITY
+                              ? `Max ${MAX_VARIANT_QUANTITY} per variant. ${CONTACT_STORE_MESSAGE}`
+                              : `Only ${maxAllowedQuantity} item(s) currently available`}
+                          </p>
+                        )}
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               </div>
             </div>

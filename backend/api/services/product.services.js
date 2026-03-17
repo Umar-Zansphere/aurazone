@@ -40,35 +40,62 @@ const normalizeEnumValue = (value, allowedValues, fieldName) => {
 const normalizeSortBy = (sortBy) =>
   PRODUCT_SORT_FIELDS.has(sortBy) ? sortBy : 'createdAt';
 
+const buildInStockVariantWhere = (extra = {}) => ({
+  isAvailable: true,
+  inventory: {
+    is: {
+      quantity: {
+        gt: 0,
+      },
+    },
+  },
+  ...extra,
+});
+
 // ======================== CUSTOMER-FACING PRODUCT SERVICES ========================
 
 // Get filter options (brands, categories, genders, colors, sizes)
 const getFilterOptions = async () => {
   const [brands, categories, genders, colors, sizes] = await Promise.all([
     prisma.product.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        variants: { some: buildInStockVariantWhere() },
+      },
       select: { brand: true },
       distinct: ['brand'],
       orderBy: { brand: 'asc' }
     }),
     prisma.product.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        variants: { some: buildInStockVariantWhere() },
+      },
       select: { category: true },
       distinct: ['category']
     }),
     prisma.product.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        variants: { some: buildInStockVariantWhere() },
+      },
       select: { gender: true },
       distinct: ['gender']
     }),
     prisma.productVariant.findMany({
-      where: { product: { isActive: true }, isAvailable: true },
+      where: {
+        product: { isActive: true },
+        ...buildInStockVariantWhere(),
+      },
       select: { color: true },
       distinct: ['color'],
       orderBy: { color: 'asc' }
     }),
     prisma.productVariant.findMany({
-      where: { product: { isActive: true }, isAvailable: true },
+      where: {
+        product: { isActive: true },
+        ...buildInStockVariantWhere(),
+      },
       select: { size: true },
       distinct: ['size'],
       orderBy: { size: 'asc' }
@@ -92,11 +119,11 @@ const getPopularProducts = async (skip = 0, take = 10) => {
     prisma.product.findMany({
       where: {
         isActive: true,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       },
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -109,7 +136,7 @@ const getPopularProducts = async (skip = 0, take = 10) => {
     prisma.product.count({
       where: {
         isActive: true,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       }
     })
   ]);
@@ -129,11 +156,11 @@ const getProductsByBrand = async (brandName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         brand: { equals: brandName, mode: 'insensitive' },
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       },
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -147,7 +174,7 @@ const getProductsByBrand = async (brandName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         brand: { equals: brandName, mode: 'insensitive' },
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       }
     })
   ]);
@@ -169,11 +196,11 @@ const getProductsByCategory = async (categoryName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         category: normalizedCategory,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       },
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -187,7 +214,7 @@ const getProductsByCategory = async (categoryName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         category: normalizedCategory,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       }
     })
   ]);
@@ -209,11 +236,11 @@ const getProductsByGender = async (genderName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         gender: normalizedGender,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       },
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -227,7 +254,7 @@ const getProductsByGender = async (genderName, skip = 0, take = 10) => {
       where: {
         isActive: true,
         gender: normalizedGender,
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       }
     })
   ]);
@@ -250,15 +277,15 @@ const getProductsByColor = async (colorName, skip = 0, take = 10) => {
         variants: {
           some: {
             color: { equals: colorName, mode: 'insensitive' },
-            isAvailable: true
+            ...buildInStockVariantWhere(),
           }
         }
       },
       include: {
         variants: {
-          where: { 
+          where: {
             color: { equals: colorName, mode: 'insensitive' },
-            isAvailable: true 
+            ...buildInStockVariantWhere(),
           },
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' }
@@ -274,7 +301,7 @@ const getProductsByColor = async (colorName, skip = 0, take = 10) => {
         variants: {
           some: {
             color: { equals: colorName, mode: 'insensitive' },
-            isAvailable: true
+            ...buildInStockVariantWhere(),
           }
         }
       }
@@ -299,15 +326,15 @@ const getProductsBySize = async (sizeValue, skip = 0, take = 10) => {
         variants: {
           some: {
             size: { equals: sizeValue, mode: 'insensitive' },
-            isAvailable: true
+            ...buildInStockVariantWhere(),
           }
         }
       },
       include: {
         variants: {
-          where: { 
+          where: {
             size: { equals: sizeValue, mode: 'insensitive' },
-            isAvailable: true 
+            ...buildInStockVariantWhere(),
           },
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' }
@@ -323,7 +350,7 @@ const getProductsBySize = async (sizeValue, skip = 0, take = 10) => {
         variants: {
           some: {
             size: { equals: sizeValue, mode: 'insensitive' },
-            isAvailable: true
+            ...buildInStockVariantWhere(),
           }
         }
       }
@@ -346,11 +373,11 @@ const getProductsByModel = async (modelNumber, skip = 0, take = 10) => {
       where: {
         isActive: true,
         modelNumber: { equals: modelNumber, mode: 'insensitive' },
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       },
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -364,7 +391,7 @@ const getProductsByModel = async (modelNumber, skip = 0, take = 10) => {
       where: {
         isActive: true,
         modelNumber: { equals: modelNumber, mode: 'insensitive' },
-        variants: { some: { isAvailable: true } },
+        variants: { some: buildInStockVariantWhere() },
       }
     })
   ]);
@@ -399,7 +426,7 @@ const searchProducts = async (filters = {}) => {
 
   let where = {
     isActive: true,
-    variants: { some: { isAvailable: true } },
+    variants: { some: buildInStockVariantWhere() },
   };
 
   // Enhanced text search - split by spaces and search for any term
@@ -416,12 +443,16 @@ const searchProducts = async (filters = {}) => {
         { modelNumber: { contains: term, mode: 'insensitive' } },
         { tags: { hasSome: [term] } },
         // Search variant fields
-        { variants: { some: { 
-          OR: [
-            { color: { contains: term, mode: 'insensitive' } },
-            { sku: { contains: term, mode: 'insensitive' } }
-          ]
-        }}}
+        {
+          variants: {
+            some: buildInStockVariantWhere({
+              OR: [
+                { color: { contains: term, mode: 'insensitive' } },
+                { sku: { contains: term, mode: 'insensitive' } }
+              ],
+            }),
+          },
+        }
       ]);
     }
   }
@@ -457,7 +488,7 @@ const searchProducts = async (filters = {}) => {
   }
 
   // Build variant filter for include
-  let variantWhere = { isAvailable: true };
+  let variantWhere = buildInStockVariantWhere();
   if (color) variantWhere.color = { equals: color, mode: 'insensitive' };
   if (size) variantWhere.size = { equals: size, mode: 'insensitive' };
   if (minPrice || maxPrice) {
@@ -512,7 +543,7 @@ const getProductsList = async (filters = {}) => {
 
   let where = {
     isActive: true,
-    variants: { some: { isAvailable: true } },
+    variants: { some: buildInStockVariantWhere() },
   };
 
   if (normalizedCategory) where.category = normalizedCategory;
@@ -524,7 +555,7 @@ const getProductsList = async (filters = {}) => {
       where,
       include: {
         variants: {
-          where: { isAvailable: true },
+          where: buildInStockVariantWhere(),
           include: { images: true, inventory: true },
           orderBy: { price: 'asc' },
           take: 1
@@ -551,10 +582,16 @@ const getProductsList = async (filters = {}) => {
 // Get single product with all variants
 const getProductDetail = async (productId) => {
   const product = await prisma.product.findFirst({
-    where: { id: productId, isActive: true },
+    where: {
+      id: productId,
+      isActive: true,
+      variants: {
+        some: buildInStockVariantWhere(),
+      },
+    },
     include: {
       variants: {
-        where: { isAvailable: true },
+        where: buildInStockVariantWhere(),
         include: { images: true, inventory: true },
         orderBy: { price: 'asc' }
       }
@@ -586,6 +623,7 @@ const formatProductDetailForResponse = (product) => {
       size: variant.size,
       color: variant.color,
       sku: variant.sku,
+      isAvailable: variant.isAvailable,
       price: Number(variant.price),
       compareAtPrice: variant.compareAtPrice ? Number(variant.compareAtPrice) : null,
       images: variant.images

@@ -434,6 +434,36 @@ const getOrderItems = async (orderId) => {
 
 
 const SHIPPING_FEE = 40;
+const MAX_VARIANT_QUANTITY_PER_ORDER = 5;
+const BULK_ORDER_ERROR_MESSAGE = `Maximum quantity allowed per variant is ${MAX_VARIANT_QUANTITY_PER_ORDER}. Please contact store for bulk orders.`;
+
+const ensureCheckoutQuantityLimit = (items = []) => {
+  for (const item of items) {
+    const quantity = Number(item?.quantity);
+
+    if (!Number.isInteger(quantity) || quantity <= 0) {
+      throw new Error('Quantity must be greater than 0');
+    }
+
+    if (quantity > MAX_VARIANT_QUANTITY_PER_ORDER) {
+      throw new Error(BULK_ORDER_ERROR_MESSAGE);
+    }
+  }
+};
+
+const parseDirectOrderQuantity = (quantity) => {
+  const qty = parseInt(quantity, 10);
+
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new Error('Quantity must be greater than 0');
+  }
+
+  if (qty > MAX_VARIANT_QUANTITY_PER_ORDER) {
+    throw new Error(BULK_ORDER_ERROR_MESSAGE);
+  }
+
+  return qty;
+};
 
 const createOrderFromCart = async (userId, orderData) => {
   const { addressId, paymentMethod } = orderData;
@@ -452,6 +482,7 @@ const createOrderFromCart = async (userId, orderData) => {
   if (!cart || cart.items.length === 0) {
     throw new Error('Cart is empty');
   }
+  ensureCheckoutQuantityLimit(cart.items);
 
   const address = await prisma.address.findUnique({ where: { id: addressId } });
   if (!address || address.userId !== userId) {
@@ -676,6 +707,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
   if (!cart || cart.items.length === 0) {
     throw new Error('Cart is empty');
   }
+  ensureCheckoutQuantityLimit(cart.items);
 
   const cartTotal = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
   const totalAmount = cartTotal + SHIPPING_FEE;
@@ -892,7 +924,7 @@ const createDirectOrder = async (userId, orderData) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
 
   const unitPrice = parseFloat(variant.price);
-  const qty = parseInt(quantity, 10);
+  const qty = parseDirectOrderQuantity(quantity);
   const cartTotal = unitPrice * qty;
   const totalAmount = cartTotal + SHIPPING_FEE;
   const orderNumber = generateOrderNumber();
@@ -1116,7 +1148,7 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
   }
 
   const unitPrice = parseFloat(variant.price);
-  const qty = parseInt(quantity, 10);
+  const qty = parseDirectOrderQuantity(quantity);
   const cartTotal = unitPrice * qty;
   const totalAmount = cartTotal + SHIPPING_FEE;
   const orderNumber = generateOrderNumber();
@@ -1523,6 +1555,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
   if (!sessionCart || sessionCart.items.length === 0) {
     throw new Error('Cart is empty');
   }
+  ensureCheckoutQuantityLimit(sessionCart.items);
 
   const cart = sessionCart;
 

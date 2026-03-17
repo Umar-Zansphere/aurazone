@@ -429,7 +429,7 @@ export default function OrderDetailPage() {
           <div className="space-y-1 text-sm">
             <p className="text-[var(--text-primary)]">
               <span className="text-[var(--text-secondary)]">Provider:</span>{" "}
-              <span className="font-semibold">{order.shipment.provider}</span>
+              <span className="font-semibold">{order.shipment.courierName}</span>
             </p>
             <p className="text-[var(--text-primary)]">
               <span className="text-[var(--text-secondary)]">Tracking:</span>{" "}
