@@ -15,12 +15,16 @@ const {
 } = require('./utils/helpers');
 
 async function selectVariant(page, color, size) {
-  const colorButton = page.getByRole('button', { name: new RegExp(color, 'i') }).first();
+  const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+  const colorButton = page.locator(`button:has(img[alt="${color}"])`).first();
   if (await colorButton.isVisible().catch(() => false)) {
     await colorButton.click();
   }
 
-  const sizeButton = page.getByRole('button', { name: new RegExp(size.replace(/\s+/g, '\\s*'), 'i') }).first();
+  const sizeButton = page.getByRole('button', {
+    name: new RegExp(`^${escapeRegex(size).replace(/\s+/g, '\\s*')}$`, 'i'),
+  }).first();
   if (await sizeButton.isVisible().catch(() => false)) {
     await sizeButton.click();
   }
@@ -38,22 +42,23 @@ test.describe('2. Cart Management', () => {
     await clearCart(page);
   });
 
-  test('2.1 Add Simple Product: button swaps to quantity selector', async ({ page }) => {
-    const beforeCount = await page.locator('button[aria-label="Shopping cart"] span').first().textContent().catch(() => '0');
+  test('2.1 Add Simple Product: button swaps to added state', async ({ page }) => {
+    const cartBadge = page.locator('[aria-label="Shopping cart"] span').first();
+    const beforeCount = await cartBadge.textContent().catch(() => '0');
     const before = Number.parseInt(beforeCount || '0', 10) || 0;
 
     await openProductByName(page, TEST_DATA.exactProductName);
     await addCurrentProductToCart(page);
 
-    // Verify UI transformation
-    await expect(page.getByRole('button', { name: /add to cart/i })).toBeHidden();
-    await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^added to cart$/i }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /^add to cart$/i })).toHaveCount(0);
 
-    const afterBadge = page.locator('button[aria-label="quantity selector"] span').first();
-    await expect(afterBadge).toBeVisible();
-    const after = Number.parseInt((await afterBadge.textContent()) || '0', 10) || 0;
-
-    expect(after).toBeGreaterThan(before);
+    await expect
+      .poll(async () => {
+        const afterCount = await cartBadge.textContent().catch(() => '0');
+        return Number.parseInt(afterCount || '0', 10) || 0;
+      }, { timeout: 45_000 })
+      .toBeGreaterThan(before);
   });
 
   test('2.2 Add Product with Variants: selected variant is added', async ({ page }) => {
@@ -138,7 +143,12 @@ test.describe('2. Cart Management', () => {
     const beforeText = (await summary.textContent()) || '';
     const beforeSubtotal = extractSubtotal(beforeText);
 
-    await page.locator('button:has(svg[class*="plus"])').first().click();
+    const quantitySelector = page.getByLabel(/quantity selector/i).first();
+    const quantityValue = quantitySelector.locator('span').first();
+
+    await quantitySelector.locator('button').last().click();
+    await expect(quantityValue).toHaveText('2');
+    
     await delay(500);
 
     const afterText = (await summary.textContent()) || '';
@@ -149,16 +159,22 @@ test.describe('2. Cart Management', () => {
     expect(afterSubtotal).toBeGreaterThan(beforeSubtotal);
   });
 
-  test('2.6 Quantity Decrement to Zero: item auto-removes', async ({ page }) => {
+  test('2.6 Quantity Decrement: quantity reduces but not below one', async ({ page }) => {
     await openProductByName(page, TEST_DATA.exactProductName);
     await addCurrentProductToCart(page);
 
-    const removeFromQuantity = page.locator('button:has(svg[class*="trash"])').first();
-    await expect(removeFromQuantity).toBeVisible();
-    await removeFromQuantity.click();
-
     await gotoCart(page);
-    await expect(page.getByText(/your cart is empty/i)).toBeVisible();
+    const quantitySelector = page.getByLabel(/quantity selector/i).first();
+    const quantityValue = quantitySelector.locator('span').first();
+
+    await quantitySelector.locator('button').last().click();
+    await expect(quantityValue).toHaveText('2');
+
+    await quantitySelector.locator('button').first().click();
+    await expect(quantityValue).toHaveText('1');
+    await expect(quantitySelector.locator('button').first()).toBeDisabled();
+
+    await expect(page.getByText(TEST_DATA.exactProductName)).toBeVisible();
   });
 
   test('2.7 Explicit Removal: remove icon deletes item and updates total', async ({ page }) => {

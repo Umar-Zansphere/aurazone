@@ -30,6 +30,7 @@ loadDotEnv(path.join(__dirname, '.env'));
 
 module.exports = defineConfig({
     testDir: './tests',
+    globalSetup: require.resolve('./global-setup'),
     fullyParallel: false, // Run sequentially for flow tests
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
@@ -41,6 +42,7 @@ module.exports = defineConfig({
     },
     use: {
         baseURL: process.env.CUSTOMER_BASE_URL || 'https://www.aurazone.shop',
+        storageState: path.join(__dirname, '.auth', 'guest.json'),
         trace: 'on-first-retry',
         screenshot: 'only-on-failure',
         video: 'retain-on-failure',

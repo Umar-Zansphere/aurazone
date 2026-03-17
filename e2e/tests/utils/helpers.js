@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const fs = require('fs');
 const { expect, request: pwRequest } = require('@playwright/test');
 const {
   CUSTOMER_BASE_URL,
@@ -7,9 +8,21 @@ const {
   ADMIN_PASSWORD,
   CUSTOMER_EMAIL,
   CUSTOMER_PASSWORD,
+  STORAGE_STATE_PATHS,
 } = require('./constants');
 
 const joinUrl = (base, path = '/') => `${base}${path.startsWith('/') ? path : `/${path}`}`;
+
+const storageStateHasCookie = (storageStatePath, cookieName) => {
+  try {
+    const raw = fs.readFileSync(storageStatePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const cookies = Array.isArray(parsed?.cookies) ? parsed.cookies : [];
+    return cookies.some((cookie) => cookie?.name === cookieName);
+  } catch {
+    return false;
+  }
+};
 
 const parseInr = (value) => {
   const text = String(value || '');
@@ -66,25 +79,34 @@ async function openProductByName(page, name) {
 }
 
 async function addCurrentProductToCart(page) {
-  const addButton = page.getByRole('button', { name: /add to cart/i }).first();
-  const quantitySelector = page.getByLabel(/quantity selector/i).first();
+  const addButton = page.getByRole('button', { name: /^add to cart$/i }).first();
+  const addedStateButton = page.getByRole('button', { name: /^added to cart$/i }).first();
+  const successToast = page.locator('.toast-message').filter({ hasText: /added to cart/i }).first();
 
   await expect(addButton).toBeVisible({ timeout: 30_000 });
   await expect(addButton).toBeEnabled({ timeout: 30_000 });
   await addButton.scrollIntoViewIfNeeded();
   await addButton.click();
 
-  // This is a client-driven UI update that can take time (hydration + API + store refresh).
-  // Wait for the success state, but fail fast if the page shows an error toast.
+  // Wait for either success state or error feedback after store/API sync.
   const errorToast = page.locator('.toast-message').filter({ hasText: /insufficient|failed|error/i }).first();
-  await expect(quantitySelector.or(errorToast)).toBeVisible({ timeout: 45_000 });
+
+  await expect
+    .poll(async () => {
+      if (await errorToast.isVisible().catch(() => false)) return 'error';
+      if (await addedStateButton.isVisible().catch(() => false)) return 'added';
+      if (await successToast.isVisible().catch(() => false)) return 'success-toast';
+      return 'pending';
+    }, { timeout: 45_000 })
+    .not.toBe('pending');
+
   if (await errorToast.isVisible().catch(() => false)) {
     const message = ((await errorToast.textContent().catch(() => '')) || '').trim();
     throw new Error(`Add to cart failed${message ? `: ${message}` : ''}`);
   }
 
-  await expect(quantitySelector).toBeVisible({ timeout: 45_000 });
-  await expect(addButton).toBeHidden({ timeout: 45_000 });
+  await expect(addedStateButton).toBeVisible({ timeout: 45_000 });
+  await expect(addButton).toHaveCount(0, { timeout: 45_000 });
 }
 
 async function gotoCart(page) {
@@ -175,29 +197,50 @@ async function ensureGuestAddressFilled(page, overrides = {}) {
 }
 
 async function createAdminApiContext(request) {
+  const storageState =
+    fs.existsSync(STORAGE_STATE_PATHS.admin) && storageStateHasCookie(STORAGE_STATE_PATHS.admin, 'accessToken')
+      ? STORAGE_STATE_PATHS.admin
+      : undefined;
   const api = await pwRequest.newContext({
     baseURL: ADMIN_BASE_URL,
+    storageState,
     extraHTTPHeaders: { 'ngrok-skip-browser-warning': 'true' },
   });
 
-  const loginRes = await api.post('/api/auth/login', {
-    data: {
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
-    },
-  });
+  // Fallback for runs that bypass globalSetup (or first-time state generation).
+  if (!storageState && ADMIN_EMAIL && ADMIN_PASSWORD) {
+    const loginRes = await api.post('/api/auth/login', {
+      data: {
+        email: ADMIN_EMAIL,
+        password: ADMIN_PASSWORD,
+      },
+    });
 
-  expect(loginRes.ok()).toBeTruthy();
+    expect(loginRes.ok()).toBeTruthy();
+    await api.storageState({ path: STORAGE_STATE_PATHS.admin });
+  }
+
   return api;
 }
 
-async function createGuestApiContext(request) {
+async function createGuestApiContext(request, options = {}) {
+  const { fresh = true } = options;
+  const storageState = !fresh && fs.existsSync(STORAGE_STATE_PATHS.guest) ? STORAGE_STATE_PATHS.guest : undefined;
+
   const api = await pwRequest.newContext({
     baseURL: CUSTOMER_BASE_URL,
+    storageState,
     extraHTTPHeaders: { 'ngrok-skip-browser-warning': 'true' },
   });
 
+  // Ensure guestSessionId exists for APIs that require a guest session.
   await api.get('/api/cart');
+
+  // If we expected a persisted guest state but it wasn't available, create it for later callers.
+  if (!fresh && !storageState) {
+    await api.storageState({ path: STORAGE_STATE_PATHS.guest });
+  }
+
   return api;
 }
 

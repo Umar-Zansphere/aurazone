@@ -1,3 +1,5 @@
+const path = require('path');
+
 const CUSTOMER_BASE_URL = process.env.CUSTOMER_BASE_URL || 'https://www.aurazone.shop';
 const ADMIN_BASE_URL = process.env.ADMIN_BASE_URL || 'https://admin.aurazone.shop';
 
@@ -26,6 +28,14 @@ const hasCustomerCreds = () => Boolean(CUSTOMER_EMAIL && CUSTOMER_PASSWORD);
 const hasAdminCreds = () => Boolean(ADMIN_EMAIL && ADMIN_PASSWORD);
 const hasWebhookSecret = () => Boolean(WEBHOOK_SECRET);
 
+const E2E_ROOT = path.join(__dirname, '..', '..');
+const AUTH_DIR = path.join(E2E_ROOT, '.auth');
+const STORAGE_STATE_PATHS = {
+  guest: path.join(AUTH_DIR, 'guest.json'),
+  customer: path.join(AUTH_DIR, 'customer.json'),
+  admin: path.join(AUTH_DIR, 'admin.json'),
+};
+
 module.exports = {
   CUSTOMER_BASE_URL,
   ADMIN_BASE_URL,
@@ -38,4 +48,5 @@ module.exports = {
   hasCustomerCreds,
   hasAdminCreds,
   hasWebhookSecret,
+  STORAGE_STATE_PATHS,
 };

@@ -44,8 +44,8 @@ test.describe('7. Concurrency & Edge Cases', () => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for concurrent stock race test.');
 
     const adminApi = await createAdminApiContext(request);
-    const guestOne = await createGuestApiContext(request);
-    const guestTwo = await createGuestApiContext(request);
+    const guestOne = await createGuestApiContext(request, { fresh: true });
+    const guestTwo = await createGuestApiContext(request, { fresh: true });
 
     try {
       const product = await findProductByName(guestOne, TEST_DATA.exactProductName);

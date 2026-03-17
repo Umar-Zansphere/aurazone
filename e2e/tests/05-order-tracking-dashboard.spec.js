@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_DATA, hasCustomerCreds, hasAdminCreds } = require('./utils/constants');
+const { TEST_DATA, hasCustomerCreds, hasAdminCreds, STORAGE_STATE_PATHS } = require('./utils/constants');
 const {
   CUSTOMER_BASE_URL,
   ADMIN_BASE_URL,
@@ -11,6 +11,8 @@ const {
   gotoCustomer,
   delay,
 } = require('./utils/helpers');
+
+test.use({ storageState: STORAGE_STATE_PATHS.customer });
 
 async function createAuthenticatedOrder(page, paymentMethod = 'COD') {
   await ensureCustomerLogin(page);

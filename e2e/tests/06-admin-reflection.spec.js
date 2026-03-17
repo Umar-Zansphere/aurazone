@@ -4,6 +4,7 @@ const {
   WEBHOOK_SECRET,
   hasAdminCreds,
   hasWebhookSecret,
+  STORAGE_STATE_PATHS,
 } = require('./utils/constants');
 const {
   ADMIN_BASE_URL,
@@ -20,6 +21,8 @@ const {
   signRazorpayWebhook,
   delay,
 } = require('./utils/helpers');
+
+test.use({ storageState: STORAGE_STATE_PATHS.admin });
 
 function buildGuestAddress(tag = 'admin') {
   return {
