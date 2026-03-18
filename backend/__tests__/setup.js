@@ -13,6 +13,7 @@ const unique = (prefix = 'id') => `${prefix}-${Date.now()}-${uniqueCounter++}`;
 
 const clearDatabase = async () => {
   await prisma.$transaction([
+    prisma.orderStatusEmailLog.deleteMany(),
     prisma.paymentLog.deleteMany(),
     prisma.shipmentLog.deleteMany(),
     prisma.orderLog.deleteMany(),

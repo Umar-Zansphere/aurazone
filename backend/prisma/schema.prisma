@@ -56,7 +56,7 @@ enum PaymentStatus {
 
 enum PaymentGateway {
   RAZORPAY
-  COD 
+  COD
 }
 
 enum OrderShipmentStatus {
@@ -74,6 +74,11 @@ enum InventoryLogType {
   MANUAL
   RESTOCK
   RETURN
+}
+
+enum EmailDeliveryState {
+  SENT
+  FAILED
 }
 
 model User {
@@ -101,6 +106,7 @@ model User {
   wishlists               Wishlist[]
   orders                  Order[]
   orderLogs               OrderLog[]               @relation("OrderLogActor")
+  orderStatusEmailLogs    OrderStatusEmailLog[]    @relation("OrderStatusEmailLogActor")
   shipmentLogs            ShipmentLog[]            @relation("ShipmentLogActor")
   paymentLogs             PaymentLog[]             @relation("PaymentLogActor")
   pushSubscriptions       PushSubscription[]
@@ -332,14 +338,15 @@ model Order {
   deletedBy         String?        @map("deleted_by")
   createdAt         DateTime       @default(now()) @map("created_at")
 
-  items         OrderItem[]
-  payments      Payment[]
-  shipments     OrderShipment[]
-  orderLogs     OrderLog[]
-  shipmentLogs  ShipmentLog[]
-  paymentLogs   PaymentLog[]
-  inventoryLogs InventoryLog[]
-  orderAddress  OrderAddress?
+  items           OrderItem[]
+  payments        Payment[]
+  shipments       OrderShipment[]
+  orderLogs       OrderLog[]
+  shipmentLogs    ShipmentLog[]
+  paymentLogs     PaymentLog[]
+  statusEmailLogs OrderStatusEmailLog[]
+  inventoryLogs   InventoryLog[]
+  orderAddress    OrderAddress?
 
   @@index([orderNumber])
   @@index([trackingToken])
@@ -473,6 +480,29 @@ model OrderLog {
   @@index([adminId])
   @@index([action])
   @@index([createdAt])
+}
+
+model OrderStatusEmailLog {
+  id                String             @id @default(uuid())
+  orderId           String             @map("order_id")
+  order             Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  adminId           String?            @map("admin_id")
+  admin             User?              @relation("OrderStatusEmailLogActor", fields: [adminId], references: [id], onDelete: SetNull)
+  recipientEmail    String?            @map("recipient_email")
+  statusSnapshot    OrderStatus        @map("status_snapshot")
+  template          String             @db.VarChar(100)
+  subject           String
+  providerMessageId String?            @map("provider_message_id")
+  state             EmailDeliveryState @default(FAILED)
+  errorMessage      String?            @map("error_message")
+  metadata          Json?
+  sentAt            DateTime?          @map("sent_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@index([orderId, createdAt])
+  @@index([state, createdAt])
+  @@index([adminId])
 }
 
 model ShipmentLog {

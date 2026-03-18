@@ -16,6 +16,8 @@ import {
   Trash2,
   ScrollText,
   Plus,
+  Mail,
+  RotateCcw,
 } from "lucide-react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
@@ -39,6 +41,8 @@ export default function OrderDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [sharingStatus, setSharingStatus] = useState(false);
+  const [resendingEmailId, setResendingEmailId] = useState(null);
 
   // Shipment creation
   const [shipmentSheet, setShipmentSheet] = useState(false);
@@ -195,6 +199,44 @@ export default function OrderDetailPage() {
     }
   };
 
+  const shareStatusEmail = async () => {
+    setActionError(null);
+    setSharingStatus(true);
+    try {
+      const response = await apiFetch(`/admin/orders/${order.id}/status-email`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!response?.sent) {
+        setActionError(response?.message || "Failed to share order status.");
+      }
+      await loadOrder();
+    } catch {
+      setActionError("Failed to share order status.");
+    } finally {
+      setSharingStatus(false);
+    }
+  };
+
+  const resendStatusEmail = async (emailLogId) => {
+    setActionError(null);
+    setResendingEmailId(emailLogId);
+    try {
+      const response = await apiFetch(`/admin/orders/${order.id}/status-email/${emailLogId}/resend`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      if (!response?.sent) {
+        setActionError(response?.message || "Failed to resend status email.");
+      }
+      await loadOrder();
+    } catch {
+      setActionError("Failed to resend status email.");
+    } finally {
+      setResendingEmailId(null);
+    }
+  };
+
   // Delete order
   const deleteOrder = async () => {
     setActionError(null);
@@ -235,6 +277,7 @@ export default function OrderDetailPage() {
   const readyForDelivery = order.status === "SHIPPED";
   const isCancelled = order.status === "CANCELLED";
   const currentStepIndex = statusSteps.findIndex((step) => step.key === order.status);
+  const failedStatusEmails = (order.statusEmails || []).filter((entry) => entry.state === "FAILED");
 
   return (
     <div className="space-y-3 pb-10">
@@ -474,12 +517,59 @@ export default function OrderDetailPage() {
           </button>
           <button
             type="button"
+            disabled={sharingStatus}
+            onClick={shareStatusEmail}
+            className="app-button app-button-secondary flex items-center justify-center gap-2 py-2.5 text-xs disabled:opacity-50"
+          >
+            <Mail size={14} /> {sharingStatus ? "Sharing..." : "Share Status"}
+          </button>
+          <button
+            type="button"
             onClick={() => setDeleteSheet(true)}
             className="app-button app-button-danger flex items-center justify-center gap-2 py-2.5 text-xs"
           >
             <Trash2 size={14} /> Delete Order
           </button>
         </div>
+      </section>
+
+      <section className="card-surface p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="section-title">Failed Status Emails</p>
+          <span className="text-xs text-[var(--text-muted)]">{failedStatusEmails.length}</span>
+        </div>
+        {failedStatusEmails.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">No failed status emails.</p>
+        ) : (
+          <div className="space-y-2">
+            {failedStatusEmails.map((entry) => (
+              <div key={entry.id} className="rounded-[14px] border border-[var(--border)] p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-[var(--text-primary)]">
+                      {entry.recipientEmail || "No recipient email"}
+                    </p>
+                    <p className="text-xs text-[var(--text-secondary)]">
+                      Status: {entry.statusSnapshot} · {formatDateTime(entry.createdAt)}
+                    </p>
+                    <p className="mt-1 text-xs text-[var(--error)]">
+                      {entry.errorMessage || "Email delivery failed."}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={resendingEmailId === entry.id}
+                    onClick={() => resendStatusEmail(entry.id)}
+                    className="app-button app-button-secondary flex items-center gap-1 px-2 py-1 text-[11px] disabled:opacity-50"
+                  >
+                    <RotateCcw size={12} />
+                    {resendingEmailId === entry.id ? "Resending..." : "Resend"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <section className="card-surface p-4">
@@ -593,7 +683,7 @@ export default function OrderDetailPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="text-sm font-medium text-[var(--text-primary)]">{log.action || log.event || log.type || "Event"}</p>
-                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{log.details || log.message || log.description || ""}</p>
+                    <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{log.details || log.message || log.description || log.note || ""}</p>
                   </div>
                   <span className="shrink-0 text-[11px] text-[var(--text-muted)]">{formatRelativeTime(log.createdAt)}</span>
                 </div>

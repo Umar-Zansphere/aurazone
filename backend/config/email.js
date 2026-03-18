@@ -25,13 +25,14 @@ const sendEmail = async (to, subject, template, data) => {
 
     if (error) {
       console.error('Error sending email via Resend:', error);
-      throw new Error('Failed to send email.');
+      throw new Error(error?.message || 'Failed to send email.');
     }
 
-    console.log(`Email sent successfully to: ${to} (Template: ${template}, ID: ${emailData.id})`)
+    console.log(`Email sent successfully to: ${to} (Template: ${template}, ID: ${emailData.id})`);
+    return emailData;
   } catch (error) {
     console.error('Error sending email:', error);
-    throw new Error('Failed to send email.');
+    throw new Error(error?.message || 'Failed to send email.');
   }
 };
 

@@ -14,6 +14,21 @@ const INVENTORY_LOG_TYPES = ['HOLD', 'RELEASE', 'SOLD', 'MANUAL', 'RESTOCK', 'RE
 const INVENTORY_ADJUST_OPERATIONS = ['SET', 'RESTOCK', 'REDUCE', 'HOLD', 'RELEASE', 'RETURN'];
 const PRODUCT_CATEGORIES = ['RUNNING', 'CASUAL', 'FORMAL', 'SNEAKERS'];
 const PRODUCT_GENDERS = ['MEN', 'WOMEN', 'UNISEX', 'KIDS'];
+const ORDER_STATUS_LABELS = {
+  PENDING: 'Pending',
+  PAID: 'Paid',
+  SHIPPED: 'Shipped',
+  DELIVERED: 'Delivered',
+  CANCELLED: 'Cancelled',
+  RECEIVED: 'Received',
+  SUCCESS: 'Completed',
+  FAILED: 'Failed',
+};
+const PAYMENT_STATUS_LABELS = {
+  PENDING: 'Pending',
+  SUCCESS: 'Paid',
+  FAILED: 'Failed',
+};
 
 const parseBool = (value) => {
   if (typeof value === 'boolean') {
@@ -908,6 +923,7 @@ const formatFullOrder = (order) => {
       : null,
     payments: formattedPayments,
     statusTimeline: buildOrderStatusTimeline(order, latestShipment),
+    statusEmails: (order.statusEmailLogs || []).map(formatOrderStatusEmailLog),
   };
 };
 
@@ -990,6 +1006,29 @@ const formatOrderLog = (log) => ({
   note: log.note,
   metadata: log.metadata,
   createdAt: log.createdAt.toISOString(),
+  admin: log.admin
+    ? {
+      id: log.admin.id,
+      fullName: log.admin.fullName,
+      email: log.admin.email,
+    }
+    : null,
+});
+
+const formatOrderStatusEmailLog = (log) => ({
+  id: log.id,
+  orderId: log.orderId,
+  statusSnapshot: log.statusSnapshot,
+  recipientEmail: log.recipientEmail,
+  template: log.template,
+  subject: log.subject,
+  providerMessageId: log.providerMessageId,
+  state: log.state,
+  errorMessage: log.errorMessage,
+  metadata: log.metadata,
+  sentAt: log.sentAt ? log.sentAt.toISOString() : null,
+  createdAt: log.createdAt.toISOString(),
+  updatedAt: log.updatedAt ? log.updatedAt.toISOString() : null,
   admin: log.admin
     ? {
       id: log.admin.id,
@@ -1234,6 +1273,278 @@ const sendOrderStatusUpdateEmail = async (order, { status, note } = {}) => {
   } catch (error) {
     console.error('Error sending order status update email:', error);
   }
+};
+
+const getOrderForStatusEmail = async (orderId) => {
+  return prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+          phone: true,
+        },
+      },
+      orderAddress: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+          addressLine1: true,
+          addressLine2: true,
+          city: true,
+          state: true,
+          postalCode: true,
+          country: true,
+        },
+      },
+      items: {
+        select: {
+          productName: true,
+          color: true,
+          size: true,
+          quantity: true,
+          price: true,
+          subtotal: true,
+        },
+      },
+      shipments: {
+        where: {
+          deletedAt: null,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 1,
+      },
+    },
+  });
+};
+
+const buildOrderTrackingUrl = (order, shipment = null) => {
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+
+  if (shipment?.trackingUrl) {
+    return shipment.trackingUrl;
+  }
+  if (order.userId) {
+    return `${clientUrl}/orders/${order.id}`;
+  }
+  if (order.trackingToken) {
+    return `${clientUrl}/track-order/${order.trackingToken}`;
+  }
+
+  return `${clientUrl}/orders/${order.id}`;
+};
+
+const buildOrderStatusShareEmailPayload = (order, statusSnapshot, note) => {
+  const latestShipment = (order.shipments || []).sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  )[0] || null;
+  const statusLabel = ORDER_STATUS_LABELS[statusSnapshot] || statusSnapshot;
+  const paymentStatusLabel = PAYMENT_STATUS_LABELS[order.paymentStatus] || order.paymentStatus;
+  const customerName = order.user?.fullName || order.orderAddress?.name || 'Valued Customer';
+  const recipientEmail = order.user?.email || order.orderAddress?.email || null;
+
+  return {
+    recipientEmail,
+    subject: `Order Status Update - ${order.orderNumber}`,
+    template: 'order-status-share',
+    data: {
+      customerName,
+      orderNumber: order.orderNumber,
+      orderId: order.id,
+      statusSnapshot,
+      statusLabel,
+      paymentStatus: order.paymentStatus,
+      paymentStatusLabel,
+      updatedAt: new Date(),
+      trackingNumber: latestShipment?.trackingNumber || null,
+      courierName: latestShipment?.courierName || null,
+      trackingUrl: buildOrderTrackingUrl(order, latestShipment),
+      note: note || '',
+      totalAmount: toNumber(order.totalAmount) || 0,
+      items: (order.items || []).map((item) => ({
+        productName: item.productName,
+        color: item.color,
+        size: item.size,
+        quantity: item.quantity,
+      })),
+    },
+  };
+};
+
+const normalizeEmailError = (error) => {
+  if (error?.message && typeof error.message === 'string') {
+    return error.message;
+  }
+
+  return 'Failed to send email.';
+};
+
+const sendOrderStatusEmailWithLog = async ({
+  order,
+  adminId,
+  statusSnapshot,
+  note,
+  source,
+  resendOfLogId,
+}) => {
+  const payload = buildOrderStatusShareEmailPayload(order, statusSnapshot, note);
+  let state = 'FAILED';
+  let providerMessageId = null;
+  let errorMessage = null;
+  let sentAt = null;
+
+  if (!payload.recipientEmail) {
+    errorMessage = 'Customer email not found for this order.';
+  } else {
+    try {
+      const emailResult = await sendEmail(
+        payload.recipientEmail,
+        payload.subject,
+        payload.template,
+        payload.data
+      );
+      state = 'SENT';
+      providerMessageId = emailResult?.id || null;
+      sentAt = new Date();
+    } catch (error) {
+      errorMessage = normalizeEmailError(error);
+    }
+  }
+
+  const emailLog = await prisma.$transaction(async (tx) => {
+    const createdLog = await tx.orderStatusEmailLog.create({
+      data: {
+        orderId: order.id,
+        adminId: adminId || null,
+        recipientEmail: payload.recipientEmail,
+        statusSnapshot,
+        template: payload.template,
+        subject: payload.subject,
+        providerMessageId,
+        state,
+        errorMessage,
+        metadata: {
+          source,
+          note: note || null,
+          resendOfLogId: resendOfLogId || null,
+        },
+        sentAt,
+      },
+      include: {
+        admin: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    await createOrderLogTx(tx, {
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      adminId: adminId || null,
+      action: state === 'SENT'
+        ? (resendOfLogId ? 'STATUS_EMAIL_RESENT' : 'STATUS_EMAIL_SHARED')
+        : (resendOfLogId ? 'STATUS_EMAIL_RESEND_FAILED' : 'STATUS_EMAIL_SHARE_FAILED'),
+      note: state === 'SENT'
+        ? `Status email sent to ${payload.recipientEmail}`
+        : errorMessage,
+      metadata: {
+        source,
+        statusSnapshot,
+        recipientEmail: payload.recipientEmail,
+        template: payload.template,
+        providerMessageId,
+        resendOfLogId: resendOfLogId || null,
+      },
+    });
+
+    return createdLog;
+  });
+
+  return {
+    sent: state === 'SENT',
+    emailLog,
+  };
+};
+
+const shareOrderStatusEmail = async (req, res) => {
+  const { orderId } = req.params;
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  const { adminId } = getAdminActor(req);
+
+  const order = await getOrderForStatusEmail(orderId);
+
+  if (!order) {
+    throw createError(404, 'Order not found');
+  }
+
+  const result = await sendOrderStatusEmailWithLog({
+    order,
+    adminId,
+    statusSnapshot: order.status,
+    note,
+    source: 'ADMIN_SHARE_STATUS_EMAIL',
+  });
+
+  return res.status(200).json({
+    sent: result.sent,
+    message: result.sent
+      ? 'Status email sent successfully.'
+      : 'Status email could not be sent. Failure has been logged.',
+    emailLog: formatOrderStatusEmailLog(result.emailLog),
+  });
+};
+
+const resendOrderStatusEmail = async (req, res) => {
+  const { orderId, emailLogId } = req.params;
+  const note = typeof req.body?.note === 'string' ? req.body.note.trim() : '';
+  const { adminId } = getAdminActor(req);
+
+  const sourceLog = await prisma.orderStatusEmailLog.findFirst({
+    where: {
+      id: emailLogId,
+      orderId,
+    },
+  });
+
+  if (!sourceLog) {
+    throw createError(404, 'Status email log not found for this order');
+  }
+
+  if (sourceLog.state !== 'FAILED') {
+    throw createError(409, 'Only failed status emails can be resent');
+  }
+
+  const order = await getOrderForStatusEmail(orderId);
+
+  if (!order) {
+    throw createError(404, 'Order not found');
+  }
+
+  const result = await sendOrderStatusEmailWithLog({
+    order,
+    adminId,
+    statusSnapshot: sourceLog.statusSnapshot || order.status,
+    note,
+    source: 'ADMIN_RESEND_STATUS_EMAIL',
+    resendOfLogId: sourceLog.id,
+  });
+
+  return res.status(200).json({
+    sent: result.sent,
+    message: result.sent
+      ? 'Status email resent successfully.'
+      : 'Status email resend failed. Failure has been logged.',
+    emailLog: formatOrderStatusEmailLog(result.emailLog),
+  });
 };
 
 const getDashboard = async (req, res) => {
@@ -1642,6 +1953,21 @@ const getOrderById = async (req, res) => {
         ...(includeDeleted ? {} : { where: { deletedAt: null } }),
         orderBy: {
           createdAt: 'asc',
+        },
+      },
+      statusEmailLogs: {
+        orderBy: {
+          createdAt: 'desc',
+        },
+        take: 30,
+        include: {
+          admin: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
         },
       },
     },
@@ -5305,6 +5631,8 @@ module.exports = {
   listOrderLogs,
   getOrderById,
   updateOrderStatus,
+  shareOrderStatusEmail,
+  resendOrderStatusEmail,
   updateOrderPaymentStatus,
   listPayments,
   listPaymentLogs,

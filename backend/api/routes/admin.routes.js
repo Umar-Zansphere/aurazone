@@ -8,6 +8,8 @@ const {
   listOrderLogs,
   getOrderById,
   updateOrderStatus,
+  shareOrderStatusEmail,
+  resendOrderStatusEmail,
   updateOrderPaymentStatus,
   listPayments,
   listPaymentLogs,
@@ -62,6 +64,8 @@ router.get('/orders/logs', listOrderLogs);
 router.get('/orders/:orderId/logs', listOrderLogs);
 router.post('/orders/:orderId/payments', createPaymentForOrder);
 router.post('/orders/:orderId/shipments', createShipmentForOrder);
+router.post('/orders/:orderId/status-email', shareOrderStatusEmail);
+router.post('/orders/:orderId/status-email/:emailLogId/resend', resendOrderStatusEmail);
 router.get('/orders/:orderId', getOrderById);
 router.put('/orders/:orderId/status', updateOrderStatus);
 router.put('/orders/:orderId/payment-status', updateOrderPaymentStatus);

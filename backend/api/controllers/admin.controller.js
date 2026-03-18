@@ -7,6 +7,8 @@ const listOrders = catchAsync(async (req, res) => adminService.listOrders(req, r
 const listOrderLogs = catchAsync(async (req, res) => adminService.listOrderLogs(req, res));
 const getOrderById = catchAsync(async (req, res) => adminService.getOrderById(req, res));
 const updateOrderStatus = catchAsync(async (req, res) => adminService.updateOrderStatus(req, res));
+const shareOrderStatusEmail = catchAsync(async (req, res) => adminService.shareOrderStatusEmail(req, res));
+const resendOrderStatusEmail = catchAsync(async (req, res) => adminService.resendOrderStatusEmail(req, res));
 const updateOrderPaymentStatus = catchAsync(async (req, res) => adminService.updateOrderPaymentStatus(req, res));
 const listPayments = catchAsync(async (req, res) => adminService.listPayments(req, res));
 const listPaymentLogs = catchAsync(async (req, res) => adminService.listPaymentLogs(req, res));
@@ -58,6 +60,8 @@ module.exports = {
   listOrderLogs,
   getOrderById,
   updateOrderStatus,
+  shareOrderStatusEmail,
+  resendOrderStatusEmail,
   updateOrderPaymentStatus,
   listPayments,
   listPaymentLogs,

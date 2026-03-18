@@ -2,6 +2,7 @@ const request = require('supertest');
 
 const mockUploadBufferToS3 = jest.fn();
 const mockBroadcastToAll = jest.fn();
+const mockSendEmail = jest.fn();
 
 jest.mock('../api/services/s3.services', () => {
   const actual = jest.requireActual('../api/services/s3.services');
@@ -18,6 +19,10 @@ jest.mock('../api/services/notification.service', () => {
     broadcastToAll: mockBroadcastToAll,
   };
 });
+
+jest.mock('../config/email', () => ({
+  sendEmail: (...args) => mockSendEmail(...args),
+}));
 
 const { app } = require('../app');
 const {
@@ -49,8 +54,10 @@ describe('Admin routes integration', () => {
     auth = await createAuthContext();
     mockUploadBufferToS3.mockReset();
     mockBroadcastToAll.mockReset();
+    mockSendEmail.mockReset();
     mockUploadBufferToS3.mockResolvedValue(`https://mock-s3.local/${unique('image')}.jpg`);
     mockBroadcastToAll.mockResolvedValue({ sent: 0, failed: 0, total: 0 });
+    mockSendEmail.mockResolvedValue({ id: unique('email') });
   });
 
   afterAll(async () => {
@@ -372,6 +379,71 @@ describe('Admin routes integration', () => {
         where: { orderId: order.id, action: 'CREATED' },
       });
       expect(log).toBeTruthy();
+    });
+
+    it('POST /api/admin/orders/:orderId/status-email shares status email and persists sent log', async () => {
+      const { variant } = await createProductFixture();
+      const order = await createOrderFixture({
+        userId: auth.customer.id,
+        variantId: variant.id,
+        status: 'PENDING',
+      });
+
+      const response = await asAdmin('post', `/api/admin/orders/${order.id}/status-email`)
+        .send({ note: 'manual share from panel' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.sent).toBe(true);
+      expect(response.body.emailLog.state).toBe('SENT');
+
+      const statusEmailLog = await prisma.orderStatusEmailLog.findFirst({
+        where: { orderId: order.id },
+      });
+      const orderLog = await prisma.orderLog.findFirst({
+        where: { orderId: order.id, action: 'STATUS_EMAIL_SHARED' },
+      });
+
+      expect(statusEmailLog).toBeTruthy();
+      expect(statusEmailLog.state).toBe('SENT');
+      expect(orderLog).toBeTruthy();
+      expect(mockSendEmail).toHaveBeenCalled();
+    });
+
+    it('POST /api/admin/orders/:orderId/status-email/:emailLogId/resend retries failed status emails', async () => {
+      const { variant } = await createProductFixture();
+      const order = await createOrderFixture({
+        userId: auth.customer.id,
+        variantId: variant.id,
+        status: 'DELIVERED',
+      });
+
+      mockSendEmail.mockRejectedValueOnce(new Error('SMTP unavailable'));
+
+      const firstAttempt = await asAdmin('post', `/api/admin/orders/${order.id}/status-email`)
+        .send({ note: 'first try' });
+
+      expect(firstAttempt.status).toBe(200);
+      expect(firstAttempt.body.sent).toBe(false);
+      expect(firstAttempt.body.emailLog.state).toBe('FAILED');
+
+      mockSendEmail.mockResolvedValueOnce({ id: unique('email-resend') });
+
+      const retry = await asAdmin('post', `/api/admin/orders/${order.id}/status-email/${firstAttempt.body.emailLog.id}/resend`)
+        .send({ note: 'retry now' });
+
+      expect(retry.status).toBe(200);
+      expect(retry.body.sent).toBe(true);
+      expect(retry.body.emailLog.state).toBe('SENT');
+
+      const allLogs = await prisma.orderStatusEmailLog.findMany({
+        where: { orderId: order.id },
+      });
+      const resendOrderLog = await prisma.orderLog.findFirst({
+        where: { orderId: order.id, action: 'STATUS_EMAIL_RESENT' },
+      });
+
+      expect(allLogs).toHaveLength(2);
+      expect(resendOrderLog).toBeTruthy();
     });
   });
 
