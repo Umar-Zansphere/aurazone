@@ -152,7 +152,7 @@ export default function Header({
                 </span>
               )}
             </button>
-            <div ref={profileMenuRef} className="relative">
+            <div ref={profileMenuRef} className="relative hidden sm:flex">
               <button
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
