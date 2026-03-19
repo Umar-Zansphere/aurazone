@@ -168,7 +168,7 @@ export default function SettingsPage() {
             <span className="text-[var(--text-primary)]">Version</span>
             <span className="text-[var(--text-secondary)]">{appVersion}</span>
           </div>
-          <div className="flex items-center justify-between">
+          {/* <div className="flex items-center justify-between">
             <span className="inline-flex items-center gap-1.5 text-[var(--text-primary)]">
               <ShieldCheck size={14} className="text-[var(--highlight)]" /> Backend Health
             </span>
@@ -179,7 +179,7 @@ export default function SettingsPage() {
               <CircleDot size={10} /> {health.status || "unknown"}
             </span>
           </div>
-          <p className="text-xs text-[var(--text-muted)]">{health.message}</p>
+          <p className="text-xs text-[var(--text-muted)]">{health.message}</p> */}
         </div>
       </section>
     </div>

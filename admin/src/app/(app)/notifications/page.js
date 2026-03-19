@@ -101,14 +101,14 @@ function NotificationsContent() {
         </div>
 
         <div className="mt-3 flex items-center gap-3">
-          <button
+          {/* <button
             type="button"
             onClick={() => setComposeOpen(true)}
             className="app-button app-button-primary flex items-center gap-2 px-3 py-2 text-xs"
           >
             <Megaphone size={14} />
             Broadcast
-          </button>
+          </button> */}
           <span className="text-xs text-[var(--text-secondary)]">{unreadCount} unread</span>
         </div>
       </header>
