@@ -328,12 +328,8 @@ export default function OrderDetailPage() {
                     </div>
                     <div className="space-y-2">
                         <div className="flex justify-between text-slate-700">
-                            <span>Subtotal</span>
+                            <span>Subtotal + Shipping</span>
                             <span>{formatPrice(order.subtotal || order.totalAmount)}</span>
-                        </div>
-                        <div className="flex justify-between text-slate-700">
-                            <span>Shipping</span>
-                            <span className="font-medium text-slate-900">₹40.00</span>
                         </div>
                         <div className="flex justify-between text-slate-700">
                             <span>Tax</span>
@@ -342,7 +338,7 @@ export default function OrderDetailPage() {
                         <div className="border-t border-slate-200 pt-2 mt-2">
                             <div className="flex justify-between text-lg font-bold text-slate-900">
                                 <span>Total</span>
-                                <span>{formatPrice(parseFloat(order.totalAmount || 0) + 40)}</span>
+                                <span>{formatPrice(parseFloat(order.totalAmount || 0))}</span>
                             </div>
                         </div>
                         <div className="pt-2 border-t border-slate-200 mt-2">
