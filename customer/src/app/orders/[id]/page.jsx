@@ -342,7 +342,7 @@ export default function OrderDetailPage() {
                         <div className="border-t border-slate-200 pt-2 mt-2">
                             <div className="flex justify-between text-lg font-bold text-slate-900">
                                 <span>Total</span>
-                                <span>{formatPrice(order.totalAmount + 40)}</span>
+                                <span>{formatPrice(parseFloat(order.totalAmount || 0) + 40)}</span>
                             </div>
                         </div>
                         <div className="pt-2 border-t border-slate-200 mt-2">

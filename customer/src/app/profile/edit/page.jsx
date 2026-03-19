@@ -47,7 +47,7 @@ export default function EditProfilePage() {
       const response = await userApi.updateProfile(fullName, email);
 
       if (response.message === 'Profile updated successfully') {
-        setUser(response.user);
+        await refreshUser(); // Refresh user data from context
         setSuccessMessage('Profile updated successfully');
         setTimeout(() => {
           setSuccessMessage('');
