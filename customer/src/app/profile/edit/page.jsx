@@ -46,8 +46,8 @@ export default function EditProfilePage() {
       setError(null);
       const response = await userApi.updateProfile(fullName, email);
 
-      if (response.success) {
-        setUser(response.data.user);
+      if (response.message === 'Profile updated successfully') {
+        setUser(response.user);
         setSuccessMessage('Profile updated successfully');
         setTimeout(() => {
           setSuccessMessage('');
@@ -75,7 +75,7 @@ export default function EditProfilePage() {
       setError(null);
       const response = await userApi.updatePhoneNumber(phoneNumber);
 
-      if (response.success) {
+      if (response.message === 'Phone number updated. Please verify your new phone number.') {
         // Refresh user data from context
         await refreshUser();
         setSuccessMessage('Phone number updated successfully');

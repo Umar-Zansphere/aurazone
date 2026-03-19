@@ -36,6 +36,22 @@ function ProductsContent() {
   // Pagination
   const itemsPerPage = 12;
 
+  // Sync filters with searchParams when URL changes (e.g., from sidebar navigation)
+  useEffect(() => {
+    setFilters({
+      category: searchParams.get('category') || '',
+      gender: searchParams.get('gender') || '',
+      brand: searchParams.get('brand') || '',
+      color: searchParams.get('color') || '',
+      size: searchParams.get('size') || '',
+      minPrice: searchParams.get('minPrice') || '',
+      maxPrice: searchParams.get('maxPrice') || '',
+    });
+    setSearchTerm(searchParams.get('search') || '');
+    setSortBy(searchParams.get('sort') || 'popular');
+    setCurrentPage(parseInt(searchParams.get('page') || '1'));
+  }, [searchParams]);
+
   // Load filters and products
   useEffect(() => {
     loadFilterOptions();

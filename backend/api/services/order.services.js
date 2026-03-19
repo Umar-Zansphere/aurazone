@@ -492,7 +492,9 @@ const createOrderFromCart = async (userId, orderData) => {
   const user = await prisma.user.findUnique({ where: { id: userId } });
 
   const cartTotal = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
-  const totalAmount = cartTotal + SHIPPING_FEE;
+  const totalQuantity = cart.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const shippingTotal = SHIPPING_FEE * totalQuantity;
+  const totalAmount = cartTotal + shippingTotal;
   const orderNumber = generateOrderNumber();
   const trackingToken = crypto.randomBytes(16).toString('hex');
 
@@ -605,7 +607,7 @@ const createOrderFromCart = async (userId, orderData) => {
   // For Razorpay, confirmation will be sent after payment verification
   if (normalizedPaymentMethod === 'COD') {
     try {
-      await sendEmail(
+        await sendEmail(
         user.email,
         'Order Confirmation - ' + order.orderNumber,
         'order-confirmation',
@@ -616,7 +618,7 @@ const createOrderFromCart = async (userId, orderData) => {
           status: order.status,
           paymentMethod: order.paymentMethod,
           totalAmount: order.totalAmount,
-          shippingFee: SHIPPING_FEE,
+          shippingFee: shippingTotal,
           createdAt: order.createdAt,
           items: order.items.map((item) => ({
             productName: item.productName,
@@ -657,7 +659,7 @@ const createOrderFromCart = async (userId, orderData) => {
     orderId: order.id,
     orderNumber: order.orderNumber,
     totalAmount: order.totalAmount,
-    shippingFee: SHIPPING_FEE,
+    shippingFee: shippingTotal,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -708,9 +710,10 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
     throw new Error('Cart is empty');
   }
   ensureCheckoutQuantityLimit(cart.items);
-
   const cartTotal = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
-  const totalAmount = cartTotal + SHIPPING_FEE;
+  const totalQuantity = cart.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const shippingTotal = SHIPPING_FEE * totalQuantity;
+  const totalAmount = cartTotal + shippingTotal;
   const orderNumber = generateOrderNumber();
   const trackingToken = crypto.randomBytes(16).toString('hex');
 
@@ -836,7 +839,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
           status: order.status,
           paymentMethod: order.paymentMethod,
           totalAmount: order.totalAmount,
-          shippingFee: SHIPPING_FEE,
+          shippingFee: shippingTotal,
           createdAt: order.createdAt,
           items: order.items.map((item) => ({
             productName: item.productName,
@@ -878,7 +881,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
     orderNumber: order.orderNumber,
     trackingToken: order.trackingToken,
     totalAmount: order.totalAmount,
-    shippingFee: SHIPPING_FEE,
+      shippingFee: shippingTotal,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -926,7 +929,8 @@ const createDirectOrder = async (userId, orderData) => {
   const unitPrice = parseFloat(variant.price);
   const qty = parseDirectOrderQuantity(quantity);
   const cartTotal = unitPrice * qty;
-  const totalAmount = cartTotal + SHIPPING_FEE;
+  const shippingTotal = SHIPPING_FEE * qty;
+  const totalAmount = cartTotal + shippingTotal;
   const orderNumber = generateOrderNumber();
   const trackingToken = crypto.randomBytes(16).toString('hex');
 
@@ -1059,7 +1063,7 @@ const createDirectOrder = async (userId, orderData) => {
           status: order.status,
           paymentMethod: order.paymentMethod,
           totalAmount: order.totalAmount,
-          shippingFee: SHIPPING_FEE,
+          shippingFee: shippingTotal,
           createdAt: order.createdAt,
           items: order.items.map((item) => ({
             productName: item.productName,
@@ -1096,11 +1100,11 @@ const createDirectOrder = async (userId, orderData) => {
 
   await notifyLowStockForItems(mockItems, 'Error sending low stock notification');
 
-  return {
+    return {
     orderId: order.id,
     orderNumber: order.orderNumber,
     totalAmount: order.totalAmount,
-    shippingFee: SHIPPING_FEE,
+      shippingFee: shippingTotal,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -1150,7 +1154,8 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
   const unitPrice = parseFloat(variant.price);
   const qty = parseDirectOrderQuantity(quantity);
   const cartTotal = unitPrice * qty;
-  const totalAmount = cartTotal + SHIPPING_FEE;
+  const shippingTotal = SHIPPING_FEE * qty;
+  const totalAmount = cartTotal + shippingTotal;
   const orderNumber = generateOrderNumber();
   const trackingToken = crypto.randomBytes(16).toString('hex');
 
@@ -1285,7 +1290,7 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
           status: order.status,
           paymentMethod: order.paymentMethod,
           totalAmount: order.totalAmount,
-          shippingFee: SHIPPING_FEE,
+          shippingFee: shippingTotal,
           createdAt: order.createdAt,
           items: order.items.map((item) => ({
             productName: item.productName,
@@ -1322,12 +1327,12 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
 
   await notifyLowStockForItems(mockItems, 'Error sending low stock notification for guest order');
 
-  return {
+    return {
     orderId: order.id,
     orderNumber: order.orderNumber,
     trackingToken: order.trackingToken,
     totalAmount: order.totalAmount,
-    shippingFee: SHIPPING_FEE,
+      shippingFee: shippingTotal,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
@@ -1559,7 +1564,10 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
 
   const cart = sessionCart;
 
-  const totalAmount = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
+  const cartTotal = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
+  const totalQuantity = cart.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const shippingTotal = SHIPPING_FEE * totalQuantity;
+  const totalAmount = cartTotal + shippingTotal;
   const orderNumber = generateOrderNumber();
   const trackingToken = crypto.randomBytes(16).toString('hex');
 
@@ -1681,6 +1689,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
         status: order.status,
         paymentMethod: order.paymentMethod,
         totalAmount: order.totalAmount,
+        shippingFee: shippingTotal,
         createdAt: order.createdAt,
         items: order.items.map((item) => ({
           productName: item.productName,
@@ -1720,6 +1729,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
     orderId: order.id,
     orderNumber: order.orderNumber,
     totalAmount: order.totalAmount,
+    shippingFee: shippingTotal,
     status: order.status,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,

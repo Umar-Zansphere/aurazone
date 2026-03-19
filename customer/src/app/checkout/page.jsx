@@ -13,6 +13,7 @@ import { useAuth } from '@/context/AuthContext';
 
 const MAX_VARIANT_QUANTITY = 5;
 const BULK_ORDER_MODAL_MESSAGE = 'please contact store for bulk orders';
+const SHIPPING_UNIT = 40;
 
 const parsePositiveInteger = (value, fallback = 1) => {
   const parsed = Number.parseInt(value, 10);
@@ -261,7 +262,8 @@ function CheckoutPageContent() {
       } else if (paymentMethod === 'RAZORPAY') {
         // Initialize Razorpay payment
         const totalAmount = cart.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
-        const shippingFee = 40;
+        const totalQuantity = cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+        const shippingFee = SHIPPING_UNIT * totalQuantity;
         const finalAmount = totalAmount + shippingFee;
 
         const options = {
@@ -349,7 +351,8 @@ function CheckoutPageContent() {
   };
 
   const cartTotal = cart.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
-  const shippingFee = 40;
+  const totalQuantity = cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const shippingFee = SHIPPING_UNIT * totalQuantity;
 
   if (loading) {
     return (
@@ -768,7 +771,7 @@ function CheckoutPageContent() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Shipping</span>
-                  <span className="font-semibold text-slate-900">₹40.00</span>
+                  <span className="font-semibold text-slate-900">₹{shippingFee.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Tax</span>

@@ -97,7 +97,9 @@ export default function CartPage() {
 
   // Calculate totals using store helper
   const subtotal = getCartTotal();
-  const shippingFee = 40;
+  const SHIPPING_UNIT = 40;
+  const totalQuantity = cartItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+  const shippingFee = SHIPPING_UNIT * totalQuantity;
   const total = subtotal + shippingFee;
 
   // Handle checkout
@@ -322,7 +324,7 @@ export default function CartPage() {
                     {/* Shipping */}
                     <div className="flex justify-between text-slate-700">
                       <span>Shipping</span>
-                      <span className="font-semibold text-slate-900">₹40.00</span>
+                      <span className="font-semibold text-slate-900">₹{shippingFee.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
 
                     {/* Tax */}

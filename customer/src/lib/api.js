@@ -210,6 +210,8 @@ export const wishlistApi = {
 
   moveToCart: (wishlistItemId) =>
     makeRequest(`/api/wishlist/${wishlistItemId}/move-to-cart`, {
+      method: 'POST',
+      credentials: 'include',
     }),
 };
 
