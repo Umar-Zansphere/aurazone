@@ -10,13 +10,27 @@ const createApp = () => {
   const app = express();
 
   app.set('trust proxy', 1);
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://shoe-shop-25gx.vercel.app',
+  ];
+
+  // allow ALL vercel previews
   app.use(cors({
-    origin: [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://shoe-shop-25gx.vercel.app',
-      'https://shoe-shop-8tbmbxp8p-umar-mohameds-projects-5295067c.vercel.app',
-    ],
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.aurazone.shop')
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   }));
   app.use(express.json({ limit: '10mb' }));
