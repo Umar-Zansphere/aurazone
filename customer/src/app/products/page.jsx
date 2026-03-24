@@ -8,6 +8,26 @@ import Header from '@/app/components/Header';
 import ProductCard from '@/app/components/ProductCard';
 import { productApi, cartApi, wishlistApi } from '@/lib/api';
 
+const getFiltersFromParams = (params) => ({
+  category: params.get('category') || '',
+  gender: params.get('gender') || '',
+  brand: params.get('brand') || '',
+  color: params.get('color') || '',
+  size: params.get('size') || '',
+  minPrice: params.get('minPrice') || '',
+  maxPrice: params.get('maxPrice') || '',
+});
+
+const getEmptyFilters = () => ({
+  category: '',
+  gender: '',
+  brand: '',
+  color: '',
+  size: '',
+  minPrice: '',
+  maxPrice: '',
+});
+
 function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -20,16 +40,10 @@ function ProductsContent() {
   const [user, setUser] = useState(null);
 
   // Filter states
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
-  const [filters, setFilters] = useState({
-    category: searchParams.get('category') || '',
-    gender: searchParams.get('gender') || '',
-    brand: searchParams.get('brand') || '',
-    color: searchParams.get('color') || '',
-    size: searchParams.get('size') || '',
-    minPrice: searchParams.get('minPrice') || '',
-    maxPrice: searchParams.get('maxPrice') || '',
-  });
+  const [draftFilters, setDraftFilters] = useState(() => getFiltersFromParams(searchParams));
+  const [filters, setFilters] = useState(() => getFiltersFromParams(searchParams));
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'popular');
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
 
@@ -38,16 +52,12 @@ function ProductsContent() {
 
   // Sync filters with searchParams when URL changes (e.g., from sidebar navigation)
   useEffect(() => {
-    setFilters({
-      category: searchParams.get('category') || '',
-      gender: searchParams.get('gender') || '',
-      brand: searchParams.get('brand') || '',
-      color: searchParams.get('color') || '',
-      size: searchParams.get('size') || '',
-      minPrice: searchParams.get('minPrice') || '',
-      maxPrice: searchParams.get('maxPrice') || '',
-    });
-    setSearchTerm(searchParams.get('search') || '');
+    const nextFilters = getFiltersFromParams(searchParams);
+    const nextSearch = searchParams.get('search') || '';
+    setDraftFilters(nextFilters);
+    setFilters(nextFilters);
+    setSearchInput(nextSearch);
+    setSearchTerm(nextSearch);
     setSortBy(searchParams.get('sort') || 'popular');
     setCurrentPage(parseInt(searchParams.get('page') || '1'));
   }, [searchParams]);
@@ -143,28 +153,61 @@ function ProductsContent() {
     }
   }, []);
 
+  const updateUrl = useCallback(({
+    nextFilters = filters,
+    nextSearch = searchTerm,
+    nextSort = sortBy,
+    nextPage = currentPage,
+  } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(nextFilters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    if (nextSearch) params.set('search', nextSearch);
+    if (nextSort !== 'popular') params.set('sort', nextSort);
+    if (nextPage > 1) params.set('page', nextPage);
+
+    const query = params.toString();
+    router.push(query ? `/products?${query}` : '/products');
+  }, [router, filters, searchTerm, sortBy, currentPage]);
+
   const handleFilterChange = (field, value) => {
-    setFilters(prev => ({ ...prev, [field]: value }));
-    setCurrentPage(1);
-    updateUrl();
+    setDraftFilters(prev => ({ ...prev, [field]: value }));
   };
 
   const handleRemoveFilter = (field) => {
-    setFilters(prev => ({ ...prev, [field]: '' }));
+    const nextFilters = { ...filters, [field]: '' };
+    setDraftFilters(nextFilters);
+    setFilters(nextFilters);
     setCurrentPage(1);
-    updateUrl();
+    updateUrl({ nextFilters, nextPage: 1 });
   };
 
-  const updateUrl = () => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    if (searchTerm) params.set('search', searchTerm);
-    if (sortBy !== 'popular') params.set('sort', sortBy);
-    if (currentPage > 1) params.set('page', currentPage);
+  const handleApplyFilters = () => {
+    setFilters(draftFilters);
+    setCurrentPage(1);
+    updateUrl({ nextFilters: draftFilters, nextPage: 1 });
+    setSidebarOpen(false);
+  };
 
-    router.push(`/products?${params.toString()}`);
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    const nextSearch = searchInput.trim();
+    setSearchTerm(nextSearch);
+    setCurrentPage(1);
+    updateUrl({ nextSearch, nextPage: 1 });
+  };
+
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchTerm('');
+    setCurrentPage(1);
+    updateUrl({ nextSearch: '', nextPage: 1 });
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    updateUrl({ nextPage: page });
   };
 
   const handleAddToCart = async (item) => {
@@ -224,6 +267,7 @@ function ProductsContent() {
 
   const activeFilters = Object.entries(filters).filter(([_, value]) => value);
   const hasActiveFilters = activeFilters.length > 0 || searchTerm;
+  const hasPendingFilterChanges = Object.keys(filters).some((key) => filters[key] !== draftFilters[key]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -232,30 +276,33 @@ function ProductsContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Search Bar */}
         <div className="mb-8">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search products..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-4 py-3 pl-12 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
-            <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            )}
-          </div>
+          <form onSubmit={handleSearchSubmit} className="flex gap-3">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                placeholder="Search products..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="w-full px-4 py-3 pl-12 pr-12 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              {searchInput && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              className="px-6 py-3 bg-slate-900 text-white rounded-xl font-semibold hover:bg-slate-800 transition-colors"
+            >
+              Search
+            </button>
+          </form>
         </div>
 
         <div className="flex gap-8 relative">
@@ -284,17 +331,17 @@ function ProductsContent() {
                 {hasActiveFilters && (
                   <button
                     onClick={() => {
-                      setFilters({
-                        category: '',
-                        gender: '',
-                        brand: '',
-                        color: '',
-                        size: '',
-                        minPrice: '',
-                        maxPrice: '',
-                      });
+                      const clearedFilters = getEmptyFilters();
+                      setDraftFilters(clearedFilters);
+                      setFilters(clearedFilters);
+                      setSearchInput('');
                       setSearchTerm('');
                       setCurrentPage(1);
+                      updateUrl({
+                        nextFilters: clearedFilters,
+                        nextSearch: '',
+                        nextPage: 1,
+                      });
                     }}
                     className="text-xs font-semibold text-orange-600 hover:text-orange-700"
                   >
@@ -314,7 +361,7 @@ function ProductsContent() {
                           type="radio"
                           name="category"
                           value={cat}
-                          checked={filters.category === cat}
+                          checked={draftFilters.category === cat}
                           onChange={(e) => handleFilterChange('category', e.target.value)}
                           className="w-4 h-4 accent-orange-600"
                         />
@@ -336,7 +383,7 @@ function ProductsContent() {
                           type="radio"
                           name="gender"
                           value={gender}
-                          checked={filters.gender === gender}
+                          checked={draftFilters.gender === gender}
                           onChange={(e) => handleFilterChange('gender', e.target.value)}
                           className="w-4 h-4 accent-orange-600"
                         />
@@ -358,7 +405,7 @@ function ProductsContent() {
                           type="radio"
                           name="brand"
                           value={brand}
-                          checked={filters.brand === brand}
+                          checked={draftFilters.brand === brand}
                           onChange={(e) => handleFilterChange('brand', e.target.value)}
                           className="w-4 h-4 accent-orange-600"
                         />
@@ -380,7 +427,7 @@ function ProductsContent() {
                           type="radio"
                           name="color"
                           value={color}
-                          checked={filters.color === color}
+                          checked={draftFilters.color === color}
                           onChange={(e) => handleFilterChange('color', e.target.value)}
                           className="w-4 h-4 accent-orange-600"
                         />
@@ -402,7 +449,7 @@ function ProductsContent() {
                           type="radio"
                           name="size"
                           value={size}
-                          checked={filters.size === size}
+                          checked={draftFilters.size === size}
                           onChange={(e) => handleFilterChange('size', e.target.value)}
                           className="w-4 h-4 accent-orange-600"
                         />
@@ -420,18 +467,25 @@ function ProductsContent() {
                   <input
                     type="number"
                     placeholder="Min"
-                    value={filters.minPrice}
+                    value={draftFilters.minPrice}
                     onChange={(e) => handleFilterChange('minPrice', e.target.value)}
                     className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                   <input
                     type="number"
                     placeholder="Max"
-                    value={filters.maxPrice}
+                    value={draftFilters.maxPrice}
                     onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
                     className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   />
                 </div>
+                <button
+                  onClick={handleApplyFilters}
+                  disabled={!hasPendingFilterChanges}
+                  className="w-full mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-600 transition-colors"
+                >
+                  Apply Filters
+                </button>
               </div>
             </div>
           </aside>
@@ -451,8 +505,10 @@ function ProductsContent() {
                 <select
                   value={sortBy}
                   onChange={(e) => {
-                    setSortBy(e.target.value);
+                    const nextSort = e.target.value;
+                    setSortBy(nextSort);
                     setCurrentPage(1);
+                    updateUrl({ nextSort, nextPage: 1 });
                   }}
                   className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
                 >
@@ -477,7 +533,7 @@ function ProductsContent() {
                 {searchTerm && (
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-700 rounded-full text-sm">
                     Search: {searchTerm}
-                    <button onClick={() => setSearchTerm('')} className="ml-1">
+                    <button onClick={handleClearSearch} className="ml-1">
                       <X size={14} />
                     </button>
                   </div>
@@ -521,7 +577,7 @@ function ProductsContent() {
                 {/* Pagination */}
                 <div className="flex justify-center items-center gap-2 py-8">
                   <button
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                     className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >
@@ -535,7 +591,7 @@ function ProductsContent() {
                         return (
                           <button
                             key={page}
-                            onClick={() => setCurrentPage(page)}
+                            onClick={() => handlePageChange(page)}
                             className={`w-10 h-10 rounded-lg font-semibold ${page === currentPage
                               ? 'bg-orange-600 text-white'
                               : 'border border-gray-300 hover:bg-gray-50'
@@ -550,7 +606,7 @@ function ProductsContent() {
                   </div>
 
                   <button
-                    onClick={() => setCurrentPage(currentPage + 1)}
+                    onClick={() => handlePageChange(currentPage + 1)}
                     disabled={products.length < itemsPerPage}
                     className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
                   >

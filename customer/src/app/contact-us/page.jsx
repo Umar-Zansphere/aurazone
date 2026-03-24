@@ -39,7 +39,7 @@ export default function ContactUsPage() {
       </section>
 
       <section>
-        <h2 className="text-xl font-bold text-slate-900 mb-2">Service</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Services</h2>
         <p>Available In-Store & Online</p>
       </section>
     </PolicyPageTemplate>
