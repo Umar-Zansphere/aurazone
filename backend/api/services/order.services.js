@@ -1393,7 +1393,7 @@ const getCustomerOrderDetail = async (userId, orderId) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { variant: { include: { product: true } } } },
+      items: { include: { variant: { include: { product: true, images: true } } } },
       orderAddress: true,
       shipments: true,
       payments: true
