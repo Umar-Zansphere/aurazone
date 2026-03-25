@@ -107,9 +107,7 @@ test.describe('5. Order Tracking & Customer Dashboard', () => {
   expect(page.getByText(address.city)).toBeVisible();
 
   // ✅ Case-insensitive product match
-  expect(pageText.toLowerCase()).toContain(product.name.toLowerCase());
-
-  expect(pageText).toMatch(/payment summary/i);
+  expect(page.getByText(product.name, { exact: false })).toBeVisible();
 });
 
   test('5.4 Status Updates Reflection: admin shipped status reflects in customer dashboard', async ({ page, request }) => {

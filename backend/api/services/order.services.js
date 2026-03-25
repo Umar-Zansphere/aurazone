@@ -1422,7 +1422,8 @@ const getCustomerOrderDetail = async (userId, orderId) => {
       quantity: item.quantity,
       price: item.price,
       subtotal: item.subtotal,
-      productImage: item.variant?.product?.variants?.[0]?.images?.[0]?.url
+      productImage: item.variant?.product?.variants?.[0]?.images?.[0]?.url,
+      variant: item.variant
     })),
     shipment: order.shipments[0] ? {
       status: order.shipments[0].status,
