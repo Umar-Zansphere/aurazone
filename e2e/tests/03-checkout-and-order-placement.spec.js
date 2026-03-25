@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_DATA, hasCustomerCreds } = require('./utils/constants');
+const { TEST_DATA, hasCustomerCreds, CUSTOMER_BASE_URL } = require('./utils/constants');
 const {
   ensureProductsPage,
   clearCart,
@@ -18,6 +18,20 @@ function parseAmountFromBlock(text, label) {
   const match = String(text || '').match(regex);
   if (!match) return null;
   return Number.parseFloat(match[1].replace(/,/g, ''));
+}
+
+async function ensureGuestCheckoutCart(page, productName = TEST_DATA.exactProductName) {
+  await page.request.post(`${CUSTOMER_BASE_URL}/api/auth/logout`, { failOnStatusCode: false });
+  await clearCart(page);
+  await ensureProductsPage(page);
+
+  const product = await findProductByName(page.request, productName);
+  expect(product).toBeTruthy();
+  await openProductByName(page, product.name);
+  await addCurrentProductToCart(page);
+
+  await gotoCart(page);
+  await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
 }
 
 test.describe('3. Checkout & Order Placement', () => {
@@ -59,12 +73,7 @@ test.describe('3. Checkout & Order Placement', () => {
   });
 
   test('3.2 Address Validation (Success): valid shipping address is accepted for order payload', async ({ page }) => {
-    const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    await openProductByName(page, product.name);
-    await addCurrentProductToCart(page);
-    await gotoCart(page);
-    await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
-
+    await ensureGuestCheckoutCart(page, TEST_DATA.exactProductName);
     await gotoCheckout(page);
     const address = await ensureGuestAddressFilled(page);
 
@@ -80,6 +89,7 @@ test.describe('3. Checkout & Order Placement', () => {
     });
 
     await page.getByRole('button', { name: /place order/i }).click();
+    await expect.poll(() => payloadSeen, { timeout: 15_000 }).toBeTruthy();
 
     expect(payloadSeen).toBeTruthy();
     expect(payloadSeen.address.name).toBe(address.name);
@@ -92,12 +102,7 @@ test.describe('3. Checkout & Order Placement', () => {
   });
 
   test('3.3 Address Validation (Failure): missing required fields show validation feedback', async ({ page }) => {
-    const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    await openProductByName(page, product.name);
-    await addCurrentProductToCart(page);
-    await gotoCart(page);
-    await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
-
+    await ensureGuestCheckoutCart(page, TEST_DATA.exactProductName);
     await gotoCheckout(page);
     await page.getByRole('button', { name: /place order/i }).click();
 

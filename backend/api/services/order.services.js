@@ -1394,6 +1394,7 @@ const getCustomerOrderDetail = async (userId, orderId) => {
     where: { id: orderId },
     include: {
       items: { include: { variant: { include: { product: true } } } },
+      orderAddress: true,
       shipments: true,
       payments: true
     }

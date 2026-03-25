@@ -195,7 +195,7 @@ export default function OrderDetailPage() {
                             </span>
                         </div>
                     </div>
-
+ 
                     {/* Action Buttons */}
                     <div className="flex gap-3">
                         {order.status !== 'CANCELLED' && order.status !== 'FAILED' && (
