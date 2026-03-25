@@ -1413,6 +1413,7 @@ const getCustomerOrderDetail = async (userId, orderId) => {
     paymentMethod: order.paymentMethod,
     totalAmount: order.totalAmount,
     createdAt: order.createdAt,
+    address: order.orderAddress,
     items: order.items.map(item => ({
       id: item.id,
       productName: item.productName,
