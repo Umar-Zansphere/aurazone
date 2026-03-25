@@ -17,6 +17,7 @@ const {
   updateAdminVariant,
   updateAdminProduct,
   fetchAdminInventoryByVariant,
+  adjustInventory,
   delay,
 } = require('./utils/helpers');
 
@@ -34,25 +35,173 @@ function makeAddress(tag = 'edge') {
   };
 }
 
+function createRollbackState() {
+  return {
+    createdOrderIds: new Set(),
+    inventoryBaselines: new Map(),
+    variantPayloadBaselines: new Map(),
+    productPayloadBaselines: new Map(),
+  };
+}
+
+function rememberCreatedOrder(rollbackState, orderId) {
+  if (!rollbackState || !orderId) return;
+  rollbackState.createdOrderIds.add(orderId);
+}
+
+async function captureInventoryBaseline(rollbackState, adminApi, variantId) {
+  if (!rollbackState || !adminApi || !variantId || rollbackState.inventoryBaselines.has(variantId)) {
+    return;
+  }
+
+  const snapshot = await fetchAdminInventoryByVariant(adminApi, variantId);
+  rollbackState.inventoryBaselines.set(variantId, {
+    quantity: Number(snapshot?.inventory?.quantity || 0),
+    reserved: Number(snapshot?.inventory?.reserved || 0),
+  });
+}
+
+function rememberVariantPayloadBaseline(rollbackState, variantId, payload) {
+  if (!rollbackState || !variantId || !payload || rollbackState.variantPayloadBaselines.has(variantId)) {
+    return;
+  }
+
+  rollbackState.variantPayloadBaselines.set(variantId, payload);
+}
+
+function rememberProductPayloadBaseline(rollbackState, productId, payload) {
+  if (!rollbackState || !productId || !payload || rollbackState.productPayloadBaselines.has(productId)) {
+    return;
+  }
+
+  rollbackState.productPayloadBaselines.set(productId, payload);
+}
+
+async function restoreInventoryToBaseline(adminApi, variantId, baseline) {
+  const initial = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const initialReserved = Number(initial?.inventory?.reserved || 0);
+
+  if (initialReserved > baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'RELEASE',
+      initialReserved - baseline.reserved,
+      'E2E rollback reserved inventory'
+    );
+  } else if (initialReserved < baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'HOLD',
+      baseline.reserved - initialReserved,
+      'E2E rollback reserved inventory'
+    );
+  }
+
+  const beforeQuantityRestore = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const currentQuantity = Number(beforeQuantityRestore?.inventory?.quantity || 0);
+  if (currentQuantity !== baseline.quantity) {
+    await updateAdminInventory(
+      adminApi,
+      variantId,
+      Math.max(baseline.quantity, Number(beforeQuantityRestore?.inventory?.reserved || 0)),
+      'E2E rollback quantity'
+    );
+  }
+
+  const final = await fetchAdminInventoryByVariant(adminApi, variantId);
+  expect(Number(final?.inventory?.quantity || 0)).toBe(baseline.quantity);
+  expect(Number(final?.inventory?.reserved || 0)).toBe(baseline.reserved);
+}
+
+async function rollbackDbMutations(adminApi, rollbackState) {
+  if (!adminApi || !rollbackState) return;
+
+  const failures = [];
+
+  for (const orderId of rollbackState.createdOrderIds) {
+    try {
+      const res = await adminApi.delete(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}`, {
+        data: {
+          reason: 'E2E auto rollback',
+        },
+      });
+
+      if (!res.ok() && ![404, 409].includes(res.status())) {
+        const body = await res.text().catch(() => '');
+        failures.push(`order ${orderId}: ${res.status()} ${body}`.trim());
+      }
+    } catch (error) {
+      failures.push(`order ${orderId}: ${error.message}`);
+    }
+  }
+
+  for (const [variantId, baseline] of rollbackState.inventoryBaselines.entries()) {
+    try {
+      await restoreInventoryToBaseline(adminApi, variantId, baseline);
+    } catch (error) {
+      failures.push(`inventory ${variantId}: ${error.message}`);
+    }
+  }
+
+  for (const [variantId, payload] of rollbackState.variantPayloadBaselines.entries()) {
+    try {
+      await updateAdminVariant(adminApi, variantId, payload);
+    } catch (error) {
+      failures.push(`variant ${variantId}: ${error.message}`);
+    }
+  }
+
+  for (const [productId, payload] of rollbackState.productPayloadBaselines.entries()) {
+    try {
+      await updateAdminProduct(adminApi, productId, payload);
+    } catch (error) {
+      failures.push(`product ${productId}: ${error.message}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Rollback failed for: ${failures.join(' | ')}`);
+  }
+}
+
 test.describe('7. Concurrency & Edge Cases', () => {
-  test.beforeEach(async ({ page }) => {
+  let rollbackState = null;
+  let rollbackAdminApi = null;
+
+  test.beforeEach(async ({ page, request }) => {
+    rollbackState = createRollbackState();
+    rollbackAdminApi = hasAdminCreds() ? await createAdminApiContext(request) : null;
+
     await ensureProductsPage(page);
     await clearCart(page);
+  });
+
+  test.afterEach(async () => {
+    try {
+      await rollbackDbMutations(rollbackAdminApi, rollbackState);
+    } finally {
+      if (rollbackAdminApi) {
+        await rollbackAdminApi.dispose();
+      }
+      rollbackAdminApi = null;
+      rollbackState = null;
+    }
   });
 
   test('7.1 Race Condition (Last Item): one checkout succeeds and the other fails out-of-stock', async ({ request }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for concurrent stock race test.');
 
-    const adminApi = await createAdminApiContext(request);
     const guestOne = await createGuestApiContext(request, { fresh: true });
     const guestTwo = await createGuestApiContext(request, { fresh: true });
 
     try {
       const product = await findProductByName(guestOne, TEST_DATA.exactProductName);
       const variant = product.variants[0];
-      const originalQty = variant.inventory?.quantity ?? 20;
+      await captureInventoryBaseline(rollbackState, rollbackAdminApi, variant.id);
 
-      await updateAdminInventory(adminApi, variant.id, 1, 'E2E last-item race setup');
+      await updateAdminInventory(rollbackAdminApi, variant.id, 1, 'E2E last-item race setup');
 
       expect((await addVariantToCart(guestOne, variant.id, 1)).ok()).toBeTruthy();
       expect((await addVariantToCart(guestTwo, variant.id, 1)).ok()).toBeTruthy();
@@ -74,108 +223,87 @@ test.describe('7. Concurrency & Edge Cases', () => {
 
       const success = outcomes.find((result) => result.response.ok());
       if (success?.body?.data?.orderId) {
-        await adminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${success.body.data.orderId}/status`, {
-          data: { status: 'CANCELLED', note: 'E2E cleanup after race test' },
-        });
+        rememberCreatedOrder(rollbackState, success.body.data.orderId);
       }
-
-      await updateAdminInventory(adminApi, variant.id, originalQty, 'E2E restore stock after race');
     } finally {
       await guestOne.dispose();
       await guestTwo.dispose();
-      await adminApi.dispose();
     }
   });
 
-  test('7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change', async ({ page, request }) => {
+  test('7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change', async ({ page }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for mid-checkout mutation scenarios.');
 
-    const adminApi = await createAdminApiContext(request);
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
     const variant = product.variants[0];
     const originalPrice = Number(variant.price);
+    rememberVariantPayloadBaseline(rollbackState, variant.id, { price: originalPrice });
 
-    try {
-      await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
-        data: { variantId: variant.id, quantity: 1 },
-      });
+    await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
+      data: { variantId: variant.id, quantity: 1 },
+    });
 
-      const cartRes = await page.request.get(`${CUSTOMER_BASE_URL}/api/cart`);
-      const cart = await cartRes.json();
-      const cartPriceBefore = Number(cart.items[0].unitPrice);
+    const cartRes = await page.request.get(`${CUSTOMER_BASE_URL}/api/cart`);
+    const cart = await cartRes.json();
+    const cartPriceBefore = Number(cart.items[0].unitPrice);
 
-      await updateAdminVariant(adminApi, variant.id, { price: originalPrice + 75 });
+    await updateAdminVariant(rollbackAdminApi, variant.id, { price: originalPrice + 75 });
 
-      await gotoCheckout(page);
-      const checkoutText = (await page.locator('main').textContent()) || '';
-      const containsOld = checkoutText.includes(`₹${cartPriceBefore.toFixed(2)}`) || checkoutText.includes(`₹${cartPriceBefore}`);
+    await gotoCheckout(page);
+    const checkoutText = (await page.locator('main').textContent()) || '';
+    const containsOld = checkoutText.includes(`₹${cartPriceBefore.toFixed(2)}`) || checkoutText.includes(`₹${cartPriceBefore}`);
 
-      expect(containsOld).toBeTruthy();
-    } finally {
-      await updateAdminVariant(adminApi, variant.id, { price: originalPrice });
-      await adminApi.dispose();
-    }
+    expect(containsOld).toBeTruthy();
   });
 
-  test('7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement', async ({ page, request }) => {
+  test('7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement', async ({ page }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for mid-checkout mutation scenarios.');
 
-    const adminApi = await createAdminApiContext(request);
     const product = await findProductByName(page.request, TEST_DATA.secondaryProductName);
     const variant = product.variants[0];
+    rememberProductPayloadBaseline(rollbackState, product.id, { isActive: product.isActive !== false });
 
-    try {
-      await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
-        data: { variantId: variant.id, quantity: 1 },
-      });
+    await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
+      data: { variantId: variant.id, quantity: 1 },
+    });
 
-      await updateAdminProduct(adminApi, product.id, { isActive: false });
+    await updateAdminProduct(rollbackAdminApi, product.id, { isActive: false });
 
-      const orderRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/orders`, {
-        data: {
-          address: makeAddress('disabled'),
-          paymentMethod: 'RAZORPAY',
-        },
-      });
+    const orderRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/orders`, {
+      data: {
+        address: makeAddress('disabled'),
+        paymentMethod: 'RAZORPAY',
+      },
+    });
 
-      const body = await orderRes.json().catch(() => ({}));
-      expect(orderRes.ok()).toBeFalsy();
-      expect((body.message || '').toLowerCase()).toMatch(/unavailable|disabled|not found|out of stock/);
-    } finally {
-      await updateAdminProduct(adminApi, product.id, { isActive: true });
-      await adminApi.dispose();
-    }
+    const body = await orderRes.json().catch(() => ({}));
+    expect(orderRes.ok()).toBeFalsy();
+    expect((body.message || '').toLowerCase()).toMatch(/unavailable|disabled|not found|out of stock/);
   });
 
-  test('7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation', async ({ page, request }) => {
+  test('7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation', async ({ page }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for mid-checkout mutation scenarios.');
 
-    const adminApi = await createAdminApiContext(request);
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
     const variant = product.variants[0];
-    const before = await fetchAdminInventoryByVariant(adminApi, variant.id);
+    await captureInventoryBaseline(rollbackState, rollbackAdminApi, variant.id);
 
-    try {
-      await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
-        data: { variantId: variant.id, quantity: 1 },
-      });
+    await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
+      data: { variantId: variant.id, quantity: 1 },
+    });
 
-      await updateAdminInventory(adminApi, variant.id, 0, 'E2E stock zero mid-checkout');
+    await updateAdminInventory(rollbackAdminApi, variant.id, 0, 'E2E stock zero mid-checkout');
 
-      const orderRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/orders`, {
-        data: {
-          address: makeAddress('stockzero'),
-          paymentMethod: 'RAZORPAY',
-        },
-      });
+    const orderRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/orders`, {
+      data: {
+        address: makeAddress('stockzero'),
+        paymentMethod: 'RAZORPAY',
+      },
+    });
 
-      const body = await orderRes.json().catch(() => ({}));
-      expect(orderRes.ok()).toBeFalsy();
-      expect((body.message || '').toLowerCase()).toMatch(/insufficient|out of stock|inventory/);
-    } finally {
-      await updateAdminInventory(adminApi, variant.id, before.inventory.quantity, 'E2E restore stock after zero test');
-      await adminApi.dispose();
-    }
+    const body = await orderRes.json().catch(() => ({}));
+    expect(orderRes.ok()).toBeFalsy();
+    expect((body.message || '').toLowerCase()).toMatch(/insufficient|out of stock|inventory/);
   });
 
   test('7.5 Extreme Quantities/Values: huge quantity requests are handled safely', async ({ page }) => {
@@ -197,6 +325,9 @@ test.describe('7. Concurrency & Edge Cases', () => {
   test('7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully', async ({ page }) => {
     const product = await findProductByName(page.request, TEST_DATA.tertiaryProductName);
     const variant = product.variants[0];
+    if (rollbackAdminApi) {
+      await captureInventoryBaseline(rollbackState, rollbackAdminApi, variant.id);
+    }
 
     await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
       data: { variantId: variant.id, quantity: 1 },
@@ -224,6 +355,7 @@ test.describe('7. Concurrency & Edge Cases', () => {
       const body = await res.json();
       expect(body.success).toBeTruthy();
       expect(body.data.orderId).toBeTruthy();
+      rememberCreatedOrder(rollbackState, body.data.orderId);
     }
   });
 

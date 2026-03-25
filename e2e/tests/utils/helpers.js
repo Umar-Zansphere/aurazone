@@ -314,6 +314,7 @@ async function createGuestOrder(apiContext, address, paymentMethod = 'RAZORPAY')
 
 async function fetchAdminInventoryByVariant(adminApi, variantId) {
   const response = await adminApi.get(joinUrl(ADMIN_BASE_URL, `/api/admin/inventory/${variantId}`));
+  // console.log('Inventory fetch response:', response.status(), await response.text());
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -337,6 +338,18 @@ async function updateAdminInventory(adminApi, variantId, quantity, note = 'E2E s
       },
     data: { quantity, note },
   });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
+async function adjustInventory(adminApi, variantId, operation, quantity, note = 'E2E') {
+  const response = await adminApi.post(
+    `/api/admin/variants/${variantId}/inventory/adjust`,
+    {
+      data: { operation, quantity, note },
+    }
+  );
+
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -451,6 +464,7 @@ module.exports = {
   fetchAdminInventoryByVariant,
   updateAdminVariant,
   updateAdminInventory,
+  adjustInventory,
   updateAdminProduct,
   ensureCustomerAddress,
   signRazorpayWebhook,

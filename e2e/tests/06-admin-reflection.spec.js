@@ -17,6 +17,7 @@ const {
   addVariantToCart,
   createGuestOrder,
   fetchAdminInventoryByVariant,
+  adjustInventory,
   updateAdminInventory,
   signRazorpayWebhook,
   delay,
@@ -38,10 +39,114 @@ function buildGuestAddress(tag = 'admin') {
   };
 }
 
-async function createPendingGuestOrder(request, quantity = 1) {
+function createRollbackState() {
+  return {
+    createdOrderIds: new Set(),
+    variantBaselines: new Map(),
+  };
+}
+
+function rememberCreatedOrder(rollbackState, orderId) {
+  if (!rollbackState || !orderId) return;
+  rollbackState.createdOrderIds.add(orderId);
+}
+
+async function captureVariantBaseline(rollbackState, adminApi, variantId) {
+  if (!rollbackState || !adminApi || !variantId || rollbackState.variantBaselines.has(variantId)) {
+    return;
+  }
+
+  const snapshot = await fetchAdminInventoryByVariant(adminApi, variantId);
+  rollbackState.variantBaselines.set(variantId, {
+    quantity: Number(snapshot?.inventory?.quantity || 0),
+    reserved: Number(snapshot?.inventory?.reserved || 0),
+  });
+}
+
+async function restoreVariantToBaseline(adminApi, variantId, baseline) {
+  const initial = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const initialReserved = Number(initial?.inventory?.reserved || 0);
+
+  if (initialReserved > baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'RELEASE',
+      initialReserved - baseline.reserved,
+      'E2E rollback reserved inventory'
+    );
+  } else if (initialReserved < baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'HOLD',
+      baseline.reserved - initialReserved,
+      'E2E rollback reserved inventory'
+    );
+  }
+
+  const beforeQuantityRestore = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const currentQuantity = Number(beforeQuantityRestore?.inventory?.quantity || 0);
+  if (currentQuantity !== baseline.quantity) {
+    await updateAdminInventory(
+      adminApi,
+      variantId,
+      Math.max(baseline.quantity, Number(beforeQuantityRestore?.inventory?.reserved || 0)),
+      'E2E rollback quantity'
+    );
+  }
+
+  const final = await fetchAdminInventoryByVariant(adminApi, variantId);
+  expect(Number(final?.inventory?.quantity || 0)).toBe(baseline.quantity);
+  expect(Number(final?.inventory?.reserved || 0)).toBe(baseline.reserved);
+}
+
+async function rollbackDbMutations(adminApi, rollbackState) {
+  if (!adminApi || !rollbackState) return;
+
+  const failures = [];
+
+  for (const orderId of rollbackState.createdOrderIds) {
+    try {
+      const res = await adminApi.delete(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}`, {
+        data: {
+          reason: 'E2E auto rollback',
+        },
+      });
+
+      if (!res.ok() && ![404, 409].includes(res.status())) {
+        const body = await res.text().catch(() => '');
+        failures.push(`order ${orderId}: ${res.status()} ${body}`.trim());
+      }
+    } catch (error) {
+      failures.push(`order ${orderId}: ${error.message}`);
+    }
+  }
+
+  for (const [variantId, baseline] of rollbackState.variantBaselines.entries()) {
+    try {
+      await restoreVariantToBaseline(adminApi, variantId, baseline);
+    } catch (error) {
+      failures.push(`variant ${variantId}: ${error.message}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Rollback failed for: ${failures.join(' | ')}`);
+  }
+}
+
+async function createPendingGuestOrder(request, options = {}) {
+  const resolved = typeof options === 'number' ? { quantity: options } : options;
+  const { quantity = 1, beforeOrderCreate } = resolved;
+
   const guestApi = await createGuestApiContext(request);
   const product = await findProductByName(guestApi, TEST_DATA.exactProductName);
   const variant = product.variants[0];
+
+  if (beforeOrderCreate) {
+    await beforeOrderCreate({ guestApi, product, variant });
+  }
 
   const addRes = await addVariantToCart(guestApi, variant.id, quantity);
   expect(addRes.ok()).toBeTruthy();
@@ -81,17 +186,39 @@ async function triggerCapturedWebhook(guestApi, orderData) {
 }
 
 test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
-  test.beforeEach(async () => {
+  let rollbackState = null;
+  let rollbackAdminApi = null;
+
+  test.beforeEach(async ({ request }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials are required for admin reflection scenarios.');
+    rollbackState = createRollbackState();
+    rollbackAdminApi = await createAdminApiContext(request);
+  });
+
+  test.afterEach(async () => {
+    try {
+      await rollbackDbMutations(rollbackAdminApi, rollbackState);
+    } finally {
+      if (rollbackAdminApi) {
+        await rollbackAdminApi.dispose();
+      }
+      rollbackAdminApi = null;
+      rollbackState = null;
+    }
   });
 
   test('6.1 New Order Visibility: newly placed order appears in admin orders list', async ({ page, request }) => {
-    const { guestApi, orderResult } = await createPendingGuestOrder(request);
+    const { guestApi, orderResult } = await createPendingGuestOrder(request, {
+      beforeOrderCreate: async ({ variant }) => {
+        await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
+      },
+    });
     const { response, body } = orderResult;
 
     try {
       expect(response.ok()).toBeTruthy();
       const orderData = body.data;
+      rememberCreatedOrder(rollbackState, orderData.orderId);
 
       await ensureAdminLogin(page);
       await gotoAdmin(page, '/orders');
@@ -107,21 +234,33 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
   });
 
   test('6.2 Admin Order Details: customer, shipping, payment, and items match expected values', async ({ page, request }) => {
-    const { guestApi, orderResult, product } = await createPendingGuestOrder(request);
+    const { guestApi, orderResult, product } = await createPendingGuestOrder(request, {
+      beforeOrderCreate: async ({ variant }) => {
+        await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
+      },
+    });
     const { response, body } = orderResult;
 
     try {
       expect(response.ok()).toBeTruthy();
       const orderData = body.data;
+      rememberCreatedOrder(rollbackState, orderData.orderId);
 
       await ensureAdminLogin(page);
       await gotoAdmin(page, `/orders/${orderData.orderId}`);
 
-      const pageText = (await page.locator('main').textContent()) || '';
-      expect(pageText).toContain(orderData.orderNumber);
-      expect(pageText).toContain(product.name);
-      expect(pageText).toMatch(/payment/i);
-      expect(pageText).toMatch(/delivery address/i);
+      const pageText = (await page.locator('body').textContent()) || '';
+     // ✅ Wait for page to stabilize
+    await expect(page.getByText(orderData.orderNumber)).toBeVisible();
+
+    // ✅ Direct assertions (no textContent)
+    await expect(page.getByText(product.name)).toBeVisible();
+        const paymentSection = page.locator('section.card-surface').filter({
+      hasText: 'Payment'
+    }).first();
+
+    await expect(paymentSection).toBeVisible();
+    await expect(page.getByText(/delivery address/i)).toBeVisible();
     } finally {
       await guestApi.dispose();
     }
@@ -130,39 +269,43 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
   test('6.3 Inventory Deduction (Critical): paid order decrements variant stock exactly', async ({ request }) => {
     test.skip(!hasWebhookSecret(), 'Webhook secret required for paid-stock deduction verification.');
 
-    const adminApi = await createAdminApiContext(request);
-    const { guestApi, variant, orderResult } = await createPendingGuestOrder(request, 1);
+    const { guestApi, variant, orderResult } = await createPendingGuestOrder(request, {
+      quantity: 1,
+      beforeOrderCreate: async ({ variant: targetVariant }) => {
+        await captureVariantBaseline(rollbackState, rollbackAdminApi, targetVariant.id);
+      },
+    });
 
     try {
       const { response, body } = orderResult;
       expect(response.ok()).toBeTruthy();
       const orderData = body.data;
+      rememberCreatedOrder(rollbackState, orderData.orderId);
 
-      const before = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const before = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       const beforeQty = before.inventory.quantity;
 
       await triggerCapturedWebhook(guestApi, orderData);
       await delay(700);
 
-      const after = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const after = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       expect(after.inventory.quantity).toBe(beforeQty - 1);
     } finally {
       await guestApi.dispose();
-      await adminApi.dispose();
     }
   });
 
   test('6.4 Failed Payment Inventory Logic: failed payment does not decrement stock and releases reserve', async ({ request }) => {
     test.skip(!hasWebhookSecret(), 'Webhook secret required for payment-failure inventory assertions.');
 
-    const adminApi = await createAdminApiContext(request);
     const guestApi = await createGuestApiContext(request);
 
     try {
       const product = await findProductByName(guestApi, TEST_DATA.secondaryProductName);
       const variant = product.variants[0];
+      await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
 
-      const pre = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const pre = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
 
       const addRes = await addVariantToCart(guestApi, variant.id, 1);
       expect(addRes.ok()).toBeTruthy();
@@ -170,8 +313,9 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
       const { response, body } = await createGuestOrder(guestApi, buildGuestAddress('failed'), 'RAZORPAY');
       expect(response.ok()).toBeTruthy();
       const orderData = body.data;
+      rememberCreatedOrder(rollbackState, orderData.orderId);
 
-      const mid = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const mid = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       expect(mid.inventory.reserved).toBeGreaterThanOrEqual(pre.inventory.reserved + 1);
 
       const failedPayload = {
@@ -203,22 +347,26 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
 
       await delay(700);
 
-      const post = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const post = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       expect(post.inventory.quantity).toBe(pre.inventory.quantity);
       expect(post.inventory.reserved).toBe(pre.inventory.reserved);
     } finally {
       await guestApi.dispose();
-      await adminApi.dispose();
     }
   });
 
   test('6.5 Fulfillment Update: admin marks shipped with tracking number and save persists', async ({ page, request }) => {
-    const { guestApi, orderResult } = await createPendingGuestOrder(request);
+    const { guestApi, orderResult } = await createPendingGuestOrder(request, {
+      beforeOrderCreate: async ({ variant }) => {
+        await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
+      },
+    });
 
     try {
       const { response, body } = orderResult;
       expect(response.ok()).toBeTruthy();
       const orderId = body.data.orderId;
+      rememberCreatedOrder(rollbackState, orderId);
 
       await ensureAdminLogin(page);
       await gotoAdmin(page, `/orders/${orderId}`);
@@ -226,7 +374,7 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
       await page.getByRole('button', { name: /add shipment/i }).first().click();
       await page.locator('input[placeholder*="Delhivery"]').first().fill('DHL E2E');
       await page.locator('input[placeholder*="Tracking ID"]').first().fill(`TRK-${Date.now()}`);
-      await page.getByRole('button', { name: /create shipment & mark shipped/i }).click();
+      await page.getByRole('button', { name: /Create Shipment/i }).click();
 
       await expect(page.getByText(/tracking:/i)).toBeVisible();
       await expect(page.getByText(/shipped/i).first()).toBeVisible();
@@ -236,15 +384,19 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
   });
 
   test('6.6 Delivery Update: admin marks order delivered and database reflects delivered status', async ({ request }) => {
-    const adminApi = await createAdminApiContext(request);
-    const { guestApi, orderResult } = await createPendingGuestOrder(request);
+    const { guestApi, orderResult } = await createPendingGuestOrder(request, {
+      beforeOrderCreate: async ({ variant }) => {
+        await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
+      },
+    });
 
     try {
       const { response, body } = orderResult;
       expect(response.ok()).toBeTruthy();
       const orderId = body.data.orderId;
+      rememberCreatedOrder(rollbackState, orderId);
 
-      const deliverRes = await adminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
+      const deliverRes = await rollbackAdminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
         data: {
           status: 'DELIVERED',
           note: 'E2E delivered update',
@@ -252,24 +404,23 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
       });
       expect(deliverRes.ok()).toBeTruthy();
 
-      const detailRes = await adminApi.get(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}`);
+      const detailRes = await rollbackAdminApi.get(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}`);
       const detail = await detailRes.json();
       expect(detail.status).toBe('DELIVERED');
     } finally {
       await guestApi.dispose();
-      await adminApi.dispose();
     }
   });
 
   test('6.7 Admin Order Cancellation & Restock: cancellation releases reserved stock accurately', async ({ request }) => {
-    const adminApi = await createAdminApiContext(request);
     const guestApi = await createGuestApiContext(request);
 
     try {
       const product = await findProductByName(guestApi, TEST_DATA.tertiaryProductName);
       const variant = product.variants[0];
+      await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
 
-      const pre = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const pre = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
 
       const addRes = await addVariantToCart(guestApi, variant.id, 1);
       expect(addRes.ok()).toBeTruthy();
@@ -277,46 +428,54 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
       const { response, body } = await createGuestOrder(guestApi, buildGuestAddress('cancel'), 'RAZORPAY');
       expect(response.ok()).toBeTruthy();
       const orderId = body.data.orderId;
+      rememberCreatedOrder(rollbackState, orderId);
 
-      const mid = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const mid = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       expect(mid.inventory.reserved).toBeGreaterThanOrEqual(pre.inventory.reserved + 1);
 
-      const cancelRes = await adminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
+      const cancelRes = await rollbackAdminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
         data: { status: 'CANCELLED', note: 'E2E cancellation restock check' },
       });
       expect(cancelRes.ok()).toBeTruthy();
 
-      const post = await fetchAdminInventoryByVariant(adminApi, variant.id);
+      const post = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
       expect(post.inventory.quantity).toBe(pre.inventory.quantity);
       expect(post.inventory.reserved).toBe(pre.inventory.reserved);
     } finally {
       await guestApi.dispose();
-      await adminApi.dispose();
     }
   });
 
   test('6.8 Low Stock Alerts: low-stock badge appears when purchase drops below threshold', async ({ page, request }) => {
     test.skip(!hasWebhookSecret(), 'Webhook secret required to drive stock below threshold via purchase.');
 
-    const adminApi = await createAdminApiContext(request);
     const guestApi = await createGuestApiContext(request);
-    let restoreVariantId = null;
-    let restoreQuantity = null;
 
     try {
       const product = await findProductByName(guestApi, TEST_DATA.exactProductName);
       const variant = product.variants[0];
-      const originalQty = variant.inventory?.quantity ?? 20;
-      restoreVariantId = variant.id;
-      restoreQuantity = originalQty;
+      await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
+      const inv = await fetchAdminInventoryByVariant(rollbackAdminApi, variant.id);
+      const quantity = inv.inventory.quantity;
+      const reserve = inv.inventory.reserved;
+      const available = quantity - reserve;
 
-      await updateAdminInventory(adminApi, variant.id, 6, 'E2E low stock prep');
+      const LOW_STOCK_THRESHOLD = 5;
+      const targetAvailable = LOW_STOCK_THRESHOLD - 1;
+
+      const requiredReduction = available - targetAvailable;
+
+      if (requiredReduction > 0) {
+        await adjustInventory(rollbackAdminApi, variant.id, 'HOLD', requiredReduction);
+      }
+
 
       const addRes = await addVariantToCart(guestApi, variant.id, 2);
       expect(addRes.ok()).toBeTruthy();
 
       const { response, body } = await createGuestOrder(guestApi, buildGuestAddress('lowstock'), 'RAZORPAY');
       expect(response.ok()).toBeTruthy();
+      rememberCreatedOrder(rollbackState, body?.data?.orderId);
 
       await triggerCapturedWebhook(guestApi, body.data);
       await delay(700);
@@ -328,11 +487,7 @@ test.describe('6. Admin Reflection (Inventory & Order Management)', () => {
 
       await expect(page.getByText(/low stock/i).first()).toBeVisible();
     } finally {
-      if (restoreVariantId && Number.isInteger(restoreQuantity)) {
-        await updateAdminInventory(adminApi, restoreVariantId, restoreQuantity, 'E2E restore quantity');
-      }
       await guestApi.dispose();
-      await adminApi.dispose();
     }
   });
 });
