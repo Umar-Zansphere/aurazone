@@ -274,7 +274,7 @@ export default function OrderDetailPage() {
                                 <div className="w-20 h-20 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden">
                                     {item.variant?.images?.[0] ? (
                                         <Image
-                                            src={item.variant.images[0]}
+                                            src={item.variant.images[0].url}
                                             alt={item.variant.product.name}
                                             width={80}
                                             height={80}
