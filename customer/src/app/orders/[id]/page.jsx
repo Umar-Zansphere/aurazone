@@ -272,9 +272,9 @@ export default function OrderDetailPage() {
                         {order.items?.map((item, index) => (
                             <div key={index} className="flex gap-4 pb-4 border-b border-slate-100 last:border-0 last:pb-0">
                                 <div className="w-20 h-20 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden">
-                                    {item.variant?.product?.images?.[0] ? (
+                                    {item.variant?.images?.[0] ? (
                                         <Image
-                                            src={item.variant.product.images[0]}
+                                            src={item.variant.images[0]}
                                             alt={item.variant.product.name}
                                             width={80}
                                             height={80}
