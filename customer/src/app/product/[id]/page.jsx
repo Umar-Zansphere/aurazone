@@ -35,8 +35,8 @@ export default function ProductDetailsPage() {
   const cartItems = useCartStore((state) => state.items);
   const cartCount = useCartStore((state) => state.getCartCount());
   const wishlistItems = useWishlistStore((state) => state.items);
-  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
-  const isWishlistPending = useWishlistStore((state) => state.isWishlistPending);
+  const wishlistPendingByKey = useWishlistStore((state) => state.pendingByKey);
+  const toggleWishlistByProduct = useWishlistStore((state) => state.toggleWishlistByProduct);
 
   // Calculate current variant first (needed for derived state)
   const currentVariants = product?.variants?.filter(v => v.color === selectedColor) || [];
@@ -56,7 +56,10 @@ export default function ProductDetailsPage() {
   const cartItem = currentVariant ? cartItems.find(item => item.variantId === currentVariant.id) : null;
   const isInCart = !!cartItem;
   const isCartPending = currentVariantId ? isVariantPending(currentVariantId) : false;
-  const isHeartPending = isWishlistPending(productId, currentVariant?.id || null);
+  const heartPendingPrefix = `${productId}::`;
+  const isHeartPending = Object.keys(wishlistPendingByKey || {}).some((key) =>
+    key.startsWith(heartPendingPrefix)
+  );
 
   useEffect(() => {
     if (!currentVariantId) {
@@ -250,7 +253,7 @@ export default function ProductDetailsPage() {
     const currentlyLiked = isLiked;
 
     try {
-      await toggleWishlist(productId, currentVariant?.id || null, {
+      await toggleWishlistByProduct(productId, currentVariant?.id || null, {
         product: {
           id: product.id,
           name: product.name,

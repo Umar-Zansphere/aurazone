@@ -36,6 +36,9 @@ const findWishlistItem = (items, productId, variantId = null) => {
     );
 };
 
+const isProductInWishlistItems = (items, productId) =>
+    items.some((item) => item.productId === productId);
+
 const buildOptimisticWishlistItem = (productId, variantId = null, itemSeed = {}) => {
     const now = Date.now();
     const variant = itemSeed?.variant || null;
@@ -247,6 +250,13 @@ const useWishlistStore = create((set, get) => ({
         return get().removeItem(item.id);
     },
 
+    toggleWishlistByProduct: async (productId, preferredVariantId = null, itemSeed = null) => {
+        if (get().isProductInWishlist(productId)) {
+            return get().removeByProductVariant(productId, null);
+        }
+        return get().addToWishlist(productId, preferredVariantId, itemSeed);
+    },
+
     toggleWishlist: async (productId, variantId = null, itemSeed = null) => {
         if (get().isInWishlist(productId, variantId)) {
             return get().removeByProductVariant(productId, variantId);
@@ -268,9 +278,19 @@ const useWishlistStore = create((set, get) => ({
         );
     },
 
+    isProductInWishlist: (productId) => {
+        return isProductInWishlistItems(get().items, productId);
+    },
+
     isWishlistPending: (productId, variantId = null) => {
         const pendingByKey = get().pendingByKey;
         return Boolean(pendingByKey[makeWishlistKey(productId, variantId)]);
+    },
+
+    isProductWishlistPending: (productId) => {
+        const pendingByKey = get().pendingByKey;
+        const keyPrefix = `${productId}::`;
+        return Object.keys(pendingByKey).some((key) => key.startsWith(keyPrefix));
     },
 }));
 

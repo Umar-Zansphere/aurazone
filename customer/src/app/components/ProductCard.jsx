@@ -19,7 +19,7 @@ export default function ProductCard({ product }) {
   const toggleVariantInCart = useCartStore((state) => state.toggleVariantInCart);
   const wishlistItems = useWishlistStore((state) => state.items);
   const wishlistPendingByKey = useWishlistStore((state) => state.pendingByKey);
-  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
+  const toggleWishlistByProduct = useWishlistStore((state) => state.toggleWishlistByProduct);
 
   if (!product) return null;
 
@@ -40,15 +40,15 @@ export default function ProductCard({ product }) {
   const inCart = firstVariant
     ? cartItems.some((item) => item.variantId === firstVariant.id)
     : false;
-  const wishlistAdded = firstVariant
-    ? wishlistItems.some((item) => item.productId === product.id && item.variantId === firstVariant.id)
-    : false;
+  const wishlistAdded = wishlistItems.some((item) => item.productId === product.id);
 
   const isCartPending = firstVariant
     ? Boolean(cartPendingByVariant?.[firstVariant.id])
     : false;
-  const wishlistKey = `${product.id}::${firstVariant?.id || 'any'}`;
-  const isHeartPending = Boolean(wishlistPendingByKey?.[wishlistKey]);
+  const wishlistKeyPrefix = `${product.id}::`;
+  const isHeartPending = Object.keys(wishlistPendingByKey || {}).some((key) =>
+    key.startsWith(wishlistKeyPrefix)
+  );
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
@@ -80,7 +80,7 @@ export default function ProductCard({ product }) {
     if (!firstVariant) return;
 
     try {
-      await toggleWishlist(product.id, firstVariant.id, {
+      await toggleWishlistByProduct(product.id, firstVariant.id, {
         product: {
           id: product.id,
           name: product.name,
