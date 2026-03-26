@@ -17,7 +17,7 @@ pipeline {
         ADMIN_EMAIL='admin@aurazone.com'
         ADMIN_PASSWORD='Admin@123456'
 
-        CUSTOMER_EMAIL='[EMAIL_ADDRESS]'
+        CUSTOMER_EMAIL='umar.zangroups@gmail.com'
         CUSTOMER_PASSWORD='Umar2468/us!'
 
         WEBHOOK_SECRET='iuyjRxjEJGZzD+lqXxN8rjUGQS9pMMAlxXrVQNeMch4='
@@ -71,7 +71,7 @@ pipeline {
 
         success {
             emailext(
-                to: env.ADMIN_EMAIL,
+                to: 'umarmohamed444481@gmail.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: "Tests passed: ${env.BUILD_URL}",
                 attachmentsPattern: 'playwright-report.zip'
@@ -80,7 +80,7 @@ pipeline {
 
         failure {
             emailext(
-                to: env.ADMIN_EMAIL,
+                to: 'umarmohamed444481@gmail.com',
                 subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: "Tests failed: ${env.BUILD_URL}",
                 attachmentsPattern: 'playwright-report.zip'
