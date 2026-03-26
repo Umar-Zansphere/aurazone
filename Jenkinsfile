@@ -42,9 +42,13 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('e2e') {
-                    sh 'npm install'
-                    // Ensure Playwright browsers and dependencies are installed
-                    sh 'npx playwright install --with-deps'
+                    script {
+                        
+                            bat 'npm install'
+                            // Ensure Playwright browsers and dependencies are installed
+                            bat 'npx playwright install --with-deps'
+                        
+                    }
                 }
             }
         }
@@ -53,7 +57,11 @@ pipeline {
             steps {
                 dir('e2e') {
                     // Run the playwright tests
-                    sh 'npx playwright test'
+                    script {
+                        
+                        bat 'npx playwright test'
+                        
+                    }
                 }
             }
         }
@@ -77,9 +85,7 @@ pipeline {
                 archiveArtifacts artifacts: 'playwright-report/**/*', allowEmptyArchive: true
                 
                 // Zip the report for email attachment to avoid sending many loose files
-                script {
-                    sh(script: 'zip -r playwright-report.zip playwright-report', returnStatus: true)
-                }
+                zip zipFile: 'playwright-report.zip', dir: 'playwright-report', archive: false
             }
         }
         success {
