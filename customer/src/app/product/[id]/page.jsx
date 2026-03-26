@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Heart, Cart, Star, ShoppingCart, ChevronLeft, ChevronRight, Truck, RotateCcw, Shield, Check, AlertCircle, Minus, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { productApi, cartApi, wishlistApi, storageApi } from '@/lib/api';
+import { productApi } from '@/lib/api';
 import useCartStore from '@/store/cartStore';
 import useWishlistStore from '@/store/wishlistStore';
 // import RelatedProducts from '@/app/components/RelatedProducts';
@@ -26,19 +26,17 @@ export default function ProductDetailsPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [variantQuantities, setVariantQuantities] = useState({});
   const [region, setRegion] = useState('EU');
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [cartMessage, setCartMessage] = useState(null);
   const [wishlistMessage, setWishlistMessage] = useState(null);
 
   // Store hooks
   const addToCart = useCartStore((state) => state.addToCart);
-  const updateQuantity = useCartStore((state) => state.updateQuantity);
-  const removeFromCart = useCartStore((state) => state.removeItem);
+  const isVariantPending = useCartStore((state) => state.isVariantPending);
   const cartItems = useCartStore((state) => state.items);
   const cartCount = useCartStore((state) => state.getCartCount());
   const wishlistItems = useWishlistStore((state) => state.items);
-  const addToWishlist = useWishlistStore((state) => state.addToWishlist);
-  const removeFromWishlist = useWishlistStore((state) => state.removeItem);
+  const wishlistPendingByKey = useWishlistStore((state) => state.pendingByKey);
+  const toggleWishlistByProduct = useWishlistStore((state) => state.toggleWishlistByProduct);
 
   // Calculate current variant first (needed for derived state)
   const currentVariants = product?.variants?.filter(v => v.color === selectedColor) || [];
@@ -57,6 +55,11 @@ export default function ProductDetailsPage() {
   const isLiked = wishlistItems.some(item => item.productId === productId);
   const cartItem = currentVariant ? cartItems.find(item => item.variantId === currentVariant.id) : null;
   const isInCart = !!cartItem;
+  const isCartPending = currentVariantId ? isVariantPending(currentVariantId) : false;
+  const heartPendingPrefix = `${productId}::`;
+  const isHeartPending = Object.keys(wishlistPendingByKey || {}).some((key) =>
+    key.startsWith(heartPendingPrefix)
+  );
 
   useEffect(() => {
     if (!currentVariantId) {
@@ -195,17 +198,23 @@ export default function ProductDetailsPage() {
       return;
     }
 
-    setIsAddingToCart(true);
     setCartMessage(null);
     try {
-      await addToCart(currentVariant.id, quantity);
+      await addToCart(currentVariant.id, quantity, {
+        product: {
+          id: product.id,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          gender: product.gender,
+        },
+        variant: currentVariant,
+      });
       setCartMessage({ type: 'success', text: 'Added to cart!' });
       setTimeout(() => setCartMessage(null), 3000);
     } catch (err) {
       console.error('Error adding to cart:', err);
       setCartMessage({ type: 'error', text: err.message || 'Failed to add to cart' });
-    } finally {
-      setIsAddingToCart(false);
     }
   };
 
@@ -241,25 +250,23 @@ export default function ProductDetailsPage() {
 
   const handleToggleWishlist = async () => {
     setWishlistMessage(null);
-
-    // If already liked, remove it. Logic implies finding the wishlistItemId effectively.
-    // However, existing store implementation of removeItem needs the ID of the wishlist item (relationship record), not product ID.
-    // But since `wishlistItems` contains the full objects, we can find it.
+    const currentlyLiked = isLiked;
 
     try {
-      if (isLiked) {
-        const wishlistItem = wishlistItems.find(item => item.productId === productId);
-        if (wishlistItem) {
-          await removeFromWishlist(wishlistItem.id);
-          setWishlistMessage({ type: 'success', text: 'Removed from wishlist' });
-        }
-      } else {
-        // For adding, prefer adding the specific variant if selected, else just product
-        const variantIdToAdd = currentVariant?.id || null;
-        console.log('Adding to wishlist via Store:', { productId, variantId: variantIdToAdd });
-        await addToWishlist(productId, variantIdToAdd);
-        setWishlistMessage({ type: 'success', text: 'Added to wishlist!' });
-      }
+      await toggleWishlistByProduct(productId, currentVariant?.id || null, {
+        product: {
+          id: product.id,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          gender: product.gender,
+        },
+        variant: currentVariant || null,
+      });
+      setWishlistMessage({
+        type: 'success',
+        text: currentlyLiked ? 'Removed from wishlist' : 'Added to wishlist!',
+      });
       setTimeout(() => setWishlistMessage(null), 3000);
     } catch (err) {
       console.error('Error toggling wishlist:', err);
@@ -287,7 +294,8 @@ export default function ProductDetailsPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={handleToggleWishlist}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors relative"
+              disabled={isHeartPending}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors relative disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Heart
                 size={24}
@@ -638,11 +646,11 @@ export default function ProductDetailsPage() {
               ) : (
                 <button
                   onClick={handleAddToCart}
-                  disabled={isAddingToCart || isVariantOutOfStock}
+                  disabled={isCartPending || isVariantOutOfStock}
                   className="flex-1 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] py-4 rounded-xl font-bold text-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <ShoppingCart size={22} strokeWidth={2.5} className={isAddingToCart ? 'animate-spin' : 'group-hover:animate-bounce'} />
-                  {isAddingToCart ? 'Adding...' : 'Add to Cart'}
+                  <ShoppingCart size={22} strokeWidth={2.5} className={isCartPending ? 'animate-spin' : 'group-hover:animate-bounce'} />
+                  {isCartPending ? 'Adding...' : 'Add to Cart'}
                 </button>
               )}
 

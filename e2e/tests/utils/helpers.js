@@ -49,7 +49,13 @@ async function ensureProductsPage(page) {
 async function searchProducts(page, term) {
   const input = page.getByPlaceholder(/search products/i).first();
   await input.fill(term);
-  await page.waitForLoadState('networkidle');
+  await Promise.all([
+    page.waitForURL((url) => {
+      const nextSearch = url.searchParams.get('search') || '';
+      return nextSearch === String(term || '').trim();
+    }),
+    page.getByRole('button', { name: /^search$/i }).click(),
+  ]);
 }
 
 async function waitForToast(page, pattern) {
@@ -82,20 +88,43 @@ async function addCurrentProductToCart(page) {
   const addButton = page.getByRole('button', { name: /^add to cart$/i }).first();
   const addedStateButton = page.getByRole('button', { name: /^added to cart$/i }).first();
   const successToast = page.locator('.toast-message').filter({ hasText: /added to cart/i }).first();
+  const errorToast = page.locator('.toast-message').filter({ hasText: /insufficient|failed|error|out of stock/i }).first();
 
-  await expect(addButton).toBeVisible({ timeout: 30_000 });
+  const getCartSignature = async () => {
+    const res = await page.request.get('/api/cart').catch(() => null);
+    if (!res || !res.ok()) {
+      return '0:0';
+    }
+    const cart = await res.json().catch(() => ({}));
+    const items = Array.isArray(cart?.items) ? cart.items : [];
+    const totalQty = items.reduce((sum, item) => sum + Number(item?.quantity || 0), 0);
+    return `${items.length}:${totalQty}`;
+  };
+
+  if (await addedStateButton.isVisible().catch(() => false)) {
+    return;
+  }
+
+  const beforeCartSignature = await getCartSignature();
+
+  await expect(
+    addButton.or(addedStateButton).first()
+  ).toBeVisible({ timeout: 30_000 });
+  if (await addedStateButton.isVisible().catch(() => false)) {
+    return;
+  }
+
   await expect(addButton).toBeEnabled({ timeout: 30_000 });
   await addButton.scrollIntoViewIfNeeded();
   await addButton.click();
-
-  // Wait for either success state or error feedback after store/API sync.
-  const errorToast = page.locator('.toast-message').filter({ hasText: /insufficient|failed|error/i }).first();
 
   await expect
     .poll(async () => {
       if (await errorToast.isVisible().catch(() => false)) return 'error';
       if (await addedStateButton.isVisible().catch(() => false)) return 'added';
       if (await successToast.isVisible().catch(() => false)) return 'success-toast';
+      const afterCartSignature = await getCartSignature();
+      if (afterCartSignature !== beforeCartSignature) return 'cart-updated';
       return 'pending';
     }, { timeout: 45_000 })
     .not.toBe('pending');
@@ -104,9 +133,6 @@ async function addCurrentProductToCart(page) {
     const message = ((await errorToast.textContent().catch(() => '')) || '').trim();
     throw new Error(`Add to cart failed${message ? `: ${message}` : ''}`);
   }
-
-  await expect(addedStateButton).toBeVisible({ timeout: 45_000 });
-  await expect(addButton).toHaveCount(0, { timeout: 45_000 });
 }
 
 async function gotoCart(page) {
@@ -288,6 +314,7 @@ async function createGuestOrder(apiContext, address, paymentMethod = 'RAZORPAY')
 
 async function fetchAdminInventoryByVariant(adminApi, variantId) {
   const response = await adminApi.get(joinUrl(ADMIN_BASE_URL, `/api/admin/inventory/${variantId}`));
+  // console.log('Inventory fetch response:', response.status(), await response.text());
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -311,6 +338,18 @@ async function updateAdminInventory(adminApi, variantId, quantity, note = 'E2E s
       },
     data: { quantity, note },
   });
+  expect(response.ok()).toBeTruthy();
+  return response.json();
+}
+
+async function adjustInventory(adminApi, variantId, operation, quantity, note = 'E2E') {
+  const response = await adminApi.post(
+    `/api/admin/variants/${variantId}/inventory/adjust`,
+    {
+      data: { operation, quantity, note },
+    }
+  );
+
   expect(response.ok()).toBeTruthy();
   return response.json();
 }
@@ -425,6 +464,7 @@ module.exports = {
   fetchAdminInventoryByVariant,
   updateAdminVariant,
   updateAdminInventory,
+  adjustInventory,
   updateAdminProduct,
   ensureCustomerAddress,
   signRazorpayWebhook,

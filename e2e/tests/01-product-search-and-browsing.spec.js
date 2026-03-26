@@ -8,8 +8,9 @@ const {
   getCardPrices,
   openProductByName,
   parseInr,
-  delay,
 } = require('./utils/helpers');
+
+const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 test.describe('1. Product Searching & Browsing', () => {
   test.beforeEach(async ({ page }) => {
@@ -44,23 +45,48 @@ test.describe('1. Product Searching & Browsing', () => {
   });
 
   test('1.4 Category Filtering: only selected category products are displayed', async ({ page }) => {
-    await page.locator('label', { hasText: TEST_DATA.category }).first().click();
-    await page.waitForLoadState('networkidle');
+    const categoryInputs = page.locator('input[type="radio"][name="category"]');
+    await expect(categoryInputs.first()).toBeVisible();
+
+    const categoryCount = await categoryInputs.count();
+    let selectedCategory = '';
+    let selectedIndex = 0;
+
+    for (let i = 0; i < categoryCount; i += 1) {
+      const value = (await categoryInputs.nth(i).getAttribute('value')) || '';
+      if (!selectedCategory) selectedCategory = value;
+      if (value.toLowerCase() === TEST_DATA.category.toLowerCase()) {
+        selectedCategory = value;
+        selectedIndex = i;
+        break;
+      }
+    }
+
+    await categoryInputs.nth(selectedIndex).check();
+    await page.getByRole('button', { name: /apply filters/i }).click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('category') || '')
+      .toBe(selectedCategory);
 
     const cards = page.locator('a[href^="/product/"]');
     const cardTexts = await cards.evaluateAll((nodes) => nodes.map((node) => node.textContent || ''));
 
     expect(cardTexts.length).toBeGreaterThan(0);
     for (const text of cardTexts) {
-      expect(text.toUpperCase()).toContain(TEST_DATA.category);
+      expect(text.toLowerCase()).toContain(selectedCategory.toLowerCase());
     }
   });
 
   test('1.5 Price Range Filtering: listed products are within min/max', async ({ page }) => {
     await page.getByPlaceholder('Min').fill(String(TEST_DATA.minPrice));
     await page.getByPlaceholder('Max').fill(String(TEST_DATA.maxPrice));
-    await page.waitForLoadState('networkidle');
-    await delay(300);
+    await page.getByRole('button', { name: /apply filters/i }).click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('minPrice') || '')
+      .toBe(String(TEST_DATA.minPrice));
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('maxPrice') || '')
+      .toBe(String(TEST_DATA.maxPrice));
 
     const prices = await getCardPrices(page);
     expect(prices.length).toBeGreaterThan(0);
@@ -119,7 +145,7 @@ test.describe('1. Product Searching & Browsing', () => {
   test('1.8 Product Details Accuracy: title, description, price, images, variants render correctly', async ({ page }) => {
     await openProductByName(page, TEST_DATA.exactProductName);
 
-    await expect(page.getByRole('heading', { name: TEST_DATA.exactProductName, level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: new RegExp(escapeRegExp(TEST_DATA.exactProductName), 'i') }).first()).toBeVisible();
     await expect(page.getByText(/color variant/i)).toBeVisible();
     await expect(page.getByText(/select size/i)).toBeVisible();
 

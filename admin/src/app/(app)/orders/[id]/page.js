@@ -398,7 +398,7 @@ export default function OrderDetailPage() {
           <span className="text-base font-bold text-[var(--text-primary)]">{formatCurrencyINR(order.totalAmount)}</span>
         </div>
       </section>
-
+ 
       {order.orderAddress ? (
         <section className="card-surface p-4">
           <p className="section-title mb-3">

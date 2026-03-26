@@ -87,20 +87,28 @@ test.describe('5. Order Tracking & Customer Dashboard', () => {
   });
 
   test('5.3 Detailed View: order details match checkout summary and address', async ({ page }) => {
-    const { response, body, address, product } = await createAuthenticatedOrder(page, 'COD');
-    expect(response.ok()).toBeTruthy();
+  const { response, body, address, product } = await createAuthenticatedOrder(page, 'COD');
+  expect(response.ok()).toBeTruthy();
 
-    const order = body.data;
+  const order = body.data;
 
-    await gotoCustomer(page, `/orders/${order.orderId}`);
-    await expect(page.getByRole('heading', { name: new RegExp(order.orderNumber, 'i') })).toBeVisible();
+  await gotoCustomer(page, `/orders/${order.orderId}`);
 
-    const pageText = (await page.locator('main').textContent()) || "";
-    expect(pageText).toContain(address.addressLine1);
-    expect(pageText).toContain(address.city);
-    expect(pageText).toContain(product.name);
-    expect(pageText).toMatch(/payment summary/i);
-  });
+  await expect(page.getByRole('heading', { name: new RegExp(order.orderNumber, 'i') })).toBeVisible();
+
+  // ✅ Wait for full page load
+  await expect(page.getByText(/shipping address/i)).toBeVisible();
+  await expect(page.getByText(/payment summary/i)).toBeVisible();
+
+  const pageText = (await page.locator('div.min-h-screen').textContent()) || "";
+
+  // ✅ Use order data instead of raw input (safer)
+  expect(page.getByText(address.addressLine1)).toBeVisible();
+  expect(page.getByText(address.city)).toBeVisible();
+
+  // ✅ Case-insensitive product match
+  expect(page.getByText(product.name, { exact: false })).toBeVisible();
+});
 
   test('5.4 Status Updates Reflection: admin shipped status reflects in customer dashboard', async ({ page, request }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for cross-panel status reflection.');

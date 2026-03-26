@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_DATA, hasAdminCreds } = require('./utils/constants');
+const { TEST_DATA, hasAdminCreds, CUSTOMER_BASE_URL } = require('./utils/constants');
 const {
   ensureProductsPage,
   openProductByName,
@@ -7,39 +7,169 @@ const {
   gotoCart,
   clearCart,
   fetchCart,
-  parseInr,
   createAdminApiContext,
   findProductByName,
+  fetchAdminInventoryByVariant,
   updateAdminInventory,
-  delay,
 } = require('./utils/helpers');
 
 async function selectVariant(page, color, size) {
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-  const colorButton = page.locator(`button:has(img[alt="${color}"])`).first();
+  const colorButton = page.locator(`button[data-selected]:has(img[alt="${color}"])`).first();
   if (await colorButton.isVisible().catch(() => false)) {
     await colorButton.click();
+    await expect(colorButton).toHaveAttribute('data-selected', 'true');
   }
 
-  const sizeButton = page.getByRole('button', {
-    name: new RegExp(`^${escapeRegex(size).replace(/\s+/g, '\\s*')}$`, 'i'),
-  }).first();
+  const sizeButton = page
+    .locator('button[data-selected]')
+    .filter({ hasText: new RegExp(`^${escapeRegex(size).replace(/\s+/g, '\\s*')}$`, 'i') })
+    .first();
   if (await sizeButton.isVisible().catch(() => false)) {
     await sizeButton.click();
+    await expect(sizeButton).toHaveAttribute('data-selected', 'true');
   }
+
+  const selectedColor = ((await page.locator('button[data-selected="true"] img[alt]').first().getAttribute('alt').catch(() => '')) || '').trim();
+  const selectedSize = ((await page.locator('button[data-selected="true"]').filter({ hasText: /\S/ }).first().textContent().catch(() => '')) || '').trim();
+  return { color: selectedColor, size: selectedSize };
 }
 
-function extractSubtotal(text) {
-  const match = text.match(/Subtotal\s*₹\s*([\d,]+(?:\.\d+)?)/i);
+function parseCurrencyAmount(text) {
+  const match = String(text || '').match(/₹\s*([\d,]+(?:\.\d+)?)/i);
   if (!match) return null;
   return Number.parseFloat(match[1].replace(/,/g, ''));
 }
 
+async function readUiSubtotal(page) {
+  const subtotalValue = await page
+    .locator('xpath=//span[normalize-space()="Subtotal"]/following-sibling::span[1]')
+    .first()
+    .textContent();
+
+  return parseCurrencyAmount(subtotalValue);
+}
+
+let sharedAdminApi = null;
+let currentRollbackState = null;
+
+function createRollbackState() {
+  return {
+    variantBaselines: new Map(),
+  };
+}
+
+async function captureInventoryBaseline(adminApi, variantId) {
+  if (!currentRollbackState) {
+    currentRollbackState = createRollbackState();
+  }
+
+  if (currentRollbackState.variantBaselines.has(variantId)) {
+    return currentRollbackState.variantBaselines.get(variantId);
+  }
+
+  const snapshot = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const baseline = {
+    quantity: Number(snapshot?.inventory?.quantity || 0),
+  };
+  currentRollbackState.variantBaselines.set(variantId, baseline);
+  return baseline;
+}
+
+async function setVariantAvailableUnits(adminApi, variantId, availableUnits, note) {
+  await captureInventoryBaseline(adminApi, variantId);
+  const latest = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const reserved = Number(latest?.inventory?.reserved || 0);
+  const safeQuantity = Math.max(reserved + Math.max(0, Number(availableUnits) || 0), 0);
+
+  await updateAdminInventory(adminApi, variantId, safeQuantity, note);
+
+  await expect
+    .poll(async () => {
+      const current = await fetchAdminInventoryByVariant(adminApi, variantId);
+      const quantity = Number(current?.inventory?.quantity || 0);
+      const reservedQty = Number(current?.inventory?.reserved || 0);
+      return Math.max(0, quantity - reservedQty);
+    }, { timeout: 30_000 })
+    .toBe(Math.max(0, Number(availableUnits) || 0));
+}
+
+async function restoreTrackedInventory(adminApi, variantId, reason = 'E2E rollback', baselineMap) {
+  const resolvedMap = baselineMap || currentRollbackState?.variantBaselines;
+  const baseline = resolvedMap?.get(variantId);
+  if (!baseline) return;
+
+  const current = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const reserved = Number(current?.inventory?.reserved || 0);
+  const restoreQuantity = Math.max(baseline.quantity, reserved);
+  await updateAdminInventory(adminApi, variantId, restoreQuantity, reason);
+}
+
+async function rollbackCurrentTestInventory(adminApi, reason = 'E2E per-test rollback') {
+  const baselineMap = currentRollbackState?.variantBaselines;
+  if (!adminApi || !baselineMap || baselineMap.size === 0) return;
+
+  for (const variantId of baselineMap.keys()) {
+    try {
+      await restoreTrackedInventory(adminApi, variantId, reason, baselineMap);
+    } catch (error) {
+      console.error(`Failed to rollback inventory for variant ${variantId}:`, error);
+    }
+  }
+}
+
+async function resolveTargetVariant(page) {
+  const product = await findProductByName(page.request, TEST_DATA.exactProductName);
+  expect(product).toBeTruthy();
+
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  const preferredVariant = variants.find((variant) =>
+    variant.color === TEST_DATA.variantColor && variant.size === TEST_DATA.variantSize
+  );
+  const sizeVariant = variants.find((variant) => variant.size === TEST_DATA.variantSize);
+  const targetVariant = preferredVariant || sizeVariant || variants[0];
+
+  expect(targetVariant).toBeTruthy();
+  return { product, variant: targetVariant };
+}
+
+async function setAllProductVariantsAvailableUnits(adminApi, product, availableUnits, notePrefix) {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  expect(variants.length).toBeGreaterThan(0);
+
+  for (const variant of variants) {
+    await setVariantAvailableUnits(
+      adminApi,
+      variant.id,
+      availableUnits,
+      `${notePrefix} (${variant.color || 'NA'}-${variant.size || 'NA'})`
+    );
+  }
+}
+
 test.describe('2. Cart Management', () => {
+  test.beforeAll(async ({ request }) => {
+    if (!hasAdminCreds()) return;
+    sharedAdminApi = await createAdminApiContext(request);
+  });
+
   test.beforeEach(async ({ page }) => {
+    currentRollbackState = createRollbackState();
     await ensureProductsPage(page);
     await clearCart(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    await clearCart(page);
+    await rollbackCurrentTestInventory(sharedAdminApi);
+    currentRollbackState = null;
+  });
+
+  test.afterAll(async () => {
+    if (!sharedAdminApi) return;
+    await sharedAdminApi.dispose();
+    sharedAdminApi = null;
   });
 
   test('2.1 Add Simple Product: button swaps to added state', async ({ page }) => {
@@ -63,74 +193,60 @@ test.describe('2. Cart Management', () => {
 
   test('2.2 Add Product with Variants: selected variant is added', async ({ page }) => {
     await openProductByName(page, TEST_DATA.exactProductName);
-    await selectVariant(page, TEST_DATA.variantColor, TEST_DATA.variantSize);
+    const selectedVariant = await selectVariant(page, TEST_DATA.variantColor, TEST_DATA.variantSize);
     await addCurrentProductToCart(page);
 
     await gotoCart(page);
-    const cartText = (await page.locator('main').textContent()) || '';
+    const cartText = (await page.locator('body').innerText()) || '';
 
-    expect(cartText).toContain(TEST_DATA.variantColor);
-    expect(cartText).toContain(TEST_DATA.variantSize);
+    expect(selectedVariant.color).toBeTruthy();
+    expect(selectedVariant.size).toBeTruthy();
+    expect(cartText).toContain(selectedVariant.color);
+    expect(cartText).toContain(selectedVariant.size);
   });
 
-  test('2.3 Out of Stock Prevention: adding unavailable stock is blocked', async ({ page, request }) => {
+  test('2.3 Out of Stock Prevention: adding unavailable stock is blocked', async ({ page }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for stock mutation scenarios.');
 
-    const adminApi = await createAdminApiContext(request);
-    const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    expect(product).toBeTruthy();
+    expect(sharedAdminApi).toBeTruthy();
+    const { product } = await resolveTargetVariant(page);
 
-    const variant = product.variants.find((item) => item.size === TEST_DATA.variantSize) || product.variants[0];
-    expect(variant).toBeTruthy();
+    await setAllProductVariantsAvailableUnits(sharedAdminApi, product, 0, 'E2E out-of-stock validation');
 
-    const originalQty = variant.inventory?.quantity ?? 0;
+    await openProductByName(page, product.name);
+    await selectVariant(page, TEST_DATA.variantColor, TEST_DATA.variantSize);
 
-    try {
-      await updateAdminInventory(adminApi, variant.id, 0, 'E2E out-of-stock validation');
-
-      await openProductByName(page, product.name);
-      await selectVariant(page, variant.color, variant.size);
-      await addCurrentProductToCart(page);
-
-      await expect(page.locator('.toast-message').filter({ hasText: /insufficient inventory|failed to add/i }).first()).toBeVisible();
-    } finally {
-      await updateAdminInventory(adminApi, variant.id, originalQty, 'E2E restore stock');
-      await adminApi.dispose();
+    const addButton = page.getByRole('button', { name: /add to cart/i }).first();
+    await expect(page.getByText(/out of stock/i).first()).toBeVisible();
+    if (await addButton.count()) {
+      await expect(addButton).toBeDisabled();
     }
   });
 
-  test('2.4 Exceeding Stock Limit: quantity above inventory is prevented', async ({ page, request }) => {
+  test('2.4 Exceeding Stock Limit: quantity above inventory is prevented', async ({ page }) => {
     test.skip(!hasAdminCreds(), 'Admin credentials required for stock mutation scenarios.');
 
-    const adminApi = await createAdminApiContext(request);
-    const product = await findProductByName(page.request, TEST_DATA.exactProductName);
-    const variant = product.variants[0];
-    const originalQty = variant.inventory?.quantity ?? 0;
+    expect(sharedAdminApi).toBeTruthy();
+    const { variant } = await resolveTargetVariant(page);
 
-    try {
-      await updateAdminInventory(adminApi, variant.id, 1, 'E2E limit quantity test');
+    await setVariantAvailableUnits(sharedAdminApi, variant.id, 1, 'E2E limit quantity test');
 
-      const addRes = await page.request.post('https://www.aurazone.shop/api/cart', {
-        data: { variantId: variant.id, quantity: 1 },
-      });
-      expect(addRes.ok()).toBeTruthy();
+    const addRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
+      data: { variantId: variant.id, quantity: 1 },
+    });
+    expect(addRes.ok()).toBeTruthy();
 
-      const cart = await fetchCart(page);
-      const cartItem = cart.items.find((item) => item.variantId === variant.id);
-      expect(cartItem).toBeTruthy();
+    const cart = await fetchCart(page);
+    const cartItem = cart.items.find((item) => item.variantId === variant.id);
+    expect(cartItem).toBeTruthy();
 
-      const updateRes = await page.request.patch(`https://www.aurazone.shop/api/cart/${cartItem.id}`, {
-        data: { quantity: 2 },
-      });
-      expect(updateRes.ok()).toBeFalsy();
+    const updateRes = await page.request.patch(`${CUSTOMER_BASE_URL}/api/cart/${cartItem.id}`, {
+      data: { quantity: 2 },
+    });
+    expect(updateRes.ok()).toBeFalsy();
 
-      const body = await updateRes.json();
-      expect(body.message.toLowerCase()).toContain('insufficient inventory');
-    } finally {
-      await clearCart(page);
-      await updateAdminInventory(adminApi, variant.id, originalQty, 'E2E restore stock');
-      await adminApi.dispose();
-    }
+    const body = await updateRes.json();
+    expect(String(body.message || '').toLowerCase()).toMatch(/insufficient inventory|out of stock/);
   });
 
   test('2.5 Quantity Increment: subtotal and total update immediately', async ({ page }) => {
@@ -139,20 +255,15 @@ test.describe('2. Cart Management', () => {
 
     await gotoCart(page);
 
-    const summary = page.locator('text=Order Summary').locator('..');
-    const beforeText = (await summary.textContent()) || '';
-    const beforeSubtotal = extractSubtotal(beforeText);
+    const beforeSubtotal = await readUiSubtotal(page);
 
     const quantitySelector = page.getByLabel(/quantity selector/i).first();
     const quantityValue = quantitySelector.locator('span').first();
 
     await quantitySelector.locator('button').last().click();
     await expect(quantityValue).toHaveText('2');
-    
-    await delay(500);
 
-    const afterText = (await summary.textContent()) || '';
-    const afterSubtotal = extractSubtotal(afterText);
+    const afterSubtotal = await readUiSubtotal(page);
 
     expect(beforeSubtotal).not.toBeNull();
     expect(afterSubtotal).not.toBeNull();
@@ -199,22 +310,25 @@ test.describe('2. Cart Management', () => {
     const firstVariant = firstProduct.variants[0];
     const secondVariant = secondProduct.variants[0];
 
-    await page.request.post('https://www.aurazone.shop/api/cart', {
+    const addFirstRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
       data: { variantId: firstVariant.id, quantity: 2 },
     });
-    await page.request.post('https://www.aurazone.shop/api/cart', {
+    expect(addFirstRes.ok()).toBeTruthy();
+
+    const addSecondRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
       data: { variantId: secondVariant.id, quantity: 1 },
     });
+    expect(addSecondRes.ok()).toBeTruthy();
 
     const cart = await fetchCart(page);
+    expect(Array.isArray(cart.items) ? cart.items.length : 0).toBeGreaterThan(0);
     const expectedSubtotal = cart.items.reduce(
       (sum, item) => sum + Number.parseFloat(item.unitPrice) * item.quantity,
       0
     );
 
     await gotoCart(page);
-    const summaryText = (await page.locator('text=Order Summary').locator('..').textContent()) || '';
-    const uiSubtotal = parseInr(summaryText);
+    const uiSubtotal = await readUiSubtotal(page);
 
     expect(uiSubtotal).not.toBeNull();
     expect(Math.abs(uiSubtotal - expectedSubtotal)).toBeLessThan(0.01);

@@ -12,13 +12,14 @@ const LOW_STOCK_THRESHOLD = 5;
 
 export default function ProductCard({ product }) {
   const { showToast } = useToast();
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
-  const [cartAdded, setCartAdded] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Use stores
-  const { items: cartItems, addToCart, removeItem: removeCartItem, isInCart } = useCartStore();
-  const { addToWishlist, removeItem: removeWishlistItem, isInWishlist } = useWishlistStore();
+  const cartItems = useCartStore((state) => state.items);
+  const cartPendingByVariant = useCartStore((state) => state.pendingByVariant);
+  const toggleVariantInCart = useCartStore((state) => state.toggleVariantInCart);
+  const wishlistItems = useWishlistStore((state) => state.items);
+  const wishlistPendingByKey = useWishlistStore((state) => state.pendingByKey);
+  const toggleWishlistByProduct = useWishlistStore((state) => state.toggleWishlistByProduct);
 
   if (!product) return null;
 
@@ -36,40 +37,39 @@ export default function ProductCard({ product }) {
   const isOutOfStock = !firstVariant || isVariantUnavailable || availableQuantity <= 0;
   const isLimitedStock = !isOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
 
-  // Check if product is in wishlist directly from store state
-  const wishlistAdded = isInWishlist(product.id, firstVariant?.id);
+  const inCart = firstVariant
+    ? cartItems.some((item) => item.variantId === firstVariant.id)
+    : false;
+  const wishlistAdded = wishlistItems.some((item) => item.productId === product.id);
 
-  // Check if product is in cart directly from store state
-  const inCart = firstVariant ? isInCart(firstVariant.id) : false;
-  const cartItem = firstVariant
-    ? cartItems.find((item) => item.variantId === firstVariant.id)
-    : null;
+  const isCartPending = firstVariant
+    ? Boolean(cartPendingByVariant?.[firstVariant.id])
+    : false;
+  const wishlistKeyPrefix = `${product.id}::`;
+  const isHeartPending = Object.keys(wishlistPendingByKey || {}).some((key) =>
+    key.startsWith(wishlistKeyPrefix)
+  );
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!firstVariant || isAddingToCart || isOutOfStock) return;
-
-    setIsAddingToCart(true);
+    if (!firstVariant || isOutOfStock) return;
 
     try {
-      if (inCart) {
-        if (!cartItem?.id) {
-          throw new Error('Unable to find cart item to remove');
-        }
-        await removeCartItem(cartItem.id);
-        setCartAdded(false);
-      } else {
-        await addToCart(firstVariant.id, 1);
-        setCartAdded(true);
-        setTimeout(() => setCartAdded(false), 2000);
-      }
+      await toggleVariantInCart(firstVariant.id, 1, {
+        product: {
+          id: product.id,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          gender: product.gender,
+        },
+        variant: firstVariant,
+      });
     } catch (error) {
       console.error('Error updating cart from product card:', error);
       showToast(error.message || 'Failed to update cart', 'error');
-    } finally {
-      setIsAddingToCart(false);
     }
   };
 
@@ -80,19 +80,16 @@ export default function ProductCard({ product }) {
     if (!firstVariant) return;
 
     try {
-      if (wishlistAdded) {
-        const wishlistItems = useWishlistStore.getState().items;
-        const item = wishlistItems.find(
-          w => w.productId === product.id && w.variantId === firstVariant.id
-        );
-        if (item) {
-          await removeWishlistItem(item.id);
-          // showToast('Removed from wishlist', 'info');
-        }
-      } else {
-        await addToWishlist(product.id, firstVariant.id);
-        // showToast('Added to wishlist', 'success');
-      }
+      await toggleWishlistByProduct(product.id, firstVariant.id, {
+        product: {
+          id: product.id,
+          name: product.name,
+          brand: product.brand,
+          category: product.category,
+          gender: product.gender,
+        },
+        variant: firstVariant,
+      });
     } catch (error) {
       console.error('Error toggling wishlist:', error);
       showToast('Failed to update wishlist', 'error');
@@ -105,6 +102,7 @@ export default function ProductCard({ product }) {
         <div className="relative w-full aspect-square rounded-lg overflow-hidden flex items-center justify-center mb-3 bg-gray-50">
           <button
             onClick={handleToggleLike}
+            disabled={isHeartPending}
             className="absolute top-3 right-3 z-10 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-full bg-white/90 backdrop-blur-sm border border-gray-200 hover:bg-white hover:scale-110 transition-all shadow-md active:scale-95 touch-manipulation"
             aria-label={wishlistAdded ? "Remove from wishlist" : "Add to wishlist"}
           >
@@ -171,20 +169,16 @@ export default function ProductCard({ product }) {
 
               <button
                 onClick={handleAddToCart}
-                disabled={isAddingToCart}
+                disabled={isCartPending}
                 className={`-shrink-0 w-10 h-10 sm:w-11 sm:h-11 flex items-center justify-center rounded-lg transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation ${inCart
                   ? 'bg-blue-500 hover:bg-blue-600 shadow-blue-500/20'
-                  : cartAdded
-                    ? 'bg-green-500 hover:bg-green-600 shadow-green-500/20 scale-110'
-                    : 'bg-slate-900 hover:bg-slate-800 active:scale-95 shadow-slate-900/20 text-white'
+                  : 'bg-slate-900 hover:bg-slate-800 active:scale-95 shadow-slate-900/20 text-white'
                   }`}
-                aria-label={inCart ? "Remove from cart" : cartAdded ? "Added to cart" : "Add to cart"}
+                aria-label={inCart ? "Remove from cart" : "Add to cart"}
               >
                 {inCart ? (
                   <Check size={20} className="text-white" />
-                ) : cartAdded ? (
-                  <Check size={20} className="animate-in zoom-in-50 duration-200" />
-                ) : isAddingToCart ? (
+                ) : isCartPending ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <ShoppingCart size={20} />

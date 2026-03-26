@@ -451,6 +451,17 @@ const ensureCheckoutQuantityLimit = (items = []) => {
   }
 };
 
+const ensureCheckoutItemsArePurchasable = (items = []) => {
+  for (const item of items) {
+    const variant = item?.variant;
+    const product = variant?.product;
+
+    if (!variant || !product || !variant.isAvailable || !product.isActive) {
+      throw new Error('One or more items are unavailable. Please refresh your cart and try again.');
+    }
+  }
+};
+
 const parseDirectOrderQuantity = (quantity) => {
   const qty = parseInt(quantity, 10);
 
@@ -483,6 +494,7 @@ const createOrderFromCart = async (userId, orderData) => {
     throw new Error('Cart is empty');
   }
   ensureCheckoutQuantityLimit(cart.items);
+  ensureCheckoutItemsArePurchasable(cart.items);
 
   const address = await prisma.address.findUnique({ where: { id: addressId } });
   if (!address || address.userId !== userId) {
@@ -710,6 +722,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
     throw new Error('Cart is empty');
   }
   ensureCheckoutQuantityLimit(cart.items);
+  ensureCheckoutItemsArePurchasable(cart.items);
   const cartTotal = cart.items.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
   const totalQuantity = cart.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const shippingTotal = SHIPPING_FEE * totalQuantity;
@@ -915,7 +928,7 @@ const createDirectOrder = async (userId, orderData) => {
     include: { product: true }
   });
 
-  if (!variant || !variant.isAvailable) {
+  if (!variant || !variant.isAvailable || !variant.product?.isActive) {
     throw new Error('Product not available');
   }
 
@@ -1147,7 +1160,7 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
     include: { product: true }
   });
 
-  if (!variant || !variant.isAvailable) {
+  if (!variant || !variant.isAvailable || !variant.product?.isActive) {
     throw new Error('Product not available');
   }
 
@@ -1393,7 +1406,8 @@ const getCustomerOrderDetail = async (userId, orderId) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { variant: { include: { product: true } } } },
+      items: { include: { variant: { include: { product: true, images: true } } } },
+      orderAddress: true,
       shipments: true,
       payments: true
     }
@@ -1412,6 +1426,7 @@ const getCustomerOrderDetail = async (userId, orderId) => {
     paymentMethod: order.paymentMethod,
     totalAmount: order.totalAmount,
     createdAt: order.createdAt,
+    address: order.orderAddress,
     items: order.items.map(item => ({
       id: item.id,
       productName: item.productName,
@@ -1420,7 +1435,8 @@ const getCustomerOrderDetail = async (userId, orderId) => {
       quantity: item.quantity,
       price: item.price,
       subtotal: item.subtotal,
-      productImage: item.variant?.product?.variants?.[0]?.images?.[0]?.url
+      productImage: item.variant?.images?.[0]?.url,
+      variant: item.variant
     })),
     shipment: order.shipments[0] ? {
       status: order.shipments[0].status,
@@ -1561,6 +1577,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
     throw new Error('Cart is empty');
   }
   ensureCheckoutQuantityLimit(sessionCart.items);
+  ensureCheckoutItemsArePurchasable(sessionCart.items);
 
   const cart = sessionCart;
 
