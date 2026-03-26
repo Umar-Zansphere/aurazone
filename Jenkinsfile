@@ -18,6 +18,17 @@ pipeline {
         CI = 'true'
         // Define any required environment variables here
         // CUSTOMER_BASE_URL = 'https://www.aurazone.shop'
+
+        CUSTOMER_BASE_URL='https://test.aurazone.shop'
+        ADMIN_BASE_URL='https://test.admin.aurazone.shop'
+
+        ADMIN_EMAIL='admin@aurazone.com'
+        ADMIN_PASSWORD='Admin@123456'
+
+        CUSTOMER_EMAIL='[EMAIL_ADDRESS]'
+        CUSTOMER_PASSWORD='Umar2468/us!'
+
+        WEBHOOK_SECRET='iuyjRxjEJGZzD+lqXxN8rjUGQS9pMMAlxXrVQNeMch4='
     }
 
     stages {
@@ -64,7 +75,28 @@ pipeline {
                 
                 // Also archive it so it can be downloaded
                 archiveArtifacts artifacts: 'playwright-report/**/*', allowEmptyArchive: true
+                
+                // Zip the report for email attachment to avoid sending many loose files
+                script {
+                    sh(script: 'zip -r playwright-report.zip playwright-report', returnStatus: true)
+                }
             }
+        }
+        success {
+            emailext(
+                to: env.ADMIN_EMAIL,
+                subject: "SUCCESS: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+                body: "The E2E tests completed successfully.\n\nView build details at: ${env.BUILD_URL}",
+                attachmentsPattern: 'e2e/playwright-report.zip'
+            )
+        }
+        failure {
+            emailext(
+                to: env.ADMIN_EMAIL,
+                subject: "FAILURE: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]'",
+                body: "The E2E tests failed.\n\nView build details at: ${env.BUILD_URL}",
+                attachmentsPattern: 'e2e/playwright-report.zip'
+            )
         }
     }
 }
