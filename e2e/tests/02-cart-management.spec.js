@@ -51,19 +51,29 @@ async function readUiSubtotal(page) {
   return parseCurrencyAmount(subtotalValue);
 }
 
-const trackedInventoryBaselines = new Map();
 let sharedAdminApi = null;
+let currentRollbackState = null;
+
+function createRollbackState() {
+  return {
+    variantBaselines: new Map(),
+  };
+}
 
 async function captureInventoryBaseline(adminApi, variantId) {
-  if (trackedInventoryBaselines.has(variantId)) {
-    return trackedInventoryBaselines.get(variantId);
+  if (!currentRollbackState) {
+    currentRollbackState = createRollbackState();
+  }
+
+  if (currentRollbackState.variantBaselines.has(variantId)) {
+    return currentRollbackState.variantBaselines.get(variantId);
   }
 
   const snapshot = await fetchAdminInventoryByVariant(adminApi, variantId);
   const baseline = {
     quantity: Number(snapshot?.inventory?.quantity || 0),
   };
-  trackedInventoryBaselines.set(variantId, baseline);
+  currentRollbackState.variantBaselines.set(variantId, baseline);
   return baseline;
 }
 
@@ -85,14 +95,28 @@ async function setVariantAvailableUnits(adminApi, variantId, availableUnits, not
     .toBe(Math.max(0, Number(availableUnits) || 0));
 }
 
-async function restoreTrackedInventory(adminApi, variantId, reason = 'E2E rollback') {
-  const baseline = trackedInventoryBaselines.get(variantId);
+async function restoreTrackedInventory(adminApi, variantId, reason = 'E2E rollback', baselineMap) {
+  const resolvedMap = baselineMap || currentRollbackState?.variantBaselines;
+  const baseline = resolvedMap?.get(variantId);
   if (!baseline) return;
 
   const current = await fetchAdminInventoryByVariant(adminApi, variantId);
   const reserved = Number(current?.inventory?.reserved || 0);
   const restoreQuantity = Math.max(baseline.quantity, reserved);
   await updateAdminInventory(adminApi, variantId, restoreQuantity, reason);
+}
+
+async function rollbackCurrentTestInventory(adminApi, reason = 'E2E per-test rollback') {
+  const baselineMap = currentRollbackState?.variantBaselines;
+  if (!adminApi || !baselineMap || baselineMap.size === 0) return;
+
+  for (const variantId of baselineMap.keys()) {
+    try {
+      await restoreTrackedInventory(adminApi, variantId, reason, baselineMap);
+    } catch (error) {
+      console.error(`Failed to rollback inventory for variant ${variantId}:`, error);
+    }
+  }
 }
 
 async function resolveTargetVariant(page) {
@@ -124,13 +148,6 @@ async function setAllProductVariantsAvailableUnits(adminApi, product, availableU
   }
 }
 
-async function restoreProductVariants(adminApi, product, reason) {
-  const variants = Array.isArray(product?.variants) ? product.variants : [];
-  for (const variant of variants) {
-    await restoreTrackedInventory(adminApi, variant.id, reason);
-  }
-}
-
 test.describe('2. Cart Management', () => {
   test.beforeAll(async ({ request }) => {
     if (!hasAdminCreds()) return;
@@ -138,21 +155,19 @@ test.describe('2. Cart Management', () => {
   });
 
   test.beforeEach(async ({ page }) => {
+    currentRollbackState = createRollbackState();
     await ensureProductsPage(page);
     await clearCart(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    await clearCart(page);
+    await rollbackCurrentTestInventory(sharedAdminApi);
+    currentRollbackState = null;
+  });
+
   test.afterAll(async () => {
     if (!sharedAdminApi) return;
-
-    for (const variantId of trackedInventoryBaselines.keys()) {
-      try {
-        await restoreTrackedInventory(sharedAdminApi, variantId, 'E2E suite final rollback');
-      } catch (error) {
-        console.error(`Failed to rollback inventory for variant ${variantId}:`, error);
-      }
-    }
-
     await sharedAdminApi.dispose();
     sharedAdminApi = null;
   });
@@ -196,19 +211,15 @@ test.describe('2. Cart Management', () => {
     expect(sharedAdminApi).toBeTruthy();
     const { product } = await resolveTargetVariant(page);
 
-    try {
-      await setAllProductVariantsAvailableUnits(sharedAdminApi, product, 0, 'E2E out-of-stock validation');
+    await setAllProductVariantsAvailableUnits(sharedAdminApi, product, 0, 'E2E out-of-stock validation');
 
-      await openProductByName(page, product.name);
-      await selectVariant(page, TEST_DATA.variantColor, TEST_DATA.variantSize);
+    await openProductByName(page, product.name);
+    await selectVariant(page, TEST_DATA.variantColor, TEST_DATA.variantSize);
 
-      const addButton = page.getByRole('button', { name: /add to cart/i }).first();
-      await expect(page.getByText(/out of stock/i).first()).toBeVisible();
-      if (await addButton.count()) {
-        await expect(addButton).toBeDisabled();
-      }
-    } finally {
-      await restoreProductVariants(sharedAdminApi, product, 'E2E restore stock after out-of-stock test');
+    const addButton = page.getByRole('button', { name: /add to cart/i }).first();
+    await expect(page.getByText(/out of stock/i).first()).toBeVisible();
+    if (await addButton.count()) {
+      await expect(addButton).toBeDisabled();
     }
   });
 
@@ -218,29 +229,24 @@ test.describe('2. Cart Management', () => {
     expect(sharedAdminApi).toBeTruthy();
     const { variant } = await resolveTargetVariant(page);
 
-    try {
-      await setVariantAvailableUnits(sharedAdminApi, variant.id, 1, 'E2E limit quantity test');
+    await setVariantAvailableUnits(sharedAdminApi, variant.id, 1, 'E2E limit quantity test');
 
-      const addRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
-        data: { variantId: variant.id, quantity: 1 },
-      });
-      expect(addRes.ok()).toBeTruthy();
+    const addRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
+      data: { variantId: variant.id, quantity: 1 },
+    });
+    expect(addRes.ok()).toBeTruthy();
 
-      const cart = await fetchCart(page);
-      const cartItem = cart.items.find((item) => item.variantId === variant.id);
-      expect(cartItem).toBeTruthy();
+    const cart = await fetchCart(page);
+    const cartItem = cart.items.find((item) => item.variantId === variant.id);
+    expect(cartItem).toBeTruthy();
 
-      const updateRes = await page.request.patch(`${CUSTOMER_BASE_URL}/api/cart/${cartItem.id}`, {
-        data: { quantity: 2 },
-      });
-      expect(updateRes.ok()).toBeFalsy();
+    const updateRes = await page.request.patch(`${CUSTOMER_BASE_URL}/api/cart/${cartItem.id}`, {
+      data: { quantity: 2 },
+    });
+    expect(updateRes.ok()).toBeFalsy();
 
-      const body = await updateRes.json();
-      expect(String(body.message || '').toLowerCase()).toMatch(/insufficient inventory|out of stock/);
-    } finally {
-      await clearCart(page);
-      await restoreTrackedInventory(sharedAdminApi, variant.id, 'E2E restore stock after quantity-limit test');
-    }
+    const body = await updateRes.json();
+    expect(String(body.message || '').toLowerCase()).toMatch(/insufficient inventory|out of stock/);
   });
 
   test('2.5 Quantity Increment: subtotal and total update immediately', async ({ page }) => {

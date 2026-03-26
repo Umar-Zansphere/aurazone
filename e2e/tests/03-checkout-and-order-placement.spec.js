@@ -40,6 +40,10 @@ test.describe('3. Checkout & Order Placement', () => {
     await clearCart(page);
   });
 
+  test.afterEach(async ({ page }) => {
+    await clearCart(page);
+  });
+
   test('3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings', async ({ page }) => {
     const product = await findProductByName(page.request, TEST_DATA.exactProductName);
     expect(product).toBeTruthy();
