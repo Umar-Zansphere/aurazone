@@ -14,12 +14,12 @@ export default function ProductCard({ product }) {
   const { showToast } = useToast();
   const [imageLoaded, setImageLoaded] = useState(false);
 
-  const isInCart = useCartStore((state) => state.isInCart);
+  const cartItems = useCartStore((state) => state.items);
+  const cartPendingByVariant = useCartStore((state) => state.pendingByVariant);
   const toggleVariantInCart = useCartStore((state) => state.toggleVariantInCart);
-  const isVariantPending = useCartStore((state) => state.isVariantPending);
-  const isInWishlist = useWishlistStore((state) => state.isInWishlist);
+  const wishlistItems = useWishlistStore((state) => state.items);
+  const wishlistPendingByKey = useWishlistStore((state) => state.pendingByKey);
   const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
-  const isWishlistPending = useWishlistStore((state) => state.isWishlistPending);
 
   if (!product) return null;
 
@@ -37,13 +37,18 @@ export default function ProductCard({ product }) {
   const isOutOfStock = !firstVariant || isVariantUnavailable || availableQuantity <= 0;
   const isLimitedStock = !isOutOfStock && availableQuantity < LOW_STOCK_THRESHOLD;
 
-  // Check if product is in wishlist directly from store state
-  const wishlistAdded = isInWishlist(product.id, firstVariant?.id);
+  const inCart = firstVariant
+    ? cartItems.some((item) => item.variantId === firstVariant.id)
+    : false;
+  const wishlistAdded = firstVariant
+    ? wishlistItems.some((item) => item.productId === product.id && item.variantId === firstVariant.id)
+    : false;
 
-  // Check if product is in cart directly from store state
-  const inCart = firstVariant ? isInCart(firstVariant.id) : false;
-  const isCartPending = firstVariant ? isVariantPending(firstVariant.id) : false;
-  const isHeartPending = firstVariant ? isWishlistPending(product.id, firstVariant.id) : false;
+  const isCartPending = firstVariant
+    ? Boolean(cartPendingByVariant?.[firstVariant.id])
+    : false;
+  const wishlistKey = `${product.id}::${firstVariant?.id || 'any'}`;
+  const isHeartPending = Boolean(wishlistPendingByKey?.[wishlistKey]);
 
   const handleAddToCart = async (e) => {
     e.preventDefault();
