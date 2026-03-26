@@ -45,22 +45,25 @@ pipeline {
     }
 
     post {
-        always {
-            dir('e2e') {
-                publishHTML([
-                    allowMissing: true,
-                    alwaysLinkToLastBuild: true,
-                    keepAll: true,
-                    reportDir: 'playwright-report',
-                    reportFiles: 'index.html',
-                    reportName: 'Playwright E2E Report'
-                ])
+    always {
+        dir('e2e') {
+            publishHTML([
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true,
+                reportDir: 'playwright-report',
+                reportFiles: 'index.html',
+                reportName: 'Playwright E2E Report'
+            ])
 
-                archiveArtifacts artifacts: 'playwright-report/**/*', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'playwright-report/**/*', allowEmptyArchive: true
 
-                zip zipFile: 'playwright-report.zip', dir: 'playwright-report'
-            }
+            // ZIP using PowerShell (Windows-safe)
+            bat '''
+            powershell -Command "Compress-Archive -Path playwright-report\\* -DestinationPath playwright-report.zip -Force"
+            '''
         }
+    }
 
         success {
             emailext(
