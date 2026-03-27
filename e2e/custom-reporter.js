@@ -33,55 +33,61 @@ const HTML_TEMPLATE = `
 
 class CustomHtmlReporter {
   constructor() {
-    this.logs = [];
-    this.hasFailure = false;
-    this.errorMsg = '';
+    this.results = new Map();
   }
 
   onTestEnd(test, result) {
-    const timestamp = new Date().toLocaleTimeString();
-    const status = result.status === 'passed' ? 'SUCCESS' : (result.status === 'failed' || result.status === 'timedOut' ? 'ERROR' : 'INFO');
-    
-    // Only log failures and info, do not clutter with successful tests
-    if (status !== 'SUCCESS') {
-      this.logs.push({
-        time: timestamp,
-        step: test.title,
-        status: status
-      });
-    } else {
-      // Keep track of total passed
-      this.passedCount = (this.passedCount || 0) + 1;
-    }
-    
-    if (status === 'ERROR') {
-      this.hasFailure = true;
-      if (result.error) {
-        this.errorMsg += `Test: ${test.title}\nError: ${result.error.message}\n\n`;
-      }
-    }
+    // Store only the final result for this specific test case, overwriting previous retries
+    this.results.set(test.id, { test, result });
   }
 
   onEnd() {
+    const finalLogs = [];
+    let passedCount = 0;
+    let hasFailure = false;
+    let errorMsg = '';
+
+    for (const { test, result } of this.results.values()) {
+      const timestamp = new Date().toLocaleTimeString();
+      const status = result.status === 'passed' ? 'SUCCESS' : (result.status === 'failed' || result.status === 'timedOut' ? 'ERROR' : 'INFO');
+      
+      if (status !== 'SUCCESS') {
+        finalLogs.push({
+          time: timestamp,
+          step: test.title,
+          status: status
+        });
+      } else {
+        passedCount++;
+      }
+      
+      if (status === 'ERROR') {
+        hasFailure = true;
+        if (result.error) {
+          errorMsg += `Test: ${test.title}\nError: ${result.error.message}\n\n`;
+        }
+      }
+    }
+
     let rows = "";
     
-    if (!this.hasFailure && this.logs.length === 0) {
+    if (!hasFailure && finalLogs.length === 0) {
       // All tests passed, no errors or info logs
-      rows = `<tr><td colspan="3" style="text-align: center; font-weight: bold; color: green;">All ${this.passedCount || 0} tests passed successfully!</td></tr>`;
+      rows = `<tr><td colspan="3" style="text-align: center; font-weight: bold; color: green;">All ${passedCount || 0} tests passed successfully!</td></tr>`;
     } else {
-      for (const log of this.logs) {
+      for (const log of finalLogs) {
         const colorClass = log.status === 'SUCCESS' ? 'pass' : (log.status === 'ERROR' ? 'fail' : 'info');
         rows += `<tr><td>${log.time}</td><td>${log.step}</td><td class='${colorClass}'>${log.status}</td></tr>`;
       }
     }
 
-    const success = !this.hasFailure;
+    const success = !hasFailure;
     const status_text = success ? "PASSED" : "FAILED";
     const header_color = success ? "#4CAF50" : "#f44336";
     let error_section = "";
 
     if (!success) {
-      const escapedError = this.errorMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const escapedError = errorMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;');
       error_section = `<h3>Error Details</h3><pre>${escapedError || 'Tests failed.'}</pre><p><b>Check Jenkins artifacts for detailed Playwright report and trace.</b></p>`;
     }
 
