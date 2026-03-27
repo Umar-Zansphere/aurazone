@@ -71,21 +71,23 @@ pipeline {
 
         success {
             emailext(
+                from: 'umar.zangroups@gmail.com',
                 to: 'umarmohamed444481@gmail.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: '${FILE,path="e2e/test_report.html"}',
                 mimeType: 'text/html',
-                attachmentsPattern: 'playwright-report.zip'
+                attachmentsPattern: 'test_report.html,failure_screenshot.png'
             )
         }
 
         failure {
             emailext(
+                from: 'umar.zangroups@gmail.com',
                 to: 'umarmohamed444481@gmail.com',
                 subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
                 body: '${FILE,path="e2e/test_report.html"}',
                 mimeType: 'text/html',
-                attachmentsPattern: 'playwright-report.zip'
+                attachmentsPattern: 'test_report.html,failure_screenshot.png'
             )
         }
     }
