@@ -73,7 +73,8 @@ pipeline {
             emailext(
                 to: 'umarmohamed444481@gmail.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Tests passed: ${env.BUILD_URL}",
+                body: '${FILE,path="e2e/test_report.html"}',
+                mimeType: 'text/html',
                 attachmentsPattern: 'playwright-report.zip'
             )
         }
@@ -82,7 +83,8 @@ pipeline {
             emailext(
                 to: 'umarmohamed444481@gmail.com',
                 subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Tests failed: ${env.BUILD_URL}",
+                body: '${FILE,path="e2e/test_report.html"}',
+                mimeType: 'text/html',
                 attachmentsPattern: 'playwright-report.zip'
             )
         }

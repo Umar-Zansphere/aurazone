@@ -35,7 +35,7 @@ module.exports = defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : 1, // Sequential execution for checkout -> admin flow
-    reporter: [['html', { open: 'never' }], ['list']],
+    reporter: [['html', { open: 'never' }], ['list'], ['./custom-reporter.js']],
     timeout: 120_000,
     expect: {
         timeout: 15_000,
