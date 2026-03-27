@@ -201,7 +201,7 @@ test.describe('7. Concurrency & Edge Cases', () => {
       const variant = product.variants[0];
       await captureInventoryBaseline(rollbackState, rollbackAdminApi, variant.id);
 
-      await updateAdminInventory(rollbackAdminApi, variant.id, 1, 'E2E last-item race setup');
+      await adjustInventory(rollbackAdminApi, variant.id, 'SET', 1, 'E2E last-item race setup');
 
       expect((await addVariantToCart(guestOne, variant.id, 1)).ok()).toBeTruthy();
       expect((await addVariantToCart(guestTwo, variant.id, 1)).ok()).toBeTruthy();
@@ -292,7 +292,7 @@ test.describe('7. Concurrency & Edge Cases', () => {
       data: { variantId: variant.id, quantity: 1 },
     });
 
-    await updateAdminInventory(rollbackAdminApi, variant.id, 0, 'E2E stock zero mid-checkout');
+    await adjustInventory(rollbackAdminApi, variant.id, 'SET', 0, 'E2E stock zero mid-checkout');
 
     const orderRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/orders`, {
       data: {

@@ -1,0 +1,34 @@
+
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .header { background-color: #f44336; color: white; padding: 10px; }
+        .content { padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Playwright E2E Test Report: FAILED</h2>
+        <p>Date: 3/27/2026, 4:15:52 AM</p>
+    </div>
+    <div class="content">
+        <h3>Execution Log</h3>
+        <table>
+            <tr><th>Timestamp</th><th>Test Name</th><th>Status</th></tr>
+            <tr><td>4:15:52 AM</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr>
+        </table>
+        <h3>Error Details</h3><pre>Test: 7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+Received: [31mfalse[39m
+
+</pre><p><b>Check Jenkins artifacts for detailed Playwright report and trace.</b></p>
+    </div>
+</body>
+</html>

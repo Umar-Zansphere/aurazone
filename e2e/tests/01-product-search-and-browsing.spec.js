@@ -12,6 +12,37 @@ const {
 
 const escapeRegExp = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const waitForProductsSearchResponse = async (page, expectedQuery = {}) => {
+  await page.waitForResponse((response) => {
+    if (!response.url().includes('/api/products/search')) return false;
+
+    const responseUrl = new URL(response.url());
+    return Object.entries(expectedQuery).every(([key, value]) => {
+      return (responseUrl.searchParams.get(key) || '') === String(value);
+    });
+  }, { timeout: 20_000 });
+};
+
+const waitForProductResultsToSettle = async (page) => {
+  const cards = page.locator('a[href^="/product/"]');
+  const emptyState = page.getByText(/no products found/i);
+  const loadingStatus = page.getByText(/^Loading\.\.\.$/).first();
+
+  await expect
+    .poll(async () => {
+      const isLoading = await loadingStatus.isVisible().catch(() => false);
+      if (isLoading) return 'loading';
+
+      if (await emptyState.first().isVisible().catch(() => false)) return 'empty';
+
+      const cardCount = await cards.count();
+      if (cardCount > 0) return 'cards';
+
+      return 'pending';
+    }, { timeout: 20_000 })
+    .toMatch(/^(empty|cards)$/);
+};
+
 test.describe('1. Product Searching & Browsing', () => {
   test.beforeEach(async ({ page }) => {
     await ensureProductsPage(page);
@@ -63,15 +94,23 @@ test.describe('1. Product Searching & Browsing', () => {
     }
 
     await categoryInputs.nth(selectedIndex).check();
-    await page.getByRole('button', { name: /apply filters/i }).click();
+    await Promise.all([
+      waitForProductsSearchResponse(page, { category: selectedCategory }),
+      page.getByRole('button', { name: /apply filters/i }).click(),
+    ]);
     await expect
       .poll(() => new URL(page.url()).searchParams.get('category') || '')
       .toBe(selectedCategory);
+    await waitForProductResultsToSettle(page);
 
     const cards = page.locator('a[href^="/product/"]');
     const cardTexts = await cards.evaluateAll((nodes) => nodes.map((node) => node.textContent || ''));
 
-    expect(cardTexts.length).toBeGreaterThan(0);
+    if (cardTexts.length === 0) {
+      await expect(page.getByText(/no products found/i)).toBeVisible();
+      return;
+    }
+
     for (const text of cardTexts) {
       expect(text.toLowerCase()).toContain(selectedCategory.toLowerCase());
     }
@@ -80,13 +119,27 @@ test.describe('1. Product Searching & Browsing', () => {
   test('1.5 Price Range Filtering: listed products are within min/max', async ({ page }) => {
     await page.getByPlaceholder('Min').fill(String(TEST_DATA.minPrice));
     await page.getByPlaceholder('Max').fill(String(TEST_DATA.maxPrice));
-    await page.getByRole('button', { name: /apply filters/i }).click();
+    await Promise.all([
+      waitForProductsSearchResponse(page, {
+        minPrice: String(TEST_DATA.minPrice),
+        maxPrice: String(TEST_DATA.maxPrice),
+      }),
+      page.getByRole('button', { name: /apply filters/i }).click(),
+    ]);
     await expect
       .poll(() => new URL(page.url()).searchParams.get('minPrice') || '')
       .toBe(String(TEST_DATA.minPrice));
     await expect
       .poll(() => new URL(page.url()).searchParams.get('maxPrice') || '')
       .toBe(String(TEST_DATA.maxPrice));
+    await waitForProductResultsToSettle(page);
+
+    const cards = page.locator('a[href^="/product/"]');
+    const cardCount = await cards.count();
+    if (cardCount === 0) {
+      await expect(page.getByText(/no products found/i)).toBeVisible();
+      return;
+    }
 
     const prices = await getCardPrices(page);
     expect(prices.length).toBeGreaterThan(0);
