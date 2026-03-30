@@ -1,0 +1,10 @@
+[resetDB 2026-03-30T05:59:41.984Z pid=38811] Starting: pnpm seed (cwd=/home/umar23-zan/projects/aurazone/backend)
+[resetDB 2026-03-30T05:59:41.984Z pid=38811] Database reset and seeding completed.
+[resetDB 2026-03-30T06:00:18.586Z pid=38811] Starting: pnpm seed (cwd=/home/umar23-zan/projects/aurazone/backend)
+[resetDB 2026-03-30T06:00:18.586Z pid=38811] Database reset and seeding completed.
+[resetDB 2026-03-30T06:01:00.390Z pid=39475] Starting: pnpm seed (cwd=/home/umar23-zan/projects/aurazone/backend)
+[resetDB 2026-03-30T06:01:00.390Z pid=39475] Database reset and seeding completed.
+[resetDB 2026-03-30T06:01:19.837Z pid=39685] Starting: pnpm seed (cwd=/home/umar23-zan/projects/aurazone/backend)
+[resetDB 2026-03-30T06:01:19.837Z pid=39685] Database reset and seeding completed.
+[resetDB 2026-03-30T06:01:40.465Z pid=39873] Starting: pnpm seed (cwd=/home/umar23-zan/projects/aurazone/backend)
+[resetDB 2026-03-30T06:01:40.465Z pid=39873] Database reset and seeding completed.

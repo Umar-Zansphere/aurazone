@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { request } = require('@playwright/test');
+const { execSync } = require('child_process');
 
 const ensureDir = (dirPath) => {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -82,6 +83,24 @@ async function createAdminState() {
 }
 
 module.exports = async () => {
+  // Reset and seed the database before any test setup
+  try {
+    execSync(
+    'pnpm --filter backend seed',
+    {
+      stdio: 'inherit',
+      cwd: path.resolve(__dirname, '../'),
+      env: {
+        ...process.env,
+        NODE_ENV: 'staging',
+      },
+    }
+  );
+    console.log('Database reset and seeded successfully.');
+  } catch (err) {
+    console.error('Failed to reset/seed database:', err);
+    throw err;
+  }
   ensureDir(authDir);
   await createGuestState();
   await createCustomerState();
