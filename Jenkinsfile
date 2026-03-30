@@ -38,10 +38,13 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
+                dir('C:\\Users\\ADMIN\\AppData\\Local\\Jenkins\\.jenkins\\workspace\\Aurazone-E2E-daily@2') {
+                    bat 'pnpm install'
+                }
                 dir('e2e') {
-                    bat 'npm install'
                     bat 'npx playwright install chromium'
                 }
+
             }
         }
 
