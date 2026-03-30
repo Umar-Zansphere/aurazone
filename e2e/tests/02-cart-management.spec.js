@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { TEST_DATA, hasAdminCreds, CUSTOMER_BASE_URL } = require('./utils/constants');
+const { getTestData, hasAdminCreds, CUSTOMER_BASE_URL } = require('./utils/constants');
 const {
   ensureProductsPage,
   openProductByName,
@@ -12,6 +12,8 @@ const {
   fetchAdminInventoryByVariant,
   updateAdminInventory,
 } = require('./utils/helpers');
+
+const TEST_DATA = getTestData('cart');
 
 async function selectVariant(page, color, size) {
   const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
