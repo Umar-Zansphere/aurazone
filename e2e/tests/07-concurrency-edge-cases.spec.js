@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { getTestData, hasAdminCreds } = require('./utils/constants');
+const { TEST_DATA, hasAdminCreds } = require('./utils/constants');
 const {
   CUSTOMER_BASE_URL,
   ADMIN_BASE_URL,
@@ -20,8 +20,6 @@ const {
   adjustInventory,
   delay,
 } = require('./utils/helpers');
-
-const TEST_DATA = getTestData('concurrency');
 
 function makeAddress(tag = 'edge') {
   return {

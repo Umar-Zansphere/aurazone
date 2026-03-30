@@ -96,9 +96,18 @@ async function restoreVariantToBaseline(adminApi, variantId, baseline) {
     );
   }
 
-  const final = await fetchAdminInventoryByVariant(adminApi, variantId);
-  expect(Number(final?.inventory?.quantity || 0)).toBe(baseline.quantity);
-  expect(Number(final?.inventory?.reserved || 0)).toBe(baseline.reserved);
+  await expect
+    .poll(async () => {
+      const final = await fetchAdminInventoryByVariant(adminApi, variantId);
+      return {
+        quantity: Number(final?.inventory?.quantity || 0),
+        reserved: Number(final?.inventory?.reserved || 0),
+      };
+    }, { timeout: 30_000 })
+    .toEqual({
+      quantity: baseline.quantity,
+      reserved: baseline.reserved,
+    });
 }
 
 async function rollbackDbMutations(adminApi, rollbackState) {

@@ -15,24 +15,18 @@
 <body>
     <div class="header">
         <h2>Playwright E2E Test Report: FAILED</h2>
-        <p>Date: 3/30/2026, 7:31:23 AM</p>
+        <p>Date: 3/30/2026, 8:35:43 AM</p>
     </div>
     <div class="content">
         <h3>Execution Log</h3>
         <table>
             <tr><th>Timestamp</th><th>Test Name</th><th>Status</th></tr>
-            <tr><td>7:31:23 AM</td><td>1.5 Price Range Filtering: listed products are within min/max</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>2.2 Add Product with Variants: selected variant is added</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>2.3 Out of Stock Prevention: adding unavailable stock is blocked</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully</td><td class='fail'>ERROR</td></tr><tr><td>7:31:23 AM</td><td>7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls</td><td class='fail'>ERROR</td></tr>
+            <tr><td>8:35:43 AM</td><td>2.2 Add Product with Variants: selected variant is added</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>2.3 Out of Stock Prevention: adding unavailable stock is blocked</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.3 Address Validation (Failure): missing required fields show validation feedback</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls</td><td class='fail'>ERROR</td></tr>
         </table>
-        <h3>Error Details</h3><pre>Test: 1.5 Price Range Filtering: listed products are within min/max
-Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThanOrEqual[2m([22m[32mexpected[39m[2m)[22m
-
-Expected: &lt;= [32m125[39m
-Received:    [31m150[39m
-
-Test: 2.2 Add Product with Variants: selected variant is added
+        <h3>Error Details</h3><pre>Test: 2.2 Add Product with Variants: selected variant is added
 Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
 
-Expected substring: [32m"Midnight Black"[39m
+Expected substring: [32m"Classic White"[39m
 Received string:    [31m"Aurazone.·[39m
 [31mSHOP·[39m
 [31m🌟 New Arrivals⭐ Featured👟 All Products·[39m
@@ -73,8 +67,17 @@ Call log:
 [2m  - waiting for locator('a[href^="/product/"]').filter({ hasText: 'Forest Trek' }).first()[22m
 
 
+Test: 3.3 Address Validation (Failure): missing required fields show validation feedback
+Error: TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+============================================================
+
 Test: 7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change
-Error: TypeError: Cannot read properties of undefined (reading 'unitPrice')
+Error: TimeoutError: locator.textContent: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for locator('main')[22m
+
 
 Test: 7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement
 Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m

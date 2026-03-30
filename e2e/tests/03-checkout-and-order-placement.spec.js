@@ -20,6 +20,32 @@ function parseAmountFromBlock(text, label) {
   return Number.parseFloat(match[1].replace(/,/g, ''));
 }
 
+function parseAddressList(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.data)) return raw.data;
+  return [];
+}
+
+let createdAddressIds = null;
+
+async function rollbackCreatedAddresses(page) {
+  if (!createdAddressIds || createdAddressIds.size === 0) return;
+
+  for (const addressId of createdAddressIds) {
+    try {
+      const res = await page.request.delete(`${CUSTOMER_BASE_URL}/api/users/addresses/${addressId}`);
+      if (!res.ok() && res.status() !== 404) {
+        // Best-effort cleanup; avoid masking test assertions.
+        // eslint-disable-next-line no-console
+        console.warn(`Address rollback failed for ${addressId}: ${res.status()}`);
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn(`Address rollback failed for ${addressId}: ${error.message}`);
+    }
+  }
+}
+
 async function ensureGuestCheckoutCart(page, productName = TEST_DATA.exactProductName) {
   await page.request.post(`${CUSTOMER_BASE_URL}/api/auth/logout`, { failOnStatusCode: false });
   await clearCart(page);
@@ -36,12 +62,18 @@ async function ensureGuestCheckoutCart(page, productName = TEST_DATA.exactProduc
 
 test.describe('3. Checkout & Order Placement', () => {
   test.beforeEach(async ({ page }) => {
+    createdAddressIds = new Set();
     await ensureProductsPage(page);
     await clearCart(page);
   });
 
   test.afterEach(async ({ page }) => {
-    await clearCart(page);
+    try {
+      await clearCart(page);
+      await rollbackCreatedAddresses(page);
+    } finally {
+      createdAddressIds = null;
+    }
   });
 
   test('3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings', async ({ page }) => {
@@ -63,13 +95,20 @@ test.describe('3. Checkout & Order Placement', () => {
     await clearCart(page);
     await ensureCustomerLogin(page);
 
+    const beforeAddressesRes = await page.request.get(`${CUSTOMER_BASE_URL}/api/users/addresses`);
+    const beforeAddressesRaw = await beforeAddressesRes.json().catch(() => ({}));
+    const beforeAddressIds = new Set(parseAddressList(beforeAddressesRaw).map((address) => address?.id).filter(Boolean));
+
     const authProduct = await findProductByName(page.request, TEST_DATA.secondaryProductName);
     await openProductByName(page, authProduct.name);
     await addCurrentProductToCart(page);
     await gotoCart(page);
     await expect(page.getByLabel(/quantity selector/i).first()).toBeVisible({ timeout: 45_000 });
 
-    await ensureCustomerAddress(page);
+    const ensuredAddress = await ensureCustomerAddress(page);
+    if (beforeAddressesRes.ok() && ensuredAddress?.id && !beforeAddressIds.has(ensuredAddress.id)) {
+      createdAddressIds.add(ensuredAddress.id);
+    }
     await gotoCheckout(page);
 
     await expect(page.getByText(/delivery address/i)).toBeVisible();

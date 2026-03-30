@@ -8,19 +8,173 @@ const {
   clearCart,
   findProductByName,
   createAdminApiContext,
+  fetchAdminInventoryByVariant,
+  adjustInventory,
+  updateAdminInventory,
   gotoCustomer,
   delay,
 } = require('./utils/helpers');
 
 test.use({ storageState: STORAGE_STATE_PATHS.customer });
 
+function parseAddressList(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (Array.isArray(raw?.data)) return raw.data;
+  return [];
+}
+
+function createRollbackState() {
+  return {
+    createdOrderIds: new Set(),
+    variantBaselines: new Map(),
+    createdAddressIds: new Set(),
+  };
+}
+
+function rememberCreatedOrder(rollbackState, orderId) {
+  if (!rollbackState || !orderId) return;
+  rollbackState.createdOrderIds.add(orderId);
+}
+
+async function captureVariantBaseline(rollbackState, adminApi, variantId) {
+  if (!rollbackState || !adminApi || !variantId || rollbackState.variantBaselines.has(variantId)) {
+    return;
+  }
+
+  const snapshot = await fetchAdminInventoryByVariant(adminApi, variantId);
+  rollbackState.variantBaselines.set(variantId, {
+    quantity: Number(snapshot?.inventory?.quantity || 0),
+    reserved: Number(snapshot?.inventory?.reserved || 0),
+  });
+}
+
+async function restoreVariantToBaseline(adminApi, variantId, baseline) {
+  const initial = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const initialReserved = Number(initial?.inventory?.reserved || 0);
+
+  if (initialReserved > baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'RELEASE',
+      initialReserved - baseline.reserved,
+      'E2E rollback reserved inventory'
+    );
+  } else if (initialReserved < baseline.reserved) {
+    await adjustInventory(
+      adminApi,
+      variantId,
+      'HOLD',
+      baseline.reserved - initialReserved,
+      'E2E rollback reserved inventory'
+    );
+  }
+
+  const beforeQuantityRestore = await fetchAdminInventoryByVariant(adminApi, variantId);
+  const currentQuantity = Number(beforeQuantityRestore?.inventory?.quantity || 0);
+  if (currentQuantity !== baseline.quantity) {
+    await updateAdminInventory(
+      adminApi,
+      variantId,
+      Math.max(baseline.quantity, Number(beforeQuantityRestore?.inventory?.reserved || 0)),
+      'E2E rollback quantity'
+    );
+  }
+
+  await expect
+    .poll(async () => {
+      const final = await fetchAdminInventoryByVariant(adminApi, variantId);
+      return {
+        quantity: Number(final?.inventory?.quantity || 0),
+        reserved: Number(final?.inventory?.reserved || 0),
+      };
+    }, { timeout: 30_000 })
+    .toEqual({
+      quantity: baseline.quantity,
+      reserved: baseline.reserved,
+    });
+}
+
+async function rollbackDbMutations(adminApi, rollbackState) {
+  if (!adminApi || !rollbackState) return;
+
+  const failures = [];
+
+  for (const orderId of rollbackState.createdOrderIds) {
+    try {
+      const res = await adminApi.delete(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}`, {
+        data: {
+          reason: 'E2E auto rollback',
+        },
+      });
+
+      if (!res.ok() && ![404, 409].includes(res.status())) {
+        const body = await res.text().catch(() => '');
+        failures.push(`order ${orderId}: ${res.status()} ${body}`.trim());
+      }
+    } catch (error) {
+      failures.push(`order ${orderId}: ${error.message}`);
+    }
+  }
+
+  for (const [variantId, baseline] of rollbackState.variantBaselines.entries()) {
+    try {
+      await restoreVariantToBaseline(adminApi, variantId, baseline);
+    } catch (error) {
+      failures.push(`variant ${variantId}: ${error.message}`);
+    }
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Rollback failed for: ${failures.join(' | ')}`);
+  }
+}
+
+let rollbackState = null;
+let rollbackAdminApi = null;
+
+async function ensureTrackedCustomerAddress(page, rollbackState) {
+  const listRes = await page.request.get(`${CUSTOMER_BASE_URL}/api/users/addresses`);
+  const listRaw = await listRes.json().catch(() => ({}));
+  const beforeIds = new Set(parseAddressList(listRaw).map((address) => address?.id).filter(Boolean));
+
+  const address = await ensureCustomerAddress(page);
+  if (listRes.ok() && rollbackState && address?.id && !beforeIds.has(address.id)) {
+    rollbackState.createdAddressIds.add(address.id);
+  }
+
+  return address;
+}
+
+async function rollbackCreatedAddresses(customerApi, rollbackState) {
+  if (!customerApi || !rollbackState || rollbackState.createdAddressIds.size === 0) {
+    return [];
+  }
+
+  const failures = [];
+  for (const addressId of rollbackState.createdAddressIds) {
+    try {
+      const res = await customerApi.delete(`${CUSTOMER_BASE_URL}/api/users/addresses/${addressId}`);
+      if (!res.ok() && res.status() !== 404) {
+        const body = await res.text().catch(() => '');
+        failures.push(`address ${addressId}: ${res.status()} ${body}`.trim());
+      }
+    } catch (error) {
+      failures.push(`address ${addressId}: ${error.message}`);
+    }
+  }
+
+  return failures;
+}
+
 async function createAuthenticatedOrder(page, paymentMethod = 'COD') {
   await ensureCustomerLogin(page);
   await clearCart(page);
 
-  const address = await ensureCustomerAddress(page);
+  const address = await ensureTrackedCustomerAddress(page, rollbackState);
   const product = await findProductByName(page.request, TEST_DATA.exactProductName);
   const variant = product.variants[0];
+  await captureVariantBaseline(rollbackState, rollbackAdminApi, variant.id);
 
   const addRes = await page.request.post(`${CUSTOMER_BASE_URL}/api/cart`, {
     data: {
@@ -38,17 +192,52 @@ async function createAuthenticatedOrder(page, paymentMethod = 'COD') {
   });
 
   const orderBody = await orderRes.json().catch(() => ({}));
+  if (orderBody?.data?.orderId) {
+    rememberCreatedOrder(rollbackState, orderBody.data.orderId);
+  }
+
   return {
     response: orderRes,
     body: orderBody,
     address,
     product,
+    variant,
   };
 }
 
 test.describe('5. Order Tracking & Customer Dashboard', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ request }) => {
     test.skip(!hasCustomerCreds(), 'CUSTOMER_EMAIL and CUSTOMER_PASSWORD are required for customer dashboard scenarios.');
+    test.skip(!hasAdminCreds(), 'Admin credentials are required to rollback DB mutations for dashboard scenarios.');
+    rollbackState = createRollbackState();
+    rollbackAdminApi = await createAdminApiContext(request);
+  });
+
+  test.afterEach(async ({ page }) => {
+    const failures = [];
+
+    try {
+      await clearCart(page);
+
+      try {
+        await rollbackDbMutations(rollbackAdminApi, rollbackState);
+      } catch (error) {
+        failures.push(error.message);
+      }
+
+      const addressFailures = await rollbackCreatedAddresses(page.request, rollbackState);
+      failures.push(...addressFailures);
+
+      if (failures.length > 0) {
+        throw new Error(`Rollback failed for: ${failures.join(' | ')}`);
+      }
+    } finally {
+      if (rollbackAdminApi) {
+        await rollbackAdminApi.dispose();
+      }
+      rollbackAdminApi = null;
+      rollbackState = null;
+    }
   });
 
   test('5.1 Email Confirmation: confirmation artifact includes accurate order details and order number', async ({ page }) => {
@@ -108,25 +297,17 @@ test.describe('5. Order Tracking & Customer Dashboard', () => {
 
   // ✅ Case-insensitive product match
   expect(page.getByText(product.name, { exact: false })).toBeVisible();
-});
+  });
 
-  test('5.4 Status Updates Reflection: admin shipped status reflects in customer dashboard', async ({ page, request }) => {
-    test.skip(!hasAdminCreds(), 'Admin credentials required for cross-panel status reflection.');
-
+  test('5.4 Status Updates Reflection: admin shipped status reflects in customer dashboard', async ({ page }) => {
     const { response, body } = await createAuthenticatedOrder(page, 'COD');
     expect(response.ok()).toBeTruthy();
 
     const orderId = body.data.orderId;
-    const adminApi = await createAdminApiContext(request);
-
-    try {
-      const updateRes = await adminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
-        data: { status: 'SHIPPED', note: 'E2E shipped reflection check' },
-      });
-      expect(updateRes.ok()).toBeTruthy();
-    } finally {
-      await adminApi.dispose();
-    }
+    const updateRes = await rollbackAdminApi.put(`${ADMIN_BASE_URL}/api/admin/orders/${orderId}/status`, {
+      data: { status: 'SHIPPED', note: 'E2E shipped reflection check' },
+    });
+    expect(updateRes.ok()).toBeTruthy();
 
     await gotoCustomer(page, `/orders/${orderId}`);
     await page.reload({ waitUntil: 'networkidle' });

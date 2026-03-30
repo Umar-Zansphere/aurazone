@@ -11,7 +11,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 const CUSTOMER_EMAIL = process.env.CUSTOMER_EMAIL || '';
 const CUSTOMER_PASSWORD = process.env.CUSTOMER_PASSWORD || '';
 
-const BASE_TEST_DATA = {
+const TEST_DATA = {
   exactProductName: process.env.E2E_PRODUCT_EXACT || 'Urban Street',
   secondaryProductName: process.env.E2E_PRODUCT_SECONDARY || 'Forest Trek',
   tertiaryProductName: process.env.E2E_PRODUCT_TERTIARY || 'Retro Colorblock',
@@ -21,31 +21,6 @@ const BASE_TEST_DATA = {
   variantColor: process.env.E2E_VARIANT_COLOR || 'Midnight Black',
   variantSize: process.env.E2E_VARIANT_SIZE || 'US 9',
 };
-
-const SUITE_TEST_DATA_OVERRIDES = {
-  cart: {
-    exactProductName: process.env.E2E_CART_PRODUCT_EXACT || 'Cart Anchor',
-    secondaryProductName: process.env.E2E_CART_PRODUCT_SECONDARY || 'Cart Relay',
-    tertiaryProductName: process.env.E2E_CART_PRODUCT_TERTIARY || BASE_TEST_DATA.tertiaryProductName,
-    variantColor: process.env.E2E_CART_VARIANT_COLOR || 'Midnight Black',
-    variantSize: process.env.E2E_CART_VARIANT_SIZE || 'US 9',
-  },
-  concurrency: {
-    exactProductName: process.env.E2E_CONCURRENCY_PRODUCT_EXACT || 'Concurrency Bolt',
-    secondaryProductName: process.env.E2E_CONCURRENCY_PRODUCT_SECONDARY || 'Concurrency Guard',
-    tertiaryProductName: process.env.E2E_CONCURRENCY_PRODUCT_TERTIARY || 'Concurrency Pulse',
-  },
-};
-
-function getTestData(suite = 'default') {
-  if (!suite || suite === 'default') return { ...BASE_TEST_DATA };
-  return {
-    ...BASE_TEST_DATA,
-    ...(SUITE_TEST_DATA_OVERRIDES[suite] || {}),
-  };
-}
-
-const TEST_DATA = getTestData('default');
 
 const WEBHOOK_SECRET = process.env.E2E_RAZORPAY_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '';
 
@@ -69,7 +44,6 @@ module.exports = {
   CUSTOMER_EMAIL,
   CUSTOMER_PASSWORD,
   TEST_DATA,
-  getTestData,
   WEBHOOK_SECRET,
   hasCustomerCreds,
   hasAdminCreds,
