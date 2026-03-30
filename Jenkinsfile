@@ -52,11 +52,16 @@ pipeline {
         stage('Run E2E Tests') {
             steps {
                 dir('e2e') {
-                    bat 'npx playwright test'
+                    withCredentials([string(credentialsId: 'DB_URL', variable: 'DATABASE_URL')]) {
+                        withEnv(["NODE_ENV=staging"]) {
+                            bat 'echo NODE_ENV=%NODE_ENV%'
+                            bat 'echo DATABASE_URL=%DATABASE_URL%'
+                            bat 'npx playwright test'
+                        }
+                    }
                 }
             }
         }
-    }
 
     post {
     always {
