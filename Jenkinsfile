@@ -30,6 +30,12 @@ pipeline {
             }
         }
 
+        stage('Install pnpm') {
+            steps {
+                bat 'npm install -g pnpm'
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 dir('e2e') {
