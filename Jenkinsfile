@@ -30,35 +30,19 @@ pipeline {
             }
         }
 
-        stage('Install pnpm') {
-            steps {
-                bat 'npm install -g pnpm'
-            }
-        }
-
         stage('Install Dependencies') {
             steps {
-                dir('backend') {
-                    bat 'pnpm install'
-                }
                 dir('e2e') {
                     bat 'npm install'
                     bat 'npx playwright install chromium'
                 }
-
             }
         }
 
         stage('Run E2E Tests') {
             steps {
                 dir('e2e') {
-                    withCredentials([string(credentialsId: 'DB_URL', variable: 'DATABASE_URL')]) {
-                        withEnv(["NODE_ENV=staging"]) {
-                            bat 'echo NODE_ENV=%NODE_ENV%'
-                            bat 'echo DATABASE_URL=%DATABASE_URL%'
-                            bat 'npx playwright test'
-                        }
-                    }
+                    bat 'npx playwright test'
                 }
             }
         }
