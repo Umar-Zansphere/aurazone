@@ -71,19 +71,23 @@ pipeline {
 
         success {
             emailext(
-                to: 'umarmohamed444481@gmail.com',
+                from: 'umar.zangroups@gmail.com',
+                to: 'umarmohamed444481@gmail.com, zubair@zansphere.com',
                 subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Tests passed: ${env.BUILD_URL}",
-                attachmentsPattern: 'playwright-report.zip'
+                body: '${FILE,path="e2e/test_report.html"}',
+                mimeType: 'text/html',
+                attachmentsPattern: 'test_report.html,failure_screenshot.png'
             )
         }
 
         failure {
             emailext(
-                to: 'umarmohamed444481@gmail.com',
+                from: 'umar.zangroups@gmail.com',
+                to: 'umarmohamed444481@gmail.com, zubair@zansphere.com',
                 subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: "Tests failed: ${env.BUILD_URL}",
-                attachmentsPattern: 'playwright-report.zip'
+                body: '${FILE,path="e2e/test_report.html"}',
+                mimeType: 'text/html',
+                attachmentsPattern: 'test_report.html,failure_screenshot.png'
             )
         }
     }

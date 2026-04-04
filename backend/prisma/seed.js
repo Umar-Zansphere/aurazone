@@ -1,4 +1,15 @@
-require('dotenv').config();
+const dotenv = require('dotenv');
+
+const env = process.env.NODE_ENV || 'development';
+
+dotenv.config({
+  path: `.env.${env}`,
+});
+
+// optional fallback
+dotenv.config();
+
+console.log(`Seeding with env: ${env}`);
 
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
@@ -15,34 +26,85 @@ const prisma = new PrismaClient({
   adapter,
 });
 
-async function main() {
-  // Check if admin already exists
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: 'admin@aurazone.com' },
-  });
+async function resetDatabase() {
+  // Disable referential integrity
+  await prisma.$executeRawUnsafe('SET session_replication_role = replica;');
 
-  if (existingAdmin) {
-    console.log('Admin user already exists');
-    return;
+  // Truncate all tables (order matters for FKs)
+  const tables = [
+    'OrderStatusEmailLog',
+    'PaymentLog',
+    'ShipmentLog',
+    'OrderLog',
+    'OrderShipment',
+    'OrderItem',
+    'OrderAddress',
+    'Payment',
+    'Order',
+    'WishlistItem',
+    'Wishlist',
+    'CartItem',
+    'Cart',
+    'InventoryLog',
+    'Inventory',
+    'ProductImage',
+    'ProductVariant',
+    'Product',
+    'Address',
+    'UserSession',
+    'OtpVerification',
+    'PushSubscription',
+    'NotificationHistory',
+    'NotificationPreferences',
+    'GuestSession',
+    'User'
+  ];
+  for (const table of tables) {
+    await prisma.$executeRawUnsafe(`TRUNCATE TABLE "${table}" RESTART IDENTITY CASCADE;`);
   }
 
-  // Hash password
-  const hashedPassword = await bcrypt.hash('Admin@123456', 10);
+  // Re-enable referential integrity
+  await prisma.$executeRawUnsafe('SET session_replication_role = DEFAULT;');
+}
 
-  // Create admin user
-  const admin = await prisma.user.create({
-    data: {
-      email: 'admin@aurazone.com',
-      password: hashedPassword,
+async function main() {
+  // Seed admin user
+  const adminEmail = 'admin@aurazone.com';
+  const adminPassword = 'Admin@123456';
+  const adminPhone = '9442442233';
+  const admin = await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      password: await bcrypt.hash(adminPassword, 10),
       fullName: 'Admin User',
-      phone: '9442442233',
+      phone: adminPhone,
       role: 'ADMIN',
       is_active: true,
       is_email_verified: new Date(),
     },
   });
+  console.log('Admin user seeded:', admin.email);
 
-  console.log('Admin user created successfully:', admin.email);
+  // Seed normal user
+  const userEmail = 'umar.zangroups@gmail.com';
+  const userPassword = 'Umar2468/us!';
+  const userPhone = '9500693343';
+  const user = await prisma.user.upsert({
+    where: { email: userEmail },
+    update: {},
+    create: {
+      email: userEmail,
+      password: await bcrypt.hash(userPassword, 10),
+      fullName: 'Umar Zan',
+      phone: userPhone,
+      role: 'CUSTOMER',
+      is_active: true,
+      is_email_verified: new Date(),
+    },
+  });
+  console.log('Normal user seeded:', user.email);
 }
 
 const products = [
@@ -297,9 +359,17 @@ async function runSeed() {
   await seedProducts();
 }
 
+
+runSeed = async () => {
+  await resetDatabase();
+  await main();
+  await seedProducts();
+};
+
 runSeed()
   .then(async () => {
     await prisma.$disconnect();
+    await pool.end();
   })
   .catch(async (e) => {
     console.error(e);

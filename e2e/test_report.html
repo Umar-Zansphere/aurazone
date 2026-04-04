@@ -1,0 +1,109 @@
+
+<html>
+<head>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .header { background-color: #f44336; color: white; padding: 10px; }
+        .content { padding: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>Playwright E2E Test Report: FAILED</h2>
+        <p>Date: 3/30/2026, 8:35:43 AM</p>
+    </div>
+    <div class="content">
+        <h3>Execution Log</h3>
+        <table>
+            <tr><th>Timestamp</th><th>Test Name</th><th>Status</th></tr>
+            <tr><td>8:35:43 AM</td><td>2.2 Add Product with Variants: selected variant is added</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>2.3 Out of Stock Prevention: adding unavailable stock is blocked</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.3 Address Validation (Failure): missing required fields show validation feedback</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls</td><td class='fail'>ERROR</td></tr>
+        </table>
+        <h3>Error Details</h3><pre>Test: 2.2 Add Product with Variants: selected variant is added
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
+
+Expected substring: [32m"Classic White"[39m
+Received string:    [31m"Aurazone.·[39m
+[31mSHOP·[39m
+[31m🌟 New Arrivals⭐ Featured👟 All Products·[39m
+[31mBY GENDER·[39m
+[31mMenWomenUnisexKids·[39m
+[31mBY CATEGORY·[39m
+[31mRunningCasualFormalSneakers·[39m
+[31mSUPPORT & POLICIES·[39m
+[31mCancellations & RefundsTerms & ConditionsShipping PolicyPrivacy PolicyContact Us[39m
+[31mContinue Shopping[39m
+[31mYour cart is empty·[39m
+[31mAdd some products to get started·[39m
+[31mBrowse Products"[39m
+
+Test: 2.3 Out of Stock Prevention: adding unavailable stock is blocked
+Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+Locator: getByText(/out of stock/i).first()
+Expected: visible
+Timeout: 15000ms
+Error: element(s) not found
+
+Call log:
+[2m  - Expect "toBeVisible" with timeout 15000ms[22m
+[2m  - waiting for getByText(/out of stock/i).first()[22m
+
+
+Test: 3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings
+Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+Locator: locator('a[href^="/product/"]').filter({ hasText: 'Forest Trek' }).first()
+Expected: visible
+Timeout: 15000ms
+Error: element(s) not found
+
+Call log:
+[2m  - Expect "toBeVisible" with timeout 15000ms[22m
+[2m  - waiting for locator('a[href^="/product/"]').filter({ hasText: 'Forest Trek' }).first()[22m
+
+
+Test: 3.3 Address Validation (Failure): missing required fields show validation feedback
+Error: TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+============================================================
+
+Test: 7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change
+Error: TimeoutError: locator.textContent: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for locator('main')[22m
+
+
+Test: 7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
+
+Expected pattern: [32m/unavailable|disabled|not found|out of stock/[39m
+Received string:  [31m"cart is empty"[39m
+
+Test: 7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
+
+Expected pattern: [32m/insufficient|out of stock|inventory/[39m
+Received string:  [31m"cart is empty"[39m
+
+Test: 7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThan[2m([22m[32mexpected[39m[2m)[22m
+
+Expected: &lt; [32m500[39m
+Received:   [31m500[39m
+
+Test: 7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls
+Error: TimeoutError: locator.fill: Timeout 15000ms exceeded.
+Call log:
+[2m  - waiting for getByPlaceholder(/enter your full name/i)[22m
+
+
+</pre><p><b>Check Jenkins artifacts for detailed Playwright report and trace.</b></p>
+    </div>
+</body>
+</html>
