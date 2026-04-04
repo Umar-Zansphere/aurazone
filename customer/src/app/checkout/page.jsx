@@ -729,7 +729,7 @@ function CheckoutPageContent() {
                   </div>
                 </button>
 
-                <button
+                {/*<button
                   onClick={() => setPaymentMethod('COD')}
                   className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'COD'
                     ? 'border-orange-500 bg-slate-50 shadow-md'
@@ -753,7 +753,7 @@ function CheckoutPageContent() {
                       <p className="text-sm text-slate-600 mt-1">Pay when you receive your order at the door</p>
                     </div>
                   </div>
-                </button>
+                </button>*/}
               </div>
             </div>
 
