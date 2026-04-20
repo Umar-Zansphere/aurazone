@@ -42,6 +42,8 @@ const {
   updateImage,
   deleteImage,
   createProduct,
+  createProductsBulk,
+  getBulkProductJob,
   getAnalytics,
   getNotificationHistory,
   markNotificationAsRead,
@@ -85,6 +87,8 @@ router.put('/shipments/:shipmentId', updateShipmentById);
 router.delete('/shipments/:shipmentId', deleteShipmentById);
 
 router.get('/products', listProducts);
+router.post('/products/bulk', uploadInMemory.any(), createProductsBulk);
+router.get('/products/bulk/:jobId', getBulkProductJob);
 router.post('/products', uploadInMemory.any(), createProduct);
 router.get('/products/:productId', getProductById);
 router.put('/products/:productId', updateProduct);
