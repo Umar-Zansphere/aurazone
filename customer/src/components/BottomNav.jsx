@@ -15,7 +15,7 @@ export default function BottomNav() {
     const pathname = usePathname();
 
     // Hide BottomNav on auth pages, admin pages, and unauthorized page
-    const hideOnRoutes = ['/login', '/signup', '/verify-otp', '/verify-email', '/forgot-password', '/admin', '/unauthorized'];
+    const hideOnRoutes = ['/login', '/signup', '/verify-otp', '/verify-email', '/forgot-password', '/reset-password', '/admin', '/unauthorized'];
     const shouldHide = hideOnRoutes.some(route => pathname?.startsWith(route));
 
     if (shouldHide) {

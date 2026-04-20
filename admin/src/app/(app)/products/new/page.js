@@ -52,7 +52,6 @@ const buildSku = (brand, modelNumber, color, size) =>
 const getColorKey = (color) => String(color || "").trim().toLowerCase();
 const splitList   = (value) => String(value || "").split(/[,;\n]/).map((s) => s.trim()).filter(Boolean);
 const parseTags   = (value) => splitList(value);
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalizeEnum = (value, allowed, fallback) => {
   const n = String(value || "").trim().toUpperCase();
@@ -150,41 +149,81 @@ const createImageItemFromImport = (file, colors = [], reference = "") => ({
   sourceReference: reference,
 });
 
-const hasVariantDetails = (variant = {}) => {
-  const hasPrice = variant.price !== undefined && variant.price !== null && variant.price !== "" && Number.isFinite(Number(variant.price));
-  return Boolean(
-    String(variant.color || "").trim() &&
-    String(variant.size || "").trim() &&
-    String(variant.sku || "").trim() &&
-    hasPrice
-  );
+const hasValidNumberInput = (value, required = false) => {
+  if (value === undefined || value === null || value === "") {
+    return !required;
+  }
+
+  return Number.isFinite(Number(value));
 };
 
-const getVariantAssignedImages = (product = {}, variant = {}) =>
-  (product.productImages || []).filter((image) =>
-    (image.colors || []).some((color) => getColorKey(color) === getColorKey(variant.color))
-  );
+const getVariantLabel = (variant = {}, index = 0) =>
+  `${variant.color || "Unknown"}/${variant.size || `#${index + 1}`}`;
 
 const summarizeList = (items = [], limit = 3) => {
   if (items.length <= limit) return items.join(", ");
   return `${items.slice(0, limit).join(", ")}…`;
 };
 
-const getProductPublishChecks = (product = {}) => {
+const getProductPublishIssues = (product = {}) => {
+  const issues = [];
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  const variantsMissingDetails = variants
-    .filter((variant) => !hasVariantDetails(variant))
-    .map((variant, index) => `${variant.color || "Unknown"}/${variant.size || `#${index + 1}`}`);
-  const variantsMissingImages = variants
-    .filter((variant) => getVariantAssignedImages(product, variant).length === 0)
-    .map((variant, index) => `${variant.color || "Unknown"}/${variant.size || `#${index + 1}`}`);
 
-  return {
-    variantsMissingDetails,
-    variantsMissingImages,
-    pendingImageRefsCount: product.pendingImageRefs?.length || 0,
-    hasImages: (product.productImages?.length || 0) > 0,
-  };
+  if (!String(product.name || "").trim() || !String(product.brand || "").trim()) {
+    issues.push("name and brand are required");
+  }
+
+  const invalidVariants = variants
+    .map((variant, index) => ({
+      label: getVariantLabel(variant, index),
+      valid: Boolean(
+        String(variant.color || "").trim() &&
+        String(variant.size || "").trim() &&
+        String(variant.sku || "").trim() &&
+        hasValidNumberInput(variant.price, true) &&
+        hasValidNumberInput(variant.compareAtPrice) &&
+        Number.isInteger(Number(variant.quantity || 0))
+      ),
+    }))
+    .filter((entry) => !entry.valid)
+    .map((entry) => entry.label);
+
+  if (variants.length === 0) {
+    issues.push("at least one variant is required");
+  } else if (invalidVariants.length > 0) {
+    issues.push(`complete variant details for ${summarizeList(invalidVariants)}`);
+  }
+
+  if (product.pendingImageRefs?.length > 0) {
+    issues.push(`match ${product.pendingImageRefs.length} pending image reference${product.pendingImageRefs.length === 1 ? "" : "s"}`);
+  }
+
+  return issues;
+};
+
+const createBulkPublishReport = (total = 0) => ({
+  total,
+  processed: 0,
+  succeeded: 0,
+  failed: 0,
+  currentName: "",
+  failures: [],
+});
+
+const getPublishStatusStyles = (status) => {
+  if (status === "published") return "bg-emerald-100 text-emerald-700";
+  if (status === "failed") return "bg-red-100 text-red-700";
+  if (status === "publishing") return "bg-[var(--highlight-soft)] text-[var(--highlight)]";
+  if (status === "queued") return "bg-[var(--border)] text-[var(--text-secondary)]";
+  return "bg-[var(--border)] text-[var(--text-secondary)]";
+};
+
+const getPublishStatusLabel = (status) => {
+  if (status === "published") return "Created";
+  if (status === "failed") return "Failed";
+  if (status === "publishing") return "Publishing";
+  if (status === "queued") return "Queued";
+  return "";
 };
 
 const resolveImportedProductImages = (product, files = []) => {
@@ -217,14 +256,17 @@ const resolveImportedProductImages = (product, files = []) => {
 const getProductCompletion = (product = {}) => {
   const detailsReady = Boolean(String(product.name || "").trim() && String(product.brand || "").trim());
   const variants = Array.isArray(product.variants) ? product.variants : [];
-  const publishChecks = getProductPublishChecks(product);
   const variantsReady =
     variants.length > 0 &&
-    publishChecks.variantsMissingDetails.length === 0;
-  const imagesReady =
-    publishChecks.pendingImageRefsCount === 0 &&
-    publishChecks.hasImages &&
-    publishChecks.variantsMissingImages.length === 0;
+    variants.every((variant) =>
+      variant.color &&
+      variant.size &&
+      variant.sku &&
+      hasValidNumberInput(variant.price, true) &&
+      hasValidNumberInput(variant.compareAtPrice) &&
+      Number.isInteger(Number(variant.quantity || 0))
+    );
+  const imagesReady = (product.pendingImageRefs?.length || 0) === 0;
 
   return {
     detailsReady,
@@ -232,30 +274,6 @@ const getProductCompletion = (product = {}) => {
     imagesReady,
     readyToPublish: detailsReady && variantsReady && imagesReady,
   };
-};
-
-const getProductPublishIssues = (product = {}) => {
-  const issues = [];
-  const completion = getProductCompletion(product);
-  const publishChecks = getProductPublishChecks(product);
-
-  if (!completion.detailsReady) {
-    issues.push("add the product name and brand");
-  }
-
-  if (publishChecks.variantsMissingDetails.length > 0) {
-    issues.push(`complete variant details for ${summarizeList(publishChecks.variantsMissingDetails)}`);
-  }
-
-  if (publishChecks.pendingImageRefsCount > 0) {
-    issues.push(`match ${publishChecks.pendingImageRefsCount} remaining imported image reference${publishChecks.pendingImageRefsCount === 1 ? "" : "s"}`);
-  } else if (!publishChecks.hasImages) {
-    issues.push("assign at least one image");
-  } else if (publishChecks.variantsMissingImages.length > 0) {
-    issues.push(`assign images to ${summarizeList(publishChecks.variantsMissingImages)}`);
-  }
-
-  return issues;
 };
 
 /* ─── CSV helpers ─────────────────────────────────────────────────── */
@@ -303,13 +321,33 @@ const parseCsv = (text) => {
 const csvEscape = (v) => { const t = String(v ?? ""); return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
 
 const rowsToProducts = (rows) => {
-  if (rows.length < 2) return [];
+  if (rows.length < 2) return { products: [], failures: [] };
   const headers = rows[0].map(normalizeHeader);
   const products = new Map();
-  rows.slice(1).forEach((row) => {
+  const failures = [];
+
+  rows.slice(1).forEach((row, rowIndex) => {
+    const rowNumber = rowIndex + 2;
     const record = {};
     headers.forEach((h, i) => { record[h] = String(row[i] ?? "").trim(); });
-    if (!record.name || !record.brand) return;
+
+    const rowIssues = [];
+    if (!record.name || !record.brand) rowIssues.push("name and brand are required");
+    if (record.price && !hasValidNumberInput(record.price)) rowIssues.push("price must be numeric");
+    if (record.compareAtPrice && !hasValidNumberInput(record.compareAtPrice)) rowIssues.push("MRP must be numeric");
+    if (record.quantity && (!Number.isInteger(Number(record.quantity)) || Number(record.quantity) < 0)) {
+      rowIssues.push("quantity must be a whole number");
+    }
+
+    if (rowIssues.length > 0) {
+      failures.push({
+        rowNumber,
+        name: record.name || record.brand || `Row ${rowNumber}`,
+        message: rowIssues.join("; "),
+      });
+      return;
+    }
+
     const key = [record.name, record.brand, record.modelNumber || "no-model"].join("|").toLowerCase();
     if (!products.has(key)) {
       products.set(key, {
@@ -357,12 +395,15 @@ const rowsToProducts = (rows) => {
       });
     }
   });
-  return Array.from(products.values()).map((p) => ({
-    ...p,
-    variants: p.variants.length > 0 ? p.variants : [emptyVariant("Black", "9", p)],
-    productImages: cloneProductImages(p.productImages),
-    pendingImageRefs: clonePendingImageRefs(p.pendingImageRefs),
-  }));
+  return {
+    products: Array.from(products.values()).map((p) => ({
+      ...p,
+      variants: p.variants.length > 0 ? p.variants : [emptyVariant("Black", "9", p)],
+      productImages: cloneProductImages(p.productImages),
+      pendingImageRefs: clonePendingImageRefs(p.pendingImageRefs),
+    })),
+    failures,
+  };
 };
 
 const getCsvTemplate = () => {
@@ -724,69 +765,79 @@ function VariantGrid({ color, variants, draft, suggestedSizes, selectedSizes, on
   );
 }
 
-function BulkJobProgress({ job }) {
-  if (!job) return null;
+function FailureLog({ failures = [], limit = 5 }) {
+  if (!failures.length) return null;
 
-  const done = ["completed", "completed_with_errors", "failed"].includes(job.status);
-  const statusLabel = job.status === "completed_with_errors"
-    ? "Completed with errors"
-    : job.status.replace(/_/g, " ");
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-red-700">Failed rows</p>
+      {failures.slice(0, limit).map((failure, index) => (
+        <div key={`${failure.rowNumber || failure.index || index}-${failure.name}-${failure.message}`} className="rounded-[10px] bg-red-50 px-3 py-2 text-[11px] text-red-800">
+          <span className="font-semibold">
+            {failure.rowNumber ? `Row ${failure.rowNumber}` : `Item ${(failure.index ?? index) + 1}`}: {failure.name || "Untitled product"}
+          </span>
+          <span className="block">{failure.message}</span>
+        </div>
+      ))}
+      {failures.length > limit && (
+        <p className="text-[11px] text-[var(--text-muted)]">+{failures.length - limit} more failed row{failures.length - limit === 1 ? "" : "s"}.</p>
+      )}
+    </div>
+  );
+}
+
+function BulkPublishProgress({ report }) {
+  if (!report) return null;
+
+  const percent = report.total > 0 ? Math.round((report.processed / report.total) * 100) : 0;
+  const done = report.total > 0 && report.processed >= report.total;
 
   return (
     <div className="rounded-[14px] border border-[var(--border)] bg-[var(--bg-app)] p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Bulk job progress</p>
-          <p className="mt-0.5 text-sm font-semibold capitalize text-[var(--text-primary)]">{statusLabel}</p>
+          <p className="text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">Publish progress</p>
+          <p className="mt-0.5 text-sm font-semibold text-[var(--text-primary)]">
+            {done ? "Finished" : report.currentName ? `Working on ${report.currentName}` : "Ready"}
+          </p>
         </div>
         <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${
-          job.failed > 0 ? "bg-amber-100 text-amber-700" : done ? "bg-emerald-100 text-emerald-700" : "bg-[var(--highlight-soft)] text-[var(--highlight)]"
+          report.failed > 0 ? "bg-red-100 text-red-700" : done ? "bg-emerald-100 text-emerald-700" : "bg-[var(--highlight-soft)] text-[var(--highlight)]"
         }`}>
-          {job.processed}/{job.total}
+          {report.processed}/{report.total}
         </span>
       </div>
 
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--border)]">
         <motion.div
-          animate={{ width: `${job.progressPercent || 0}%` }}
+          animate={{ width: `${percent}%` }}
           className="h-full rounded-full bg-[var(--highlight)]"
         />
       </div>
 
       <div className="mt-3 grid grid-cols-3 gap-2 text-center">
         <div className="rounded-[10px] bg-white p-2">
-          <p className="text-base font-bold text-emerald-700">{job.succeeded || 0}</p>
+          <p className="text-base font-bold text-emerald-700">{report.succeeded}</p>
           <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Created</p>
         </div>
         <div className="rounded-[10px] bg-white p-2">
-          <p className="text-base font-bold text-amber-700">{job.failed || 0}</p>
+          <p className="text-base font-bold text-red-700">{report.failed}</p>
           <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Failed</p>
         </div>
         <div className="rounded-[10px] bg-white p-2">
-          <p className="text-base font-bold text-[var(--text-primary)]">{job.queued || 0}</p>
+          <p className="text-base font-bold text-[var(--text-primary)]">{Math.max(0, report.total - report.processed)}</p>
           <p className="text-[10px] font-semibold uppercase text-[var(--text-muted)]">Queued</p>
         </div>
       </div>
 
-      {job.failures?.length > 0 && (
-        <div className="mt-3 space-y-1.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Failed rows</p>
-          {job.failures.slice(0, 5).map((failure) => (
-            <div key={`${failure.index}-${failure.name}-${failure.message}`} className="rounded-[10px] bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-              <span className="font-semibold">Row {(failure.index ?? 0) + 1}: {failure.name}</span>
-              <span className="block">{failure.message}</span>
-            </div>
-          ))}
-          {job.failures.length > 5 && (
-            <p className="text-[11px] text-[var(--text-muted)]">+{job.failures.length - 5} more failed row{job.failures.length - 5 === 1 ? "" : "s"}.</p>
-          )}
-        </div>
-      )}
+      <div className="mt-3">
+        <FailureLog failures={report.failures} />
+      </div>
     </div>
   );
 }
 
-function ImportedProductWorkbench({ products, activeImportId, onSelectProduct, onPublishAll, bulkPublishing, bulkJob }) {
+function ImportedProductWorkbench({ products, activeImportId, onSelectProduct, onPublishAll, bulkPublishing, bulkPublishReport }) {
   const readyCount = products.filter((product) => getProductCompletion(product).readyToPublish).length;
 
   return (
@@ -804,11 +855,11 @@ function ImportedProductWorkbench({ products, activeImportId, onSelectProduct, o
           disabled={bulkPublishing}
           className="app-button app-button-primary h-12 px-3 text-xs font-semibold disabled:opacity-50"
         >
-          {bulkPublishing ? "Queued…" : "Publish All"}
+          {bulkPublishing ? "Publishing…" : "Publish All"}
         </button>
       </div>
 
-      <BulkJobProgress job={bulkJob} />
+      <BulkPublishProgress report={bulkPublishReport} />
 
       <div className="flex flex-wrap gap-2 text-[10px] font-semibold">
         <span className="rounded-full bg-[var(--highlight-soft)] px-2.5 py-1 text-[var(--highlight)]">
@@ -845,6 +896,11 @@ function ImportedProductWorkbench({ products, activeImportId, onSelectProduct, o
                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${completion.readyToPublish ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                   {completion.readyToPublish ? "Ready" : "Needs review"}
                 </span>
+                {product.publishStatus && (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${getPublishStatusStyles(product.publishStatus)}`}>
+                    {getPublishStatusLabel(product.publishStatus)}
+                  </span>
+                )}
               </div>
 
               <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-semibold">
@@ -869,6 +925,12 @@ function ImportedProductWorkbench({ products, activeImportId, onSelectProduct, o
                   </span>
                 )}
               </div>
+
+              {product.publishError && (
+                <p className="mt-2 rounded-[10px] bg-red-50 px-3 py-2 text-[11px] text-red-800">
+                  {product.publishError}
+                </p>
+              )}
 
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <button
@@ -910,8 +972,9 @@ export default function CreateProductPage() {
   const [success,         setSuccess]         = useState(false);
   const [publishError,    setPublishError]    = useState(null);
   const [importStatus,    setImportStatus]    = useState(null);
+  const [importFailures,  setImportFailures]  = useState([]);
   const [importedProducts,setImportedProducts]= useState([]);
-  const [bulkJob,         setBulkJob]         = useState(null);
+  const [bulkPublishReport, setBulkPublishReport] = useState(null);
   const [activeImportId,  setActiveImportId]  = useState(null);
   const [shortDescriptionTouched, setShortDescriptionTouched] = useState(false);
   const [aiGeneratingTarget, setAiGeneratingTarget] = useState(null);
@@ -976,7 +1039,7 @@ export default function CreateProductPage() {
   const syncImportedProductsWithDraft = (products = importedProducts, draft = form, draftImportId = activeImportId) => {
     if (!draftImportId) return products;
     return products.map((product) =>
-      product.importId === draftImportId ? { ...cloneProductDraft(draft), importId: draftImportId } : product
+      product.importId === draftImportId ? { ...product, ...cloneProductDraft(draft), importId: draftImportId } : product
     );
   };
 
@@ -985,9 +1048,7 @@ export default function CreateProductPage() {
   useEffect(() => {
     if (!activeImportId) return;
     setImportedProducts((prev) =>
-      prev.map((product) =>
-        product.importId === activeImportId ? { ...cloneProductDraft(form), importId: activeImportId } : product
-      )
+      syncImportedProductsWithDraft(prev)
     );
   }, [form, activeImportId]);
 
@@ -1117,56 +1178,29 @@ export default function CreateProductPage() {
     setStep(nextStep);
   };
 
-  const serializeProductPayload = (product) => ({
-    name: product.name || "",
-    brand: product.brand || "",
-    modelNumber: product.modelNumber || "",
-    category: product.category || "",
-    gender: product.gender || "",
-    description: product.description || "",
-    shortDescription: product.shortDescription || "",
-    tags: product.tags || "",
-    variants: (product.variants || []).map((variant) => ({
-      color: variant.color,
-      size: variant.size,
-      sku: variant.sku,
-      price: Number(variant.price || 0),
-      compareAtPrice: variant.compareAtPrice ? Number(variant.compareAtPrice) : undefined,
-      quantity: Number(variant.quantity || 0),
-    })),
-  });
-
   const buildProductFormData = (product, includeImages = true) => {
     const fd = new FormData();
-    const payload = serializeProductPayload(product);
     ["name","brand","modelNumber","category","gender","description","shortDescription","tags"].forEach(
-      (key) => fd.append(key, payload[key] || "")
+      (k) => fd.append(k, product[k] || "")
     );
-    fd.append("variants", JSON.stringify(payload.variants));
+    fd.append("variants", JSON.stringify(product.variants.map((v) => ({
+      color: v.color, size: v.size, sku: v.sku,
+      price: Number(v.price || 0),
+      compareAtPrice: v.compareAtPrice ? Number(v.compareAtPrice) : undefined,
+      quantity: Number(v.quantity || 0),
+    }))));
     if (includeImages) {
-      product.variants.forEach((v, i) => {
-        const imgs = (product.productImages || []).filter((img) =>
-          img.colors.some((c) => getColorKey(c) === getColorKey(v.color))
-        );
-        imgs.forEach((img) => fd.append(`images_${i}`, img.file));
+      const colorImageGroups = [];
+      (product.productImages || []).forEach((img, imageIndex) => {
+        const colors = uniqColors(img.colors || []);
+        if (!img.file || colors.length === 0) return;
+
+        const fieldName = `colorImages_${imageIndex}`;
+        fd.append(fieldName, img.file);
+        colorImageGroups.push({ fieldName, colors });
       });
+      fd.append("colorImageGroups", JSON.stringify(colorImageGroups));
     }
-    return fd;
-  };
-
-  const buildBulkProductsFormData = (products = []) => {
-    const fd = new FormData();
-    fd.append("products", JSON.stringify(products.map(serializeProductPayload)));
-
-    products.forEach((product, productIndex) => {
-      (product.variants || []).forEach((variant, variantIndex) => {
-        const images = getVariantAssignedImages(product, variant);
-        images.forEach((image) => {
-          fd.append(`images_${productIndex}_${variantIndex}`, image.file);
-        });
-      });
-    });
-
     return fd;
   };
 
@@ -1192,9 +1226,9 @@ export default function CreateProductPage() {
   };
 
   const publishProduct = async () => {
-    const productIssues = activeImportId ? getProductPublishIssues(form) : [];
+    const productIssues = getProductPublishIssues(form);
     if (productIssues.length > 0) {
-      setPublishError(`Finish this imported product before publishing: ${productIssues.join("; ")}.`);
+      setPublishError(`Finish this product before publishing: ${productIssues.join("; ")}.`);
       return;
     }
     setPublishing(true); setPublishError(null);
@@ -1202,8 +1236,8 @@ export default function CreateProductPage() {
       await apiFetch(`/admin/products`, { method: "POST", body: buildProductFormData(form, true) });
       setSuccess(true);
       setTimeout(() => router.replace("/products"), 1500);
-    } catch (err) {
-      setPublishError(err.message || "Failed to publish. Please check your inputs and try again.");
+    } catch {
+      setPublishError("Failed to publish. Please check your inputs and try again.");
       setSuccess(false);
     } finally {
       setPublishing(false);
@@ -1212,7 +1246,7 @@ export default function CreateProductPage() {
 
   const handleImportFile = async (file) => {
     if (!file) return;
-    setImportStatus("Reading file…"); setPublishError(null); setBulkJob(null);
+    setImportStatus("Reading file…"); setPublishError(null); setImportFailures([]); setBulkPublishReport(null);
     try {
       const ext = file.name.split(".").pop()?.toLowerCase();
       let rows = [];
@@ -1225,12 +1259,13 @@ export default function CreateProductPage() {
       } else {
         throw new Error("Use a CSV, XLS, or XLSX file.");
       }
-      const products = rowsToProducts(rows);
+      const { products, failures } = rowsToProducts(rows);
+      setImportFailures(failures);
       if (!products.length) throw new Error("No product rows found. Check the template columns.");
       loadImportedProduct(products[0], 1, products);
       const summary = summarizeImportedImages(products);
       setImportStatus(
-        `${products.length} product${products.length === 1 ? "" : "s"} imported. ${summary.pending > 0 ? `${summary.pending} image reference${summary.pending === 1 ? "" : "s"} waiting for files.` : "Ready to review."}`
+        `${products.length} product${products.length === 1 ? "" : "s"} imported. ${failures.length > 0 ? `${failures.length} row${failures.length === 1 ? "" : "s"} skipped.` : ""} ${summary.pending > 0 ? `${summary.pending} image reference${summary.pending === 1 ? "" : "s"} waiting for files.` : "Ready to review."}`.replace(/\s+/g, " ").trim()
       );
     } catch (err) {
       setImportStatus(err.message || "Could not import that file.");
@@ -1256,40 +1291,88 @@ export default function CreateProductPage() {
     );
   };
 
-  const pollBulkProductJob = async (jobId) => {
-    let latestJob = null;
-    const completeStatuses = new Set(["completed", "completed_with_errors", "failed"]);
-
-    do {
-      await wait(1200);
-      const payload = await apiFetch(`/admin/products/bulk/${jobId}`);
-      latestJob = payload.job;
-      setBulkJob(latestJob);
-    } while (latestJob && !completeStatuses.has(latestJob.status));
-
-    return latestJob;
-  };
-
   const publishImportedProducts = async () => {
     if (!importedProducts.length) return;
     const latestProducts = getLatestImportedProducts();
+    const productsForPublish = latestProducts.map((product) => ({
+      ...cloneProductDraft(product),
+      publishStatus: "queued",
+      publishError: null,
+      publishedProductId: null,
+    }));
+
+    let report = createBulkPublishReport(productsForPublish.length);
+    const commitReport = (nextReport) => {
+      report = nextReport;
+      setBulkPublishReport(nextReport);
+    };
+    const patchImportedProductStatus = (importId, payload) => {
+      setImportedProducts((prev) =>
+        prev.map((product) => product.importId === importId ? { ...product, ...payload } : product)
+      );
+    };
+
     setBulkPublishing(true); setPublishError(null);
+    setImportedProducts(productsForPublish);
+    setBulkPublishReport(report);
+    setImportStatus(`Publishing ${productsForPublish.length} product${productsForPublish.length === 1 ? "" : "s"}…`);
     try {
-      setImportedProducts(latestProducts);
-      const payload = await apiFetch(`/admin/products/bulk`, { method: "POST", body: buildBulkProductsFormData(latestProducts) });
-      setBulkJob(payload.job);
-      setImportStatus(`Bulk creation started. Processing ${payload.job.total} product${payload.job.total === 1 ? "" : "s"} in the background.`);
+      for (let index = 0; index < productsForPublish.length; index += 1) {
+        const product = productsForPublish[index];
+        const name = product.name || `Product ${index + 1}`;
+        const issues = getProductPublishIssues(product);
 
-      const finalJob = await pollBulkProductJob(payload.job.id);
-      if (!finalJob) return;
+        if (issues.length > 0) {
+          const failure = { index, rowNumber: index + 1, name, message: issues.join("; ") };
+          patchImportedProductStatus(product.importId, { publishStatus: "failed", publishError: failure.message });
+          commitReport({
+            ...report,
+            processed: report.processed + 1,
+            failed: report.failed + 1,
+            currentName: "",
+            failures: [...report.failures, failure],
+          });
+          continue;
+        }
 
-      if (finalJob.failed > 0) {
-        setImportStatus(`${finalJob.succeeded} product${finalJob.succeeded === 1 ? "" : "s"} created. ${finalJob.failed} row${finalJob.failed === 1 ? "" : "s"} failed and are listed in the progress panel.`);
-        return;
+        patchImportedProductStatus(product.importId, { publishStatus: "publishing", publishError: null });
+        commitReport({ ...report, currentName: name });
+
+        try {
+          const payload = await apiFetch(`/admin/products`, { method: "POST", body: buildProductFormData(product, true) });
+          patchImportedProductStatus(product.importId, {
+            publishStatus: "published",
+            publishError: null,
+            publishedProductId: payload.product?.id || null,
+          });
+          commitReport({
+            ...report,
+            processed: report.processed + 1,
+            succeeded: report.succeeded + 1,
+            currentName: "",
+          });
+        } catch (err) {
+          const failure = {
+            index,
+            rowNumber: index + 1,
+            name,
+            message: err.message || "Product could not be created.",
+          };
+          patchImportedProductStatus(product.importId, { publishStatus: "failed", publishError: failure.message });
+          commitReport({
+            ...report,
+            processed: report.processed + 1,
+            failed: report.failed + 1,
+            currentName: "",
+            failures: [...report.failures, failure],
+          });
+        }
       }
 
-      setImportStatus(`${finalJob.succeeded} product${finalJob.succeeded === 1 ? "" : "s"} published.`);
-      setTimeout(() => router.replace("/products"), 1200);
+      setImportStatus(
+        `${report.succeeded} product${report.succeeded === 1 ? "" : "s"} created. ${report.failed > 0 ? `${report.failed} failed and are listed in the progress tracker.` : "All rows completed."}`
+      );
+      if (report.failed === 0) setTimeout(() => router.replace("/products"), 1200);
     } catch (err) {
       setPublishError(err.message || "Bulk publish failed. Check the imported rows and try again.");
     } finally {
@@ -1330,7 +1413,7 @@ export default function CreateProductPage() {
             onSelectProduct={loadImportedProduct}
             onPublishAll={publishImportedProducts}
             bulkPublishing={bulkPublishing}
-            bulkJob={bulkJob}
+            bulkPublishReport={bulkPublishReport}
           />
         )}
 
@@ -1392,6 +1475,8 @@ export default function CreateProductPage() {
                             {importStatus}
                           </p>
                         )}
+
+                        <FailureLog failures={importFailures} />
 
                         {importedProducts.length > 0 && (
                           <div className="rounded-[12px] bg-[var(--bg-app)] p-3">

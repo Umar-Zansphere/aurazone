@@ -678,18 +678,6 @@ describe('Admin routes integration', () => {
   });
 
   describe('Products, variants, images and inventory', () => {
-    const waitForBulkJob = async (jobId) => {
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        const response = await asAdmin('get', `/api/admin/products/bulk/${jobId}`);
-        if (['completed', 'completed_with_errors', 'failed'].includes(response.body.job.status)) {
-          return response;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-
-      throw new Error(`Bulk product job ${jobId} did not finish`);
-    };
-
     it('POST /api/admin/products creates product with variants and inventories', async () => {
       const variants = [
         { size: '8', color: 'White', sku: unique('SKU'), price: 1999, quantity: 5, isAvailable: true },
@@ -717,140 +705,45 @@ describe('Admin routes integration', () => {
       expect(dbProduct.variants.every((v) => Boolean(v.inventory))).toBe(true);
     });
 
-    it('POST /api/admin/products/bulk creates imported products with images for each variant', async () => {
-      const firstImage = await createTestImageBuffer();
-      const secondImage = await createTestImageBuffer();
-      const products = [
-        {
-          name: `Bulk Runner ${unique('product')}`,
-          brand: 'AuraZone',
-          category: 'RUNNING',
-          gender: 'MEN',
-          tags: 'bulk,import',
-          variants: [
-            { size: '8', color: 'Black', sku: unique('SKU'), price: 1999, quantity: 5 },
-          ],
-        },
-        {
-          name: `Bulk Street ${unique('product')}`,
-          brand: 'AuraZone',
-          category: 'CASUAL',
-          gender: 'WOMEN',
-          tags: 'bulk,import',
-          variants: [
-            { size: '6', color: 'White', sku: unique('SKU'), price: 2199, quantity: 3 },
-          ],
-        },
+    it('POST /api/admin/products uploads color images once and assigns them to all sizes for that color', async () => {
+      const variants = [
+        { size: '8', color: 'Black', sku: unique('SKU'), price: 1999, quantity: 5 },
+        { size: '9', color: 'Black', sku: unique('SKU'), price: 1999, quantity: 6 },
+        { size: '9', color: 'White', sku: unique('SKU'), price: 2099, quantity: 7 },
       ];
+      const imageBuffer = await createTestImageBuffer();
 
-      const response = await asAdmin('post', '/api/admin/products/bulk')
-        .field('products', JSON.stringify(products))
-        .attach('images_0_0', firstImage, { filename: 'bulk-black.png', contentType: 'image/png' })
-        .attach('images_1_0', secondImage, { filename: 'bulk-white.png', contentType: 'image/png' });
+      const response = await asAdmin('post', '/api/admin/products')
+        .field('name', 'Velocity Color Share')
+        .field('brand', 'AuraZone')
+        .field('category', 'RUNNING')
+        .field('gender', 'MEN')
+        .field('variants', JSON.stringify(variants))
+        .field('colorImageGroups', JSON.stringify([{ fieldName: 'colorImages_0', colors: ['Black'] }]))
+        .attach('colorImages_0', imageBuffer, { filename: 'black.png', contentType: 'image/png' });
 
-      expect(response.status).toBe(202);
-      expect(response.body.job.total).toBe(2);
+      expect(response.status).toBe(201);
+      expect(mockUploadBufferToS3).toHaveBeenCalledTimes(1);
+      expect(mockUploadBufferToS3.mock.calls[0][1]).toMatch(/\/colors\/black$/);
 
-      const jobResponse = await waitForBulkJob(response.body.job.id);
-      expect(jobResponse.body.job.status).toBe('completed');
-      expect(jobResponse.body.job.succeeded).toBe(2);
-      expect(jobResponse.body.job.failed).toBe(0);
-
-      const dbProducts = await prisma.product.findMany({
-        where: {
-          name: {
-            in: products.map((product) => product.name),
-          },
-        },
+      const dbProduct = await prisma.product.findUnique({
+        where: { id: response.body.product.id },
         include: {
           variants: {
-            include: {
-              inventory: true,
-              images: true,
-            },
+            include: { images: true },
+            orderBy: { size: 'asc' },
           },
         },
       });
 
-      expect(dbProducts).toHaveLength(2);
-      expect(dbProducts.every((product) => product.variants.every((variant) => variant.images.length > 0 && variant.inventory))).toBe(true);
-    });
+      const blackVariants = dbProduct.variants.filter((variant) => variant.color === 'Black');
+      const whiteVariant = dbProduct.variants.find((variant) => variant.color === 'White');
+      const blackImageUrls = blackVariants.flatMap((variant) => variant.images.map((image) => image.url));
 
-    it('POST /api/admin/products/bulk processes valid rows and records image assignment failures', async () => {
-      const imageBuffer = await createTestImageBuffer();
-      const validProductName = `Bulk Valid Row ${unique('product')}`;
-      const invalidProductName = `Bulk Missing Image ${unique('product')}`;
-      const response = await asAdmin('post', '/api/admin/products/bulk')
-        .field('products', JSON.stringify([
-          {
-            name: validProductName,
-            brand: 'AuraZone',
-            category: 'RUNNING',
-            gender: 'MEN',
-            variants: [
-              { size: '8', color: 'Black', sku: unique('SKU'), price: 1899, quantity: 2 },
-            ],
-          },
-          {
-            name: invalidProductName,
-            brand: 'AuraZone',
-            category: 'RUNNING',
-            gender: 'UNISEX',
-            variants: [
-              { size: '8', color: 'Black', sku: unique('SKU'), price: 1899, quantity: 2 },
-              { size: '9', color: 'White', sku: unique('SKU'), price: 1899, quantity: 2 },
-            ],
-          },
-        ]))
-        .attach('images_0_0', imageBuffer, { filename: 'bulk-only-black.png', contentType: 'image/png' });
-
-      expect(response.status).toBe(202);
-
-      const jobResponse = await waitForBulkJob(response.body.job.id);
-      expect(jobResponse.body.job.status).toBe('completed_with_errors');
-      expect(jobResponse.body.job.succeeded).toBe(1);
-      expect(jobResponse.body.job.failed).toBe(1);
-      expect(jobResponse.body.job.failures[0].message).toMatch(/each variant must have at least one image/i);
-
-      const validProduct = await prisma.product.findFirst({
-        where: { name: validProductName },
-      });
-      const invalidProduct = await prisma.product.findFirst({
-        where: { name: invalidProductName },
-      });
-      expect(validProduct).toBeTruthy();
-      expect(invalidProduct).toBeNull();
-    });
-
-    it('POST /api/admin/products/bulk logs invalid variant details without creating that row', async () => {
-      const imageBuffer = await createTestImageBuffer();
-      const productName = `Bulk Invalid Variant ${unique('product')}`;
-      const response = await asAdmin('post', '/api/admin/products/bulk')
-        .field('products', JSON.stringify([
-          {
-            name: productName,
-            brand: 'AuraZone',
-            category: 'RUNNING',
-            gender: 'MEN',
-            variants: [
-              { size: '10', color: 'Blue', sku: '', price: 2099, quantity: 4 },
-            ],
-          },
-        ]))
-        .attach('images_0_0', imageBuffer, { filename: 'bulk-invalid.png', contentType: 'image/png' });
-
-      expect(response.status).toBe(202);
-
-      const jobResponse = await waitForBulkJob(response.body.job.id);
-      expect(jobResponse.body.job.status).toBe('completed_with_errors');
-      expect(jobResponse.body.job.succeeded).toBe(0);
-      expect(jobResponse.body.job.failed).toBe(1);
-      expect(jobResponse.body.job.failures[0].message).toMatch(/size, color, sku, price are required/i);
-
-      const dbProduct = await prisma.product.findFirst({
-        where: { name: productName },
-      });
-      expect(dbProduct).toBeNull();
+      expect(blackVariants).toHaveLength(2);
+      expect(blackVariants.every((variant) => variant.images.length === 1)).toBe(true);
+      expect(new Set(blackImageUrls).size).toBe(1);
+      expect(whiteVariant.images).toHaveLength(0);
     });
 
     it('GET /api/admin/products validates sort and supports product detail', async () => {

@@ -98,6 +98,13 @@ export const authApi = {
       headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
       body: JSON.stringify({ email }),
     }),
+
+  resetPassword: (token, password) =>
+    fetch(`/api/auth/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+      body: JSON.stringify({ token, password }),
+    }),
 };
 
 // Product API - Customer facing endpoints

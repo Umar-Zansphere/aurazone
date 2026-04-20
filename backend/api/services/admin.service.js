@@ -5,8 +5,6 @@ const notificationService = require('./notification.service');
 const { sendEmail } = require('../../config/email');
 const { validateAndOptimizeImage } = require('../../utils/imageProcessor');
 const { randomUUID } = require('node:crypto');
-const IORedis = require('ioredis');
-const { Queue, Worker } = require('bullmq');
 
 const ORDER_STATUSES = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
 const PAYMENT_STATUSES = ['PENDING', 'SUCCESS', 'FAILED'];
@@ -16,11 +14,6 @@ const INVENTORY_LOG_TYPES = ['HOLD', 'RELEASE', 'SOLD', 'MANUAL', 'RESTOCK', 'RE
 const INVENTORY_ADJUST_OPERATIONS = ['SET', 'RESTOCK', 'REDUCE', 'HOLD', 'RELEASE', 'RETURN'];
 const PRODUCT_CATEGORIES = ['RUNNING', 'CASUAL', 'FORMAL', 'SNEAKERS'];
 const PRODUCT_GENDERS = ['MEN', 'WOMEN', 'UNISEX', 'KIDS'];
-const BULK_PRODUCT_QUEUE_NAME = 'bulk-product-creation';
-const BULK_PRODUCT_JOB_TTL_MS = 24 * 60 * 60 * 1000;
-let bulkProductQueue;
-let bulkProductWorker;
-let bulkProductRedisConnection;
 const ORDER_STATUS_LABELS = {
   PENDING: 'Pending',
   PAID: 'Paid',
@@ -263,519 +256,6 @@ const parseVariantsInput = (value) => {
   throw new Error('variants must be a JSON array');
 };
 
-const buildVariantImageFieldName = (variantIndex, productIndex) => (
-  productIndex === undefined || productIndex === null
-    ? `images_${variantIndex}`
-    : `images_${productIndex}_${variantIndex}`
-);
-
-const collectVariantImageFiles = ({ files = [], variantCount, productIndex } = {}) =>
-  Array.from({ length: variantCount }, (_, variantIndex) =>
-    files.filter((file) => file.fieldname === buildVariantImageFieldName(variantIndex, productIndex))
-  );
-
-const formatVariantLabel = (variant, index) => {
-  const color = String(variant?.color || '').trim();
-  const size = String(variant?.size || '').trim();
-
-  if (color && size) {
-    return `${color}/${size}`;
-  }
-
-  return `variant ${index + 1}`;
-};
-
-const buildProductContextLabel = (input, index) => {
-  const name = String(input?.name || '').trim();
-
-  if (name && index !== undefined) {
-    return `product "${name}" at index ${index}`;
-  }
-
-  if (name) {
-    return `product "${name}"`;
-  }
-
-  if (index !== undefined) {
-    return `product at index ${index}`;
-  }
-
-  return 'product';
-};
-
-const normalizeProductCreateInput = (input, { index } = {}) => {
-  const contextLabel = buildProductContextLabel(input, index);
-  const {
-    name,
-    brand,
-    modelNumber,
-    category: categoryRaw,
-    gender: genderRaw,
-    description,
-    shortDescription,
-  } = input || {};
-
-  if (!name || !brand || !categoryRaw || !genderRaw) {
-    throw createError(400, `${contextLabel}: name, brand, category and gender are required`);
-  }
-
-  const category = ensureEnumValue(categoryRaw, PRODUCT_CATEGORIES, 'category');
-  const gender = ensureEnumValue(genderRaw, PRODUCT_GENDERS, 'gender');
-
-  let variants;
-  try {
-    variants = parseVariantsInput(input?.variants);
-  } catch (error) {
-    throw createError(400, `${contextLabel}: ${error.message}`);
-  }
-
-  if (variants.length === 0) {
-    throw createError(400, `${contextLabel}: at least one variant is required`);
-  }
-
-  const seenVariantKeys = new Set();
-  const seenSkus = new Set();
-
-  const normalizedVariants = variants.map((variant, variantIndex) => {
-    const size = String(variant?.size || '').trim();
-    const color = String(variant?.color || '').trim();
-    const sku = String(variant?.sku || '').trim();
-    const price = Number(variant?.price);
-    const compareAtPrice = variant?.compareAtPrice !== undefined && variant?.compareAtPrice !== null && variant?.compareAtPrice !== ''
-      ? Number(variant.compareAtPrice)
-      : undefined;
-    const quantity = variant?.quantity !== undefined ? Number(variant.quantity) : 0;
-
-    if (!size || !color || !sku || !Number.isFinite(price)) {
-      throw createError(400, `${contextLabel}: invalid variant at index ${variantIndex}. size, color, sku, price are required`);
-    }
-
-    if (compareAtPrice !== undefined && !Number.isFinite(compareAtPrice)) {
-      throw createError(400, `${contextLabel}: invalid compareAtPrice for variant index ${variantIndex}`);
-    }
-
-    if (!Number.isInteger(quantity) || quantity < 0) {
-      throw createError(400, `${contextLabel}: invalid quantity for variant index ${variantIndex}`);
-    }
-
-    const parsedAvailability = variant?.isAvailable !== undefined ? parseBool(variant.isAvailable) : true;
-    if (variant?.isAvailable !== undefined && parsedAvailability === undefined) {
-      throw createError(400, `${contextLabel}: invalid isAvailable for variant index ${variantIndex}`);
-    }
-
-    const variantKey = `${color.toLowerCase()}::${size.toLowerCase()}`;
-    if (seenVariantKeys.has(variantKey)) {
-      throw createError(400, `${contextLabel}: duplicate variant color/size combination at index ${variantIndex}`);
-    }
-    seenVariantKeys.add(variantKey);
-
-    const normalizedSku = sku.toUpperCase();
-    if (seenSkus.has(normalizedSku)) {
-      throw createError(400, `${contextLabel}: duplicate sku "${sku}"`);
-    }
-    seenSkus.add(normalizedSku);
-
-    return {
-      size,
-      color,
-      sku,
-      price,
-      compareAtPrice,
-      isAvailable: parsedAvailability,
-      quantity,
-    };
-  });
-
-  const tags = parseTagsInput(input?.tags) || [];
-  const parsedIsActive = input?.isActive !== undefined ? parseBool(input.isActive) : true;
-  const parsedIsFeatured = input?.isFeatured !== undefined ? parseBool(input.isFeatured) : false;
-
-  if (input?.isActive !== undefined && parsedIsActive === undefined) {
-    throw createError(400, `${contextLabel}: isActive must be true or false`);
-  }
-
-  if (input?.isFeatured !== undefined && parsedIsFeatured === undefined) {
-    throw createError(400, `${contextLabel}: isFeatured must be true or false`);
-  }
-
-  return {
-    contextLabel,
-    data: {
-      name: String(name).trim(),
-      brand: String(brand).trim(),
-      modelNumber: modelNumber || null,
-      category,
-      gender,
-      description: description || null,
-      shortDescription: shortDescription || null,
-      tags,
-      isActive: parsedIsActive,
-      isFeatured: parsedIsFeatured,
-    },
-    variants: normalizedVariants,
-  };
-};
-
-const assertVariantImagesAssigned = ({ normalizedProduct, variantFilesByIndex, requireImages = false } = {}) => {
-  if (!requireImages) {
-    return;
-  }
-
-  const missingImages = normalizedProduct.variants
-    .map((variant, index) => ({
-      label: formatVariantLabel(variant, index),
-      hasImages: (variantFilesByIndex[index] || []).length > 0,
-    }))
-    .filter((entry) => !entry.hasImages)
-    .map((entry) => entry.label);
-
-  if (missingImages.length > 0) {
-    throw createError(
-      400,
-      `${normalizedProduct.contextLabel}: each variant must have at least one image. Missing images for ${missingImages.join(', ')}`
-    );
-  }
-};
-
-const assertSkusAvailable = async (normalizedProducts = []) => {
-  const seenSkus = new Map();
-
-  normalizedProducts.forEach((product) => {
-    product.variants.forEach((variant) => {
-      const normalizedSku = variant.sku.toUpperCase();
-      const existingOwner = seenSkus.get(normalizedSku);
-      if (existingOwner) {
-        throw createError(400, `Duplicate sku "${variant.sku}" found in ${existingOwner} and ${product.contextLabel}`);
-      }
-      seenSkus.set(normalizedSku, product.contextLabel);
-    });
-  });
-
-  const skus = Array.from(seenSkus.keys());
-  if (skus.length === 0) {
-    return;
-  }
-
-  const existingVariants = await prisma.productVariant.findMany({
-    where: {
-      sku: {
-        in: skus,
-      },
-    },
-    select: {
-      sku: true,
-    },
-  });
-
-  if (existingVariants.length > 0) {
-    throw createError(
-      409,
-      `SKU already exists: ${existingVariants.map((variant) => variant.sku).join(', ')}`
-    );
-  }
-};
-
-const createProductRecord = async (normalizedProduct) => {
-  return prisma.$transaction(async (tx) => {
-    const product = await tx.product.create({
-      data: normalizedProduct.data,
-    });
-
-    const createdVariants = [];
-
-    for (const variant of normalizedProduct.variants) {
-      const createdVariant = await tx.productVariant.create({
-        data: {
-          productId: product.id,
-          size: variant.size,
-          color: variant.color,
-          sku: variant.sku,
-          price: variant.price,
-          ...(variant.compareAtPrice !== undefined ? { compareAtPrice: variant.compareAtPrice } : {}),
-          isAvailable: variant.isAvailable,
-        },
-      });
-
-      await tx.inventory.create({
-        data: {
-          variantId: createdVariant.id,
-          quantity: variant.quantity,
-        },
-      });
-
-      createdVariants.push(createdVariant);
-    }
-
-    return { product, variants: createdVariants };
-  });
-};
-
-const uploadProductVariantImages = async ({ createdProduct, variantFilesByIndex = [] } = {}) => {
-  for (let variantIndex = 0; variantIndex < createdProduct.variants.length; variantIndex += 1) {
-    const variant = createdProduct.variants[variantIndex];
-    const variantFiles = variantFilesByIndex[variantIndex] || [];
-
-    for (let imageIndex = 0; imageIndex < variantFiles.length; imageIndex += 1) {
-      const file = variantFiles[imageIndex];
-      const optimized = await validateAndOptimizeImage(file.buffer);
-      const imageUrl = await uploadBufferToS3(optimized, `products/${createdProduct.product.id}/${variant.id}`, file.mimetype);
-
-      await prisma.productImage.create({
-        data: {
-          variantId: variant.id,
-          url: imageUrl,
-          altText: `${createdProduct.product.name} - ${variant.color} ${variant.size}`,
-          position: imageIndex,
-          isPrimary: imageIndex === 0,
-        },
-      });
-    }
-  }
-};
-
-const getFormattedProductById = async (productId) => {
-  const product = await prisma.product.findUnique({
-    where: { id: productId },
-    include: {
-      variants: {
-        include: {
-          inventory: true,
-          images: {
-            orderBy: {
-              position: 'asc',
-            },
-          },
-        },
-        orderBy: {
-          createdAt: 'asc',
-        },
-      },
-    },
-  });
-
-  return formatProduct(product);
-};
-
-const getRedisUrl = () => process.env.REDIS_URL || process.env.BULLMQ_REDIS_URL || 'redis://127.0.0.1:6379';
-
-const createRedisConnection = (label = 'redis') => {
-  const connection = new IORedis(getRedisUrl(), {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
-  });
-
-  connection.on('error', (error) => {
-    console.error(`[bulk-products:${label}] Redis connection error`, error.message);
-  });
-
-  return connection;
-};
-
-const getBulkProductQueue = () => {
-  if (!bulkProductQueue) {
-    bulkProductRedisConnection = createRedisConnection('queue');
-    bulkProductQueue = new Queue(BULK_PRODUCT_QUEUE_NAME, {
-      connection: bulkProductRedisConnection,
-      defaultJobOptions: {
-        attempts: 1,
-        removeOnComplete: {
-          age: Math.floor(BULK_PRODUCT_JOB_TTL_MS / 1000),
-          count: 1000,
-        },
-        removeOnFail: {
-          age: Math.floor(BULK_PRODUCT_JOB_TTL_MS / 1000),
-          count: 1000,
-        },
-      },
-    });
-
-    bulkProductQueue.on('error', (error) => {
-      console.error(`[bulk-products:${BULK_PRODUCT_QUEUE_NAME}] queue error`, error.message);
-    });
-  }
-
-  if (!bulkProductWorker) {
-    bulkProductWorker = new Worker(
-      BULK_PRODUCT_QUEUE_NAME,
-      processBulkProductsJob,
-      {
-        connection: createRedisConnection('worker'),
-        concurrency: Number(process.env.BULK_PRODUCT_WORKER_CONCURRENCY || 1),
-      }
-    );
-
-    bulkProductWorker.on('error', (error) => {
-      console.error(`[bulk-products:${BULK_PRODUCT_QUEUE_NAME}] worker error`, error.message);
-    });
-
-    bulkProductWorker.on('failed', (job, error) => {
-      console.error(`[bulk-products:${job?.id || 'unknown'}] worker failed`, error);
-    });
-  }
-
-  return bulkProductQueue;
-};
-
-const initializeBulkProductWorker = () => {
-  getBulkProductQueue();
-  console.log(`Bulk product Redis queue initialized: ${BULK_PRODUCT_QUEUE_NAME}`);
-};
-
-const serializeBulkProductFiles = (files = []) =>
-  files.map((file) => ({
-    fieldname: file.fieldname,
-    originalname: file.originalname,
-    encoding: file.encoding,
-    mimetype: file.mimetype,
-    size: file.size,
-    bufferBase64: file.buffer.toString('base64'),
-  }));
-
-const deserializeBulkProductFiles = (files = []) =>
-  files.map((file) => ({
-    fieldname: file.fieldname,
-    originalname: file.originalname,
-    encoding: file.encoding,
-    mimetype: file.mimetype,
-    size: file.size,
-    buffer: Buffer.from(file.bufferBase64, 'base64'),
-  }));
-
-const createBulkProductJobResults = ({ total, createdAt = new Date().toISOString() } = {}) => ({
-  total,
-  processed: 0,
-  succeeded: 0,
-  failed: 0,
-  created: [],
-  failures: [],
-  createdAt,
-  startedAt: null,
-  completedAt: null,
-  updatedAt: createdAt,
-});
-
-const normalizeBulkProductJobStatus = (bullState, results = {}) => {
-  if (bullState === 'active') {
-    return 'running';
-  }
-
-  if (['waiting', 'waiting-children', 'delayed', 'prioritized'].includes(bullState)) {
-    return 'queued';
-  }
-
-  if (bullState === 'completed') {
-    return results.failed > 0 ? 'completed_with_errors' : 'completed';
-  }
-
-  if (bullState === 'failed') {
-    return 'failed';
-  }
-
-  return bullState || 'queued';
-};
-
-const buildBulkProductJobSnapshot = async (job) => {
-  const bullState = await job.getState();
-  const results = job.data?.results || createBulkProductJobResults({ total: job.data?.products?.length || 0 });
-  const total = results.total || 0;
-  const processed = results.processed || 0;
-
-  return {
-    id: job.id,
-    status: normalizeBulkProductJobStatus(bullState, results),
-    total,
-    processed,
-    queued: Math.max(0, total - processed),
-    succeeded: results.succeeded || 0,
-    failed: results.failed || 0,
-    progressPercent: total > 0 ? Math.round((processed / total) * 100) : 0,
-    created: results.created || [],
-    failures: results.failures || [],
-    createdAt: results.createdAt || (job.timestamp ? new Date(job.timestamp).toISOString() : null),
-    startedAt: results.startedAt || (job.processedOn ? new Date(job.processedOn).toISOString() : null),
-    completedAt: results.completedAt || (job.finishedOn ? new Date(job.finishedOn).toISOString() : null),
-    updatedAt: results.updatedAt || null,
-  };
-};
-
-const updateBulkProductJobResults = async (job, resultsPatch = {}) => {
-  const nextResults = {
-    ...(job.data.results || {}),
-    ...resultsPatch,
-    updatedAt: new Date().toISOString(),
-  };
-
-  await job.updateData({
-    ...job.data,
-    results: nextResults,
-  });
-
-  if (nextResults.total > 0) {
-    await job.updateProgress(Math.round((nextResults.processed / nextResults.total) * 100));
-  }
-
-  return nextResults;
-};
-
-async function processBulkProductsJob(job) {
-  const { products = [], files: serializedFiles = [] } = job.data || {};
-  const files = deserializeBulkProductFiles(serializedFiles);
-  let results = await updateBulkProductJobResults(job, {
-    startedAt: new Date().toISOString(),
-  });
-
-  for (let index = 0; index < products.length; index += 1) {
-    const productInput = products[index];
-    const productName = String(productInput?.name || `Row ${index + 1}`).trim();
-
-    try {
-      const normalizedProduct = normalizeProductCreateInput(productInput, { index });
-      const variantFilesByIndex = collectVariantImageFiles({
-        files,
-        variantCount: normalizedProduct.variants.length,
-        productIndex: index,
-      });
-
-      assertVariantImagesAssigned({
-        normalizedProduct,
-        variantFilesByIndex,
-        requireImages: true,
-      });
-
-      await assertSkusAvailable([normalizedProduct]);
-
-      const created = await createProductRecord(normalizedProduct);
-      await uploadProductVariantImages({
-        createdProduct: created,
-        variantFilesByIndex,
-      });
-
-      results.succeeded += 1;
-      results.created.push({
-        index,
-        name: created.product.name,
-        productId: created.product.id,
-      });
-    } catch (error) {
-      const message = error?.message || 'Product row failed';
-      results.failed += 1;
-      results.failures.push({
-        index,
-        name: productName || `Row ${index + 1}`,
-        message,
-      });
-      console.warn(`[bulk-products:${job.id}] row ${index} failed: ${message}`);
-    } finally {
-      results.processed += 1;
-      results = await updateBulkProductJobResults(job, results);
-    }
-  }
-
-  await updateBulkProductJobResults(job, {
-    completedAt: new Date().toISOString(),
-  });
-}
-
 const parseJsonInput = (value, fieldName = 'value') => {
   if (value === undefined) {
     return undefined;
@@ -803,6 +283,64 @@ const parseJsonInput = (value, fieldName = 'value') => {
   }
 
   throw createError(400, `${fieldName} must be valid JSON`);
+};
+
+const normalizeColorKey = (value) => String(value || '').trim().toLowerCase();
+
+const sanitizePathSegment = (value, fallback = 'item') => {
+  const sanitized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return sanitized || fallback;
+};
+
+const parseProductColorImageGroups = (value) => {
+  const parsed = parseJsonInput(value, 'colorImageGroups');
+  if (parsed === undefined || parsed === null) {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw createError(400, 'colorImageGroups must be a JSON array');
+  }
+
+  return parsed.map((group, index) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) {
+      throw createError(400, `Invalid colorImageGroups item at index ${index}`);
+    }
+
+    const fieldName = String(group.fieldName || '').trim();
+    if (!fieldName) {
+      throw createError(400, `colorImageGroups item ${index} requires fieldName`);
+    }
+
+    const colors = [];
+    const seenColorKeys = new Set();
+    const rawColors = Array.isArray(group.colors) ? group.colors : [];
+    rawColors.forEach((color) => {
+      const colorName = String(color || '').trim();
+      const colorKey = normalizeColorKey(colorName);
+      if (!colorKey || seenColorKeys.has(colorKey)) {
+        return;
+      }
+
+      seenColorKeys.add(colorKey);
+      colors.push(colorName);
+    });
+
+    if (colors.length === 0) {
+      throw createError(400, `colorImageGroups item ${index} requires at least one color`);
+    }
+
+    return {
+      fieldName,
+      colors,
+      colorKeys: colors.map(normalizeColorKey),
+    };
+  });
 };
 
 const parseDateTimeInput = (value, fieldName) => {
@@ -5545,67 +5083,213 @@ const deleteImage = async (req, res) => {
 };
 
 const createProduct = async (req, res) => {
-  const normalizedProduct = normalizeProductCreateInput(req.body);
+  const { name, brand, modelNumber, category: categoryRaw, gender: genderRaw, description, shortDescription } = req.body;
+
+  if (!name || !brand || !categoryRaw || !genderRaw) {
+    throw createError(400, 'name, brand, category and gender are required');
+  }
+
+  const category = ensureEnumValue(categoryRaw, PRODUCT_CATEGORIES, 'category');
+  const gender = ensureEnumValue(genderRaw, PRODUCT_GENDERS, 'gender');
+
+  let variants;
+  try {
+    variants = parseVariantsInput(req.body.variants);
+  } catch (error) {
+    throw createError(400, error.message);
+  }
+  if (variants.length === 0) {
+    throw createError(400, 'At least one variant is required');
+  }
+
+  const normalizedVariants = variants.map((variant, index) => {
+    const price = Number(variant.price);
+    const compareAtPrice = variant.compareAtPrice !== undefined && variant.compareAtPrice !== null && variant.compareAtPrice !== ''
+      ? Number(variant.compareAtPrice)
+      : undefined;
+    const quantity = variant.quantity !== undefined ? Number(variant.quantity) : 0;
+
+    if (!variant.size || !variant.color || !variant.sku || !Number.isFinite(price)) {
+      throw createError(400, `Invalid variant at index ${index}. size, color, sku, price are required`);
+    }
+
+    if (compareAtPrice !== undefined && !Number.isFinite(compareAtPrice)) {
+      throw createError(400, `Invalid compareAtPrice for variant index ${index}`);
+    }
+
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw createError(400, `Invalid quantity for variant index ${index}`);
+    }
+
+    const parsedAvailability = variant.isAvailable !== undefined ? parseBool(variant.isAvailable) : true;
+    if (variant.isAvailable !== undefined && parsedAvailability === undefined) {
+      throw createError(400, `Invalid isAvailable for variant index ${index}`);
+    }
+
+    return {
+      size: String(variant.size),
+      color: String(variant.color),
+      sku: String(variant.sku),
+      price,
+      compareAtPrice,
+      isAvailable: parsedAvailability,
+      quantity,
+    };
+  });
+
+  const tags = parseTagsInput(req.body.tags) || [];
+  const parsedIsActive = req.body.isActive !== undefined ? parseBool(req.body.isActive) : true;
+  const parsedIsFeatured = req.body.isFeatured !== undefined ? parseBool(req.body.isFeatured) : false;
+  if (req.body.isActive !== undefined && parsedIsActive === undefined) {
+    throw createError(400, 'isActive must be true or false');
+  }
+  if (req.body.isFeatured !== undefined && parsedIsFeatured === undefined) {
+    throw createError(400, 'isFeatured must be true or false');
+  }
+  const isActive = parsedIsActive;
+  const isFeatured = parsedIsFeatured;
+
+  const created = await prisma.$transaction(async (tx) => {
+    const product = await tx.product.create({
+      data: {
+        name: String(name),
+        brand: String(brand),
+        modelNumber: modelNumber || null,
+        category,
+        gender,
+        description: description || null,
+        shortDescription: shortDescription || null,
+        tags,
+        isActive,
+        isFeatured,
+      },
+    });
+
+    const createdVariants = [];
+
+    for (const variant of normalizedVariants) {
+      const createdVariant = await tx.productVariant.create({
+        data: {
+          productId: product.id,
+          size: variant.size,
+          color: variant.color,
+          sku: variant.sku,
+          price: variant.price,
+          ...(variant.compareAtPrice !== undefined ? { compareAtPrice: variant.compareAtPrice } : {}),
+          isAvailable: variant.isAvailable,
+        },
+      });
+
+      await tx.inventory.create({
+        data: {
+          variantId: createdVariant.id,
+          quantity: variant.quantity,
+        },
+      });
+
+      createdVariants.push(createdVariant);
+    }
+
+    return { product, variants: createdVariants };
+  });
+
   const files = Array.isArray(req.files) ? req.files : [];
-  const variantFilesByIndex = collectVariantImageFiles({
-    files,
-    variantCount: normalizedProduct.variants.length,
-  });
+  const hasColorImageGroups = req.body.colorImageGroups !== undefined;
 
-  await assertSkusAvailable([normalizedProduct]);
+  if (hasColorImageGroups) {
+    const colorImageGroups = parseProductColorImageGroups(req.body.colorImageGroups);
+    const filesByFieldName = new Map();
+    files.forEach((file) => {
+      const fieldFiles = filesByFieldName.get(file.fieldname) || [];
+      fieldFiles.push(file);
+      filesByFieldName.set(file.fieldname, fieldFiles);
+    });
 
-  const created = await createProductRecord(normalizedProduct);
-  await uploadProductVariantImages({
-    createdProduct: created,
-    variantFilesByIndex,
+    const variantsByColorKey = new Map();
+    created.variants.forEach((variant) => {
+      const colorKey = normalizeColorKey(variant.color);
+      variantsByColorKey.set(colorKey, [...(variantsByColorKey.get(colorKey) || []), variant]);
+    });
+
+    const nextPositionByVariantId = new Map(created.variants.map((variant) => [variant.id, 0]));
+
+    for (const group of colorImageGroups) {
+      const groupFiles = filesByFieldName.get(group.fieldName) || [];
+      if (groupFiles.length === 0) {
+        throw createError(400, `No image file found for ${group.fieldName}`);
+      }
+
+      const targetVariants = group.colorKeys.flatMap((colorKey) => variantsByColorKey.get(colorKey) || []);
+      if (targetVariants.length === 0) {
+        throw createError(400, `No variant color matches image field ${group.fieldName}`);
+      }
+
+      for (const file of groupFiles) {
+        const optimized = await validateAndOptimizeImage(file.buffer);
+        const colorFolder = sanitizePathSegment(group.colors[0], 'color');
+        const imageUrl = await uploadBufferToS3(optimized, `products/${created.product.id}/colors/${colorFolder}`, file.mimetype);
+
+        await prisma.productImage.createMany({
+          data: targetVariants.map((variant) => {
+            const position = nextPositionByVariantId.get(variant.id) || 0;
+            nextPositionByVariantId.set(variant.id, position + 1);
+
+            return {
+              variantId: variant.id,
+              url: imageUrl,
+              altText: `${created.product.name} - ${variant.color} ${variant.size}`,
+              position,
+              isPrimary: position === 0,
+            };
+          }),
+        });
+      }
+    }
+  } else {
+    for (let i = 0; i < created.variants.length; i += 1) {
+      const variant = created.variants[i];
+      const variantFiles = files.filter((file) => file.fieldname === `images_${i}`);
+
+      for (let idx = 0; idx < variantFiles.length; idx += 1) {
+        const file = variantFiles[idx];
+        const optimized = await validateAndOptimizeImage(file.buffer);
+        const imageUrl = await uploadBufferToS3(optimized, `products/${created.product.id}/${variant.id}`, file.mimetype);
+
+        await prisma.productImage.create({
+          data: {
+            variantId: variant.id,
+            url: imageUrl,
+            altText: `${created.product.name} - ${variant.color} ${variant.size}`,
+            position: idx,
+            isPrimary: idx === 0,
+          },
+        });
+      }
+    }
+  }
+
+  const product = await prisma.product.findUnique({
+    where: { id: created.product.id },
+    include: {
+      variants: {
+        include: {
+          inventory: true,
+          images: {
+            orderBy: {
+              position: 'asc',
+            },
+          },
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+      },
+    },
   });
-  const product = await getFormattedProductById(created.product.id);
 
   return res.status(201).json({
     message: 'Product created successfully',
-    product,
-  });
-};
-
-const createProductsBulk = async (req, res) => {
-  const parsedProducts = parseJsonInput(req.body?.products, 'products');
-
-  if (!Array.isArray(parsedProducts) || parsedProducts.length === 0) {
-    throw createError(400, 'products must be a non-empty JSON array');
-  }
-
-  const queue = getBulkProductQueue();
-  const files = Array.isArray(req.files) ? req.files : [];
-  const jobId = randomUUID();
-  const now = new Date().toISOString();
-  const job = await queue.add('create-products', {
-    products: parsedProducts,
-    files: serializeBulkProductFiles(files),
-    results: createBulkProductJobResults({
-      total: parsedProducts.length,
-      createdAt: now,
-    }),
-  }, {
-    jobId,
-  });
-
-  return res.status(202).json({
-    message: 'Bulk product creation queued',
-    job: await buildBulkProductJobSnapshot(job),
-  });
-};
-
-const getBulkProductJob = async (req, res) => {
-  const { jobId } = req.params;
-  const queue = getBulkProductQueue();
-  const job = await queue.getJob(jobId);
-
-  if (!job) {
-    throw createError(404, 'Bulk product job not found');
-  }
-
-  return res.status(200).json({
-    job: await buildBulkProductJobSnapshot(job),
+    product: formatProduct(product),
   });
 };
 
@@ -6091,9 +5775,6 @@ module.exports = {
   updateImage,
   deleteImage,
   createProduct,
-  createProductsBulk,
-  getBulkProductJob,
-  initializeBulkProductWorker,
   getAnalytics,
   getNotificationHistory,
   markNotificationAsRead,

@@ -1,5 +1,6 @@
 'use client';
 import { Suspense, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Smartphone, Mail, Lock, ArrowRight } from 'lucide-react';
 import Input from '../../components/ui/Input';
@@ -148,13 +149,12 @@ function LoginContent() {
                   required
                 />
                 <div className="flex justify-end pt-1">
-                  <button
-                    type="button"
-                    onClick={() => router.push('/forgot-password')}
+                  <Link
+                    href="/forgot-password"
                     className="text-sm font-semibold text-(--text-primary) hover:text-(--accent) transition-colors duration-300 hover:underline"
                   >
-                    Forgot Password?
-                  </button>
+                    Forgot password?
+                  </Link>
                 </div>
               </div>
             </div>
@@ -174,8 +174,19 @@ function LoginContent() {
 
         {/* Sign Up Link */}
         <div className="text-center pt-4">
+          {method === 'phone' && (
+            <p className="text-(--text-secondary) text-sm mb-3">
+              Need to reset your email password?{' '}
+              <Link
+                href="/forgot-password"
+                className="text-(--accent) font-bold hover:underline transition-colors duration-300"
+              >
+                Recover account
+              </Link>
+            </p>
+          )}
           <p className="text-(--text-secondary) text-sm">
-            Don't have an account?{' '}
+            Don&apos;t have an account?{' '}
             <button
               onClick={() => router.push(`/signup${redirectParams ? `?redirect=${encodeURIComponent(redirectParams)}` : ''}`)}
               className="text-(--accent) font-bold hover:underline transition-colors duration-300"
