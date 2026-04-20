@@ -42,8 +42,6 @@ const copyVariantImages = catchAsync(async (req, res) => adminService.copyVarian
 const updateImage = catchAsync(async (req, res) => adminService.updateImage(req, res));
 const deleteImage = catchAsync(async (req, res) => adminService.deleteImage(req, res));
 const createProduct = catchAsync(async (req, res) => adminService.createProduct(req, res));
-const createProductsBulk = catchAsync(async (req, res) => adminService.createProductsBulk(req, res));
-const getBulkProductJob = catchAsync(async (req, res) => adminService.getBulkProductJob(req, res));
 
 const getAnalytics = catchAsync(async (req, res) => adminService.getAnalytics(req, res));
 
@@ -96,8 +94,6 @@ module.exports = {
   updateImage,
   deleteImage,
   createProduct,
-  createProductsBulk,
-  getBulkProductJob,
   getAnalytics,
   getNotificationHistory,
   markNotificationAsRead,
