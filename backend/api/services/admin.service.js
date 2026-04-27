@@ -285,6 +285,64 @@ const parseJsonInput = (value, fieldName = 'value') => {
   throw createError(400, `${fieldName} must be valid JSON`);
 };
 
+const normalizeColorKey = (value) => String(value || '').trim().toLowerCase();
+
+const sanitizePathSegment = (value, fallback = 'item') => {
+  const sanitized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return sanitized || fallback;
+};
+
+const parseProductColorImageGroups = (value) => {
+  const parsed = parseJsonInput(value, 'colorImageGroups');
+  if (parsed === undefined || parsed === null) {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw createError(400, 'colorImageGroups must be a JSON array');
+  }
+
+  return parsed.map((group, index) => {
+    if (!group || typeof group !== 'object' || Array.isArray(group)) {
+      throw createError(400, `Invalid colorImageGroups item at index ${index}`);
+    }
+
+    const fieldName = String(group.fieldName || '').trim();
+    if (!fieldName) {
+      throw createError(400, `colorImageGroups item ${index} requires fieldName`);
+    }
+
+    const colors = [];
+    const seenColorKeys = new Set();
+    const rawColors = Array.isArray(group.colors) ? group.colors : [];
+    rawColors.forEach((color) => {
+      const colorName = String(color || '').trim();
+      const colorKey = normalizeColorKey(colorName);
+      if (!colorKey || seenColorKeys.has(colorKey)) {
+        return;
+      }
+
+      seenColorKeys.add(colorKey);
+      colors.push(colorName);
+    });
+
+    if (colors.length === 0) {
+      throw createError(400, `colorImageGroups item ${index} requires at least one color`);
+    }
+
+    return {
+      fieldName,
+      colors,
+      colorKeys: colors.map(normalizeColorKey),
+    };
+  });
+};
+
 const parseDateTimeInput = (value, fieldName) => {
   if (value === undefined) {
     return undefined;
@@ -5136,25 +5194,77 @@ const createProduct = async (req, res) => {
   });
 
   const files = Array.isArray(req.files) ? req.files : [];
+  const hasColorImageGroups = req.body.colorImageGroups !== undefined;
 
-  for (let i = 0; i < created.variants.length; i += 1) {
-    const variant = created.variants[i];
-    const variantFiles = files.filter((file) => file.fieldname === `images_${i}`);
+  if (hasColorImageGroups) {
+    const colorImageGroups = parseProductColorImageGroups(req.body.colorImageGroups);
+    const filesByFieldName = new Map();
+    files.forEach((file) => {
+      const fieldFiles = filesByFieldName.get(file.fieldname) || [];
+      fieldFiles.push(file);
+      filesByFieldName.set(file.fieldname, fieldFiles);
+    });
 
-    for (let idx = 0; idx < variantFiles.length; idx += 1) {
-      const file = variantFiles[idx];
-      const optimized = await validateAndOptimizeImage(file.buffer);
-      const imageUrl = await uploadBufferToS3(optimized, `products/${created.product.id}/${variant.id}`, file.mimetype);
+    const variantsByColorKey = new Map();
+    created.variants.forEach((variant) => {
+      const colorKey = normalizeColorKey(variant.color);
+      variantsByColorKey.set(colorKey, [...(variantsByColorKey.get(colorKey) || []), variant]);
+    });
 
-      await prisma.productImage.create({
-        data: {
-          variantId: variant.id,
-          url: imageUrl,
-          altText: `${created.product.name} - ${variant.color} ${variant.size}`,
-          position: idx,
-          isPrimary: idx === 0,
-        },
-      });
+    const nextPositionByVariantId = new Map(created.variants.map((variant) => [variant.id, 0]));
+
+    for (const group of colorImageGroups) {
+      const groupFiles = filesByFieldName.get(group.fieldName) || [];
+      if (groupFiles.length === 0) {
+        throw createError(400, `No image file found for ${group.fieldName}`);
+      }
+
+      const targetVariants = group.colorKeys.flatMap((colorKey) => variantsByColorKey.get(colorKey) || []);
+      if (targetVariants.length === 0) {
+        throw createError(400, `No variant color matches image field ${group.fieldName}`);
+      }
+
+      for (const file of groupFiles) {
+        const optimized = await validateAndOptimizeImage(file.buffer);
+        const colorFolder = sanitizePathSegment(group.colors[0], 'color');
+        const imageUrl = await uploadBufferToS3(optimized, `products/${created.product.id}/colors/${colorFolder}`, file.mimetype);
+
+        await prisma.productImage.createMany({
+          data: targetVariants.map((variant) => {
+            const position = nextPositionByVariantId.get(variant.id) || 0;
+            nextPositionByVariantId.set(variant.id, position + 1);
+
+            return {
+              variantId: variant.id,
+              url: imageUrl,
+              altText: `${created.product.name} - ${variant.color} ${variant.size}`,
+              position,
+              isPrimary: position === 0,
+            };
+          }),
+        });
+      }
+    }
+  } else {
+    for (let i = 0; i < created.variants.length; i += 1) {
+      const variant = created.variants[i];
+      const variantFiles = files.filter((file) => file.fieldname === `images_${i}`);
+
+      for (let idx = 0; idx < variantFiles.length; idx += 1) {
+        const file = variantFiles[idx];
+        const optimized = await validateAndOptimizeImage(file.buffer);
+        const imageUrl = await uploadBufferToS3(optimized, `products/${created.product.id}/${variant.id}`, file.mimetype);
+
+        await prisma.productImage.create({
+          data: {
+            variantId: variant.id,
+            url: imageUrl,
+            altText: `${created.product.name} - ${variant.color} ${variant.size}`,
+            position: idx,
+            isPrimary: idx === 0,
+          },
+        });
+      }
     }
   }
 

@@ -705,6 +705,47 @@ describe('Admin routes integration', () => {
       expect(dbProduct.variants.every((v) => Boolean(v.inventory))).toBe(true);
     });
 
+    it('POST /api/admin/products uploads color images once and assigns them to all sizes for that color', async () => {
+      const variants = [
+        { size: '8', color: 'Black', sku: unique('SKU'), price: 1999, quantity: 5 },
+        { size: '9', color: 'Black', sku: unique('SKU'), price: 1999, quantity: 6 },
+        { size: '9', color: 'White', sku: unique('SKU'), price: 2099, quantity: 7 },
+      ];
+      const imageBuffer = await createTestImageBuffer();
+
+      const response = await asAdmin('post', '/api/admin/products')
+        .field('name', 'Velocity Color Share')
+        .field('brand', 'AuraZone')
+        .field('category', 'RUNNING')
+        .field('gender', 'MEN')
+        .field('variants', JSON.stringify(variants))
+        .field('colorImageGroups', JSON.stringify([{ fieldName: 'colorImages_0', colors: ['Black'] }]))
+        .attach('colorImages_0', imageBuffer, { filename: 'black.png', contentType: 'image/png' });
+
+      expect(response.status).toBe(201);
+      expect(mockUploadBufferToS3).toHaveBeenCalledTimes(1);
+      expect(mockUploadBufferToS3.mock.calls[0][1]).toMatch(/\/colors\/black$/);
+
+      const dbProduct = await prisma.product.findUnique({
+        where: { id: response.body.product.id },
+        include: {
+          variants: {
+            include: { images: true },
+            orderBy: { size: 'asc' },
+          },
+        },
+      });
+
+      const blackVariants = dbProduct.variants.filter((variant) => variant.color === 'Black');
+      const whiteVariant = dbProduct.variants.find((variant) => variant.color === 'White');
+      const blackImageUrls = blackVariants.flatMap((variant) => variant.images.map((image) => image.url));
+
+      expect(blackVariants).toHaveLength(2);
+      expect(blackVariants.every((variant) => variant.images.length === 1)).toBe(true);
+      expect(new Set(blackImageUrls).size).toBe(1);
+      expect(whiteVariant.images).toHaveLength(0);
+    });
+
     it('GET /api/admin/products validates sort and supports product detail', async () => {
       const { product } = await createProductFixture();
 

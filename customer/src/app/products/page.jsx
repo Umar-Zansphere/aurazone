@@ -28,6 +28,7 @@ const getEmptyFilters = () => ({
   maxPrice: '',
 });
 
+
 function ProductsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -49,6 +50,17 @@ function ProductsContent() {
 
   // Pagination
   const itemsPerPage = 12;
+
+  // Validation states for price range
+  const [priceTouched, setPriceTouched] = useState(false);
+  const minPrice = draftFilters.minPrice;
+  const maxPrice = draftFilters.maxPrice;
+  const minPriceValid = minPrice === '' || (Number(minPrice) >= 0 && /^\d+$/.test(minPrice));
+  const maxPriceValid = maxPrice === '' || (Number(maxPrice) >= 0 && /^\d+$/.test(maxPrice));
+  const priceRangeValid =
+    minPriceValid &&
+    maxPriceValid &&
+    (minPrice === '' || maxPrice === '' || Number(minPrice) <= Number(maxPrice));
 
   // Sync filters with searchParams when URL changes (e.g., from sidebar navigation)
   useEffect(() => {
@@ -173,6 +185,7 @@ function ProductsContent() {
 
   const handleFilterChange = (field, value) => {
     setDraftFilters(prev => ({ ...prev, [field]: value }));
+    if ((field === 'minPrice' || field === 'maxPrice') && !priceTouched) setPriceTouched(true);
   };
 
   const handleRemoveFilter = (field) => {
@@ -184,6 +197,8 @@ function ProductsContent() {
   };
 
   const handleApplyFilters = () => {
+    setPriceTouched(true);
+    if (!priceRangeValid) return;
     setFilters(draftFilters);
     setCurrentPage(1);
     updateUrl({ nextFilters: draftFilters, nextPage: 1 });
@@ -469,19 +484,29 @@ function ProductsContent() {
                     placeholder="Min"
                     value={draftFilters.minPrice}
                     onChange={(e) => handleFilterChange('minPrice', e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    onBlur={() => setPriceTouched(true)}
+                    className={`w-1/2 px-3 py-2 border text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${!minPriceValid && priceTouched ? 'border-red-400' : 'border-gray-300'}`}
+                    min="0"
                   />
                   <input
                     type="number"
                     placeholder="Max"
                     value={draftFilters.maxPrice}
                     onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                    onBlur={() => setPriceTouched(true)}
+                    className={`w-1/2 px-3 py-2 border text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 ${!maxPriceValid && priceTouched ? 'border-red-400' : 'border-gray-300'}`}
+                    min="0"
                   />
                 </div>
+                {priceTouched && (!minPriceValid || !maxPriceValid) && (
+                  <div className="text-red-600 text-xs mt-2">Price must be a positive number.</div>
+                )}
+                {priceTouched && minPriceValid && maxPriceValid && minPrice !== '' && maxPrice !== '' && Number(minPrice) > Number(maxPrice) && (
+                  <div className="text-red-600 text-xs mt-2">Min price cannot exceed max price.</div>
+                )}
                 <button
                   onClick={handleApplyFilters}
-                  disabled={!hasPendingFilterChanges}
+                  disabled={!hasPendingFilterChanges || !priceRangeValid}
                   className="w-full mt-4 px-4 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-600 transition-colors"
                 >
                   Apply Filters
@@ -574,45 +599,47 @@ function ProductsContent() {
                   ))}
                 </div>
 
-                {/* Pagination */}
-                <div className="flex justify-center items-center gap-2 py-8">
-                  <button
-                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Previous
-                  </button>
+                {/* Pagination: only show if products exceed itemsPerPage */}
+                {products.length === itemsPerPage && (
+                  <div className="flex justify-center items-center gap-2 py-8">
+                    <button
+                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Previous
+                    </button>
 
-                  <div className="flex items-center gap-1">
-                    {[...Array(Math.ceil(products.length / itemsPerPage) || 1)].map((_, i) => {
-                      const page = i + 1;
-                      if (page === 1 || page === Math.ceil(products.length / itemsPerPage) || (page >= currentPage - 1 && page <= currentPage + 1)) {
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => handlePageChange(page)}
-                            className={`w-10 h-10 rounded-lg font-semibold ${page === currentPage
-                              ? 'bg-orange-600 text-white'
-                              : 'border border-gray-300 hover:bg-gray-50'
-                              }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      }
-                      return null;
-                    })}
+                    <div className="flex items-center gap-1">
+                      {[...Array(Math.ceil(products.length / itemsPerPage) || 1)].map((_, i) => {
+                        const page = i + 1;
+                        if (page === 1 || page === Math.ceil(products.length / itemsPerPage) || (page >= currentPage - 1 && page <= currentPage + 1)) {
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => handlePageChange(page)}
+                              className={`w-10 h-10 rounded-lg font-semibold ${page === currentPage
+                                ? 'bg-orange-600 text-white'
+                                : 'border border-gray-300 hover:bg-gray-50'
+                                }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })}
+                    </div>
+
+                    <button
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={products.length < itemsPerPage}
+                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      Next
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={products.length < itemsPerPage}
-                    className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                </div>
+                )}
               </>
             )}
           </div>

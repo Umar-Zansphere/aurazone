@@ -24,6 +24,24 @@ export default function EditProfilePage() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [fullNameTouched, setFullNameTouched] = useState(false);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [phoneTouched, setPhoneTouched] = useState(false);
+
+  // Validation helpers
+  const isValidEmail = (val) => {
+    // Simple email regex
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+  };
+  const isValidPhone = (val) => {
+    return /^\d{10,}$/.test(val.trim());
+  };
+  const isValidFullName = (val) => {
+    return val.trim().length > 0;
+  };
+
+  const profileFormValid = isValidFullName(fullName) && isValidEmail(email);
+  const phoneFormValid = isValidPhone(phoneNumber);
 
   // Populate form when user data is available
   useEffect(() => {
@@ -36,8 +54,10 @@ export default function EditProfilePage() {
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim()) {
-      setError('Full name and email are required');
+    setFullNameTouched(true);
+    setEmailTouched(true);
+    if (!profileFormValid) {
+      setError('Please enter a valid full name and email.');
       return;
     }
 
@@ -65,7 +85,8 @@ export default function EditProfilePage() {
 
   const handleUpdatePhone = async (e) => {
     e.preventDefault();
-    if (!phoneNumber.trim() || phoneNumber.length < 10) {
+    setPhoneTouched(true);
+    if (!phoneFormValid) {
       setError('Valid phone number is required (at least 10 digits)');
       return;
     }
@@ -173,7 +194,7 @@ export default function EditProfilePage() {
         <div className="bg-white rounded-3xl shadow-lg p-8 mb-8 border border-slate-100">
           <h2 className="text-2xl font-bold text-slate-900 mb-6">Basic Information</h2>
 
-          <form onSubmit={handleUpdateProfile} className="space-y-6">
+          <form onSubmit={handleUpdateProfile} className="space-y-6" noValidate>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Full Name */}
               <div>
@@ -183,11 +204,22 @@ export default function EditProfilePage() {
                 <input
                   type="text"
                   value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
+                  onChange={(e) => {
+                    setFullName(e.target.value);
+                    if (!fullNameTouched) setFullNameTouched(true);
+                  }}
+                  onBlur={() => setFullNameTouched(true)}
                   className="w-full px-4 py-3 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-slate-50"
                   placeholder="Enter your full name"
                   required
+                  aria-invalid={!isValidFullName(fullName) && fullNameTouched}
+                  aria-describedby="fullname-error"
                 />
+                {!isValidFullName(fullName) && fullNameTouched && (
+                  <div id="fullname-error" className="text-red-600 text-xs font-medium mt-1">
+                    Please enter your full name.
+                  </div>
+                )}
               </div>
 
               {/* Email */}
@@ -198,11 +230,22 @@ export default function EditProfilePage() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (!emailTouched) setEmailTouched(true);
+                  }}
+                  onBlur={() => setEmailTouched(true)}
                   className="w-full px-4 py-3 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-slate-50"
                   placeholder="Enter your email"
                   required
+                  aria-invalid={!isValidEmail(email) && emailTouched}
+                  aria-describedby="email-error"
                 />
+                {!isValidEmail(email) && emailTouched && (
+                  <div id="email-error" className="text-red-600 text-xs font-medium mt-1">
+                    Please enter a valid email address.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -210,7 +253,7 @@ export default function EditProfilePage() {
             <div className="flex gap-4 pt-4">
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !profileFormValid}
                 className="bg-orange-600 hover:bg-orange-700 disabled:bg-slate-400 text-white px-8 py-3 rounded-2xl font-bold transition flex items-center gap-2"
               >
                 {submitting && <Loader className="animate-spin" size={20} />}
@@ -231,7 +274,7 @@ export default function EditProfilePage() {
         <div className="bg-white rounded-3xl shadow-lg p-8 border border-slate-100">
           <h2 className="text-2xl font-bold text-slate-900 mb-6">Update Phone Number</h2>
 
-          <form onSubmit={handleUpdatePhone} className="space-y-6">
+          <form onSubmit={handleUpdatePhone} className="space-y-6" noValidate>
             <div>
               <label className="block text-sm font-bold text-slate-900 mb-3">
                 Phone Number *
@@ -239,17 +282,28 @@ export default function EditProfilePage() {
               <input
                 type="tel"
                 value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
+                onChange={(e) => {
+                  setPhoneNumber(e.target.value);
+                  if (!phoneTouched) setPhoneTouched(true);
+                }}
+                onBlur={() => setPhoneTouched(true)}
                 className="w-full px-4 py-3 border border-slate-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-slate-50"
                 placeholder="Enter your phone number"
                 required
+                aria-invalid={!isValidPhone(phoneNumber) && phoneTouched}
+                aria-describedby="phone-error"
               />
+              {!isValidPhone(phoneNumber) && phoneTouched && (
+                <div id="phone-error" className="text-red-600 text-xs font-medium mt-1">
+                  Please enter a valid phone number (at least 10 digits).
+                </div>
+              )}
               <p className="text-sm text-slate-500 mt-2">At least 10 digits required</p>
             </div>
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !phoneFormValid}
               className="bg-orange-600 hover:bg-orange-700 disabled:bg-slate-400 text-white px-8 py-3 rounded-2xl font-bold transition flex items-center gap-2"
             >
               {submitting && <Loader className="animate-spin" size={20} />}

@@ -17,6 +17,7 @@ export function middleware(request) {
         '/signup',
         '/verify-otp',
         '/forgot-password',
+        '/reset-password',
         '/verify-email',
     ];
 
