@@ -998,6 +998,13 @@ export default function CreateProductPage() {
     () => importedProducts.find((product) => product.importId === activeImportId) || null,
     [importedProducts, activeImportId]
   );
+  const activeImportedProductIndex = useMemo(
+    () => importedProducts.findIndex((product) => product.importId === activeImportId),
+    [importedProducts, activeImportId]
+  );
+  const hasBulkImportContext = importedProducts.length > 0 && Boolean(activeImportId);
+  const hasNextImportedProduct =
+    activeImportedProductIndex > -1 && activeImportedProductIndex < importedProducts.length - 1;
 
   const generatedShortDescription = useMemo(
     () => generateShortDescription({ name: form.name, brand: form.brand, category: form.category, tags: form.tags }),
@@ -1204,6 +1211,25 @@ export default function CreateProductPage() {
     return fd;
   };
 
+  const goToNextImportedProductVariants = () => {
+    const latestProducts = getLatestImportedProducts();
+    const currentIndex = latestProducts.findIndex((product) => product.importId === activeImportId);
+    const nextProduct = currentIndex > -1 ? latestProducts[currentIndex + 1] || null : null;
+
+    if (!nextProduct) {
+      setImportedProducts(latestProducts);
+      setImportOpen(true);
+      setPublishError(null);
+      setSuccess(false);
+      setStep(1);
+      return;
+    }
+
+    loadImportedProduct(nextProduct, 2, latestProducts);
+    setPublishError(null);
+    setSuccess(false);
+  };
+
   const generateAiContent = async (target = "all") => {
     setAiGeneratingTarget(target); setAiError(null);
     try {
@@ -1226,6 +1252,11 @@ export default function CreateProductPage() {
   };
 
   const publishProduct = async () => {
+    if (hasBulkImportContext) {
+      setPublishError("Use Publish All from Imported Products to create the full batch.");
+      return;
+    }
+
     const productIssues = getProductPublishIssues(form);
     if (productIssues.length > 0) {
       setPublishError(`Finish this product before publishing: ${productIssues.join("; ")}.`);
@@ -1870,17 +1901,27 @@ export default function CreateProductPage() {
                 <button type="button" onClick={() => setStep(2)} className="app-button app-button-secondary flex h-13 items-center justify-center gap-2 rounded-[16px] px-5 text-sm font-semibold">
                   <ChevronLeft size={16} />
                 </button>
-                <button
-                  type="button"
-                  disabled={publishing}
-                  onClick={publishProduct}
-                  className="app-button flex h-13 flex-1 items-center justify-center gap-2 rounded-[16px] bg-[var(--highlight)] text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  {publishing
-                    ? <><span className="brand-spinner h-4 w-4 rounded-full border-2 border-white border-t-transparent" /> Publishing…</>
-                    : <><Sparkles size={16} /> Publish Product</>
-                  }
-                </button>
+                {hasBulkImportContext ? (
+                  <button
+                    type="button"
+                    onClick={goToNextImportedProductVariants}
+                    className="app-button flex h-13 flex-1 items-center justify-center gap-2 rounded-[16px] bg-[var(--highlight)] text-sm font-semibold text-white"
+                  >
+                    {hasNextImportedProduct ? <><ChevronRight size={16} /> Next Product Variants</> : "Close"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={publishing}
+                    onClick={publishProduct}
+                    className="app-button flex h-13 flex-1 items-center justify-center gap-2 rounded-[16px] bg-[var(--highlight)] text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {publishing
+                      ? <><span className="brand-spinner h-4 w-4 rounded-full border-2 border-white border-t-transparent" /> Publishing…</>
+                      : <><Sparkles size={16} /> Publish Product</>
+                    }
+                  </button>
+                )}
               </div>
             </motion.section>
           )}
