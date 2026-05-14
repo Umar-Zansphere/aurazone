@@ -6,7 +6,7 @@ pipeline {
     }
 
     triggers {
-        cron('0 10 * * *')
+        cron('0 11 * * *')
     }
 
     environment {
@@ -34,7 +34,6 @@ pipeline {
             steps {
                 dir('e2e') {
                     bat 'npm install'
-                    bat 'npx playwright install chromium'
                 }
             }
         }
