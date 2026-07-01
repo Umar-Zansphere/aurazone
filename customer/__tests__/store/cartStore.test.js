@@ -2,6 +2,7 @@
  * Tests for src/store/cartStore.js
  * Zustand store: useCartStore
  */
+
 import { act } from '@testing-library/react';
 
 // Mock the cart API
@@ -19,12 +20,21 @@ import { cartApi } from '@/lib/api';
 
 // Reset store between tests
 beforeEach(() => {
+    jest.useFakeTimers();
+
     useCartStore.setState({
         items: [],
         isLoading: false,
         error: null,
+        pendingByVariant: {},
     });
+
     jest.clearAllMocks();
+});
+
+afterEach(() => {
+    jest.runOnlyPendingTimers();
+    jest.useRealTimers();
 });
 
 // ─── Initial State ────────────────────────────────────────────────────────────
@@ -48,29 +58,45 @@ describe('cartStore initial state', () => {
 describe('setItems', () => {
     test('updates items and clears error', () => {
         const items = [{ id: '1', variantId: 'v1', quantity: 2 }];
+
         act(() => useCartStore.getState().setItems(items));
+
         expect(useCartStore.getState().items).toEqual(items);
         expect(useCartStore.getState().error).toBeNull();
     });
 });
 
-// ─── clearCart ─────────────────────────────────────────────────────────────────
+// ─── clearCart ────────────────────────────────────────────────────────────────
 
 describe('clearCart', () => {
     test('resets items to empty and clears error', () => {
-        useCartStore.setState({ items: [{ id: '1' }], error: 'some error' });
+        useCartStore.setState({
+            items: [{ id: '1' }],
+            error: 'some error',
+        });
+
         act(() => useCartStore.getState().clearCart());
+
         expect(useCartStore.getState().items).toEqual([]);
         expect(useCartStore.getState().error).toBeNull();
     });
 });
 
-// ─── fetchCart ─────────────────────────────────────────────────────────────────
+// ─── fetchCart ────────────────────────────────────────────────────────────────
 
 describe('fetchCart', () => {
     test('fetches cart items successfully', async () => {
-        const mockItems = [{ id: '1', variantId: 'v1', quantity: 1 }];
-        cartApi.getCart.mockResolvedValueOnce({ items: mockItems });
+        const mockItems = [
+            {
+                id: '1',
+                variantId: 'v1',
+                quantity: 1,
+            },
+        ];
+
+        cartApi.getCart.mockResolvedValueOnce({
+            items: mockItems,
+        });
 
         const result = await useCartStore.getState().fetchCart();
 
@@ -82,18 +108,29 @@ describe('fetchCart', () => {
 
     test('sets isLoading to true during fetch', async () => {
         let resolvePromise;
-        cartApi.getCart.mockReturnValueOnce(new Promise(r => { resolvePromise = r; }));
+
+        cartApi.getCart.mockReturnValueOnce(
+            new Promise((resolve) => {
+                resolvePromise = resolve;
+            })
+        );
 
         const fetchPromise = useCartStore.getState().fetchCart();
+
         expect(useCartStore.getState().isLoading).toBe(true);
 
         resolvePromise({ items: [] });
+
         await fetchPromise;
+
         expect(useCartStore.getState().isLoading).toBe(false);
     });
 
     test('handles 401 error silently (guest user)', async () => {
-        cartApi.getCart.mockRejectedValueOnce({ status: 401, message: 'Unauthorized' });
+        cartApi.getCart.mockRejectedValueOnce({
+            status: 401,
+            message: 'Unauthorized',
+        });
 
         const result = await useCartStore.getState().fetchCart();
 
@@ -103,7 +140,10 @@ describe('fetchCart', () => {
     });
 
     test('sets error for non-401 errors', async () => {
-        cartApi.getCart.mockRejectedValueOnce({ status: 500, message: 'Server error' });
+        cartApi.getCart.mockRejectedValueOnce({
+            status: 500,
+            message: 'Server error',
+        });
 
         const result = await useCartStore.getState().fetchCart();
 
@@ -121,7 +161,9 @@ describe('fetchCart', () => {
     });
 
     test('wraps non-array items to empty array', async () => {
-        cartApi.getCart.mockResolvedValueOnce({ items: 'not-array' });
+        cartApi.getCart.mockResolvedValueOnce({
+            items: 'not-array',
+        });
 
         await useCartStore.getState().fetchCart();
 
@@ -129,22 +171,37 @@ describe('fetchCart', () => {
     });
 });
 
-// ─── addToCart ─────────────────────────────────────────────────────────────────
+// ─── addToCart ────────────────────────────────────────────────────────────────
 
 describe('addToCart', () => {
-    test('calls API and refreshes cart', async () => {
-        cartApi.addToCart.mockResolvedValueOnce({ success: true });
-        cartApi.getCart.mockResolvedValueOnce({ items: [{ id: '1', variantId: 'v1', quantity: 1 }] });
+    test('calls API and queues cart refresh', async () => {
+        cartApi.addToCart.mockResolvedValueOnce({
+            success: true,
+        });
+
+        cartApi.getCart.mockResolvedValueOnce({
+            items: [
+                {
+                    id: '1',
+                    variantId: 'v1',
+                    quantity: 1,
+                },
+            ],
+        });
 
         await useCartStore.getState().addToCart('v1', 1);
 
         expect(cartApi.addToCart).toHaveBeenCalledWith('v1', 1);
+
+        jest.runAllTimers();
+
         expect(cartApi.getCart).toHaveBeenCalled();
     });
 
     test('uses default quantity of 1', async () => {
-        cartApi.addToCart.mockResolvedValueOnce({ success: true });
-        cartApi.getCart.mockResolvedValueOnce({ items: [] });
+        cartApi.addToCart.mockResolvedValueOnce({
+            success: true,
+        });
 
         await useCartStore.getState().addToCart('v1');
 
@@ -152,49 +209,131 @@ describe('addToCart', () => {
     });
 
     test('re-throws error on failure', async () => {
-        cartApi.addToCart.mockRejectedValueOnce(new Error('Failed'));
+        cartApi.addToCart.mockRejectedValueOnce(
+            new Error('Failed')
+        );
 
-        await expect(useCartStore.getState().addToCart('v1', 1)).rejects.toThrow('Failed');
+        await expect(
+            useCartStore.getState().addToCart('v1', 1)
+        ).rejects.toThrow('Failed');
     });
 });
 
 // ─── updateQuantity ───────────────────────────────────────────────────────────
 
 describe('updateQuantity', () => {
-    test('calls API and refreshes cart', async () => {
+    test('calls API and queues cart refresh', async () => {
+        useCartStore.setState({
+            items: [
+                {
+                    id: 'item-1',
+                    variantId: 'v1',
+                    quantity: 1,
+                },
+            ],
+        });
+
         cartApi.updateCartItem.mockResolvedValueOnce({});
-        cartApi.getCart.mockResolvedValueOnce({ items: [] });
 
-        await useCartStore.getState().updateQuantity('item-1', 5);
+        cartApi.getCart.mockResolvedValueOnce({
+            items: [],
+        });
 
-        expect(cartApi.updateCartItem).toHaveBeenCalledWith('item-1', 5);
+        await useCartStore.getState().updateQuantity(
+            'item-1',
+            5
+        );
+
+        expect(cartApi.updateCartItem)
+            .toHaveBeenCalledWith('item-1', 5);
+
+        jest.runAllTimers();
+
         expect(cartApi.getCart).toHaveBeenCalled();
     });
 
     test('re-throws error on failure', async () => {
-        cartApi.updateCartItem.mockRejectedValueOnce(new Error('Failed'));
+        useCartStore.setState({
+            items: [
+                {
+                    id: 'item-1',
+                    variantId: 'v1',
+                    quantity: 1,
+                },
+            ],
+        });
 
-        await expect(useCartStore.getState().updateQuantity('item-1', 5)).rejects.toThrow('Failed');
+        cartApi.updateCartItem.mockRejectedValueOnce(
+            new Error('Failed')
+        );
+
+        await expect(
+            useCartStore.getState().updateQuantity(
+                'item-1',
+                5
+            )
+        ).rejects.toThrow('Failed');
     });
 });
 
 // ─── removeItem ───────────────────────────────────────────────────────────────
 
 describe('removeItem', () => {
-    test('calls API and refreshes cart', async () => {
+    test('calls API and queues cart refresh', async () => {
+        useCartStore.setState({
+            items: [
+                {
+                    id: 'item-1',
+                    variantId: 'v1',
+                    quantity: 1,
+                },
+            ],
+        });
+
         cartApi.removeFromCart.mockResolvedValueOnce({});
-        cartApi.getCart.mockResolvedValueOnce({ items: [] });
+
+        cartApi.getCart.mockResolvedValueOnce({
+            items: [],
+        });
 
         await useCartStore.getState().removeItem('item-1');
 
-        expect(cartApi.removeFromCart).toHaveBeenCalledWith('item-1');
+        expect(cartApi.removeFromCart)
+            .toHaveBeenCalledWith('item-1');
+
+        jest.runAllTimers();
+
         expect(cartApi.getCart).toHaveBeenCalled();
     });
 
     test('re-throws error on failure', async () => {
-        cartApi.removeFromCart.mockRejectedValueOnce(new Error('Failed'));
+        useCartStore.setState({
+            items: [
+                {
+                    id: 'item-1',
+                    variantId: 'v1',
+                    quantity: 1,
+                },
+            ],
+        });
 
-        await expect(useCartStore.getState().removeItem('item-1')).rejects.toThrow('Failed');
+        cartApi.removeFromCart.mockRejectedValueOnce(
+            new Error('Failed')
+        );
+
+        await expect(
+            useCartStore.getState().removeItem('item-1')
+        ).rejects.toThrow('Failed');
+    });
+
+    test('returns graceful message when item already removed', async () => {
+        const result = await useCartStore
+            .getState()
+            .removeItem('missing-item');
+
+        expect(result).toEqual({
+            message: 'Item already removed',
+        });
     });
 });
 
@@ -204,20 +343,36 @@ describe('getCartCount', () => {
     test('returns sum of quantities', () => {
         useCartStore.setState({
             items: [
-                { id: '1', quantity: 2 },
-                { id: '2', quantity: 3 },
+                {
+                    id: '1',
+                    quantity: 2,
+                },
+                {
+                    id: '2',
+                    quantity: 3,
+                },
             ],
         });
-        expect(useCartStore.getState().getCartCount()).toBe(5);
+
+        expect(
+            useCartStore.getState().getCartCount()
+        ).toBe(5);
     });
 
     test('returns 0 for empty cart', () => {
-        expect(useCartStore.getState().getCartCount()).toBe(0);
+        expect(
+            useCartStore.getState().getCartCount()
+        ).toBe(0);
     });
 
     test('handles items without quantity', () => {
-        useCartStore.setState({ items: [{ id: '1' }] });
-        expect(useCartStore.getState().getCartCount()).toBe(0);
+        useCartStore.setState({
+            items: [{ id: '1' }],
+        });
+
+        expect(
+            useCartStore.getState().getCartCount()
+        ).toBe(0);
     });
 });
 
@@ -225,17 +380,39 @@ describe('getCartCount', () => {
 
 describe('isInCart', () => {
     test('returns true when variant is in cart', () => {
-        useCartStore.setState({ items: [{ id: '1', variantId: 'v1' }] });
-        expect(useCartStore.getState().isInCart('v1')).toBe(true);
+        useCartStore.setState({
+            items: [
+                {
+                    id: '1',
+                    variantId: 'v1',
+                },
+            ],
+        });
+
+        expect(
+            useCartStore.getState().isInCart('v1')
+        ).toBe(true);
     });
 
     test('returns false when variant is not in cart', () => {
-        useCartStore.setState({ items: [{ id: '1', variantId: 'v1' }] });
-        expect(useCartStore.getState().isInCart('v2')).toBe(false);
+        useCartStore.setState({
+            items: [
+                {
+                    id: '1',
+                    variantId: 'v1',
+                },
+            ],
+        });
+
+        expect(
+            useCartStore.getState().isInCart('v2')
+        ).toBe(false);
     });
 
     test('returns false for empty cart', () => {
-        expect(useCartStore.getState().isInCart('v1')).toBe(false);
+        expect(
+            useCartStore.getState().isInCart('v1')
+        ).toBe(false);
     });
 });
 
@@ -245,35 +422,73 @@ describe('getCartTotal', () => {
     test('calculates total from variant prices', () => {
         useCartStore.setState({
             items: [
-                { id: '1', variant: { price: '100.00' }, quantity: 2 },
-                { id: '2', variant: { price: '50.00' }, quantity: 1 },
+                {
+                    id: '1',
+                    variant: { price: '100.00' },
+                    quantity: 2,
+                },
+                {
+                    id: '2',
+                    variant: { price: '50.00' },
+                    quantity: 1,
+                },
             ],
         });
-        expect(useCartStore.getState().getCartTotal()).toBe(250);
+
+        expect(
+            useCartStore.getState().getCartTotal()
+        ).toBe(250);
     });
 
     test('falls back to item price when variant price missing', () => {
         useCartStore.setState({
-            items: [{ id: '1', price: '100.00', quantity: 3 }],
+            items: [
+                {
+                    id: '1',
+                    price: '100.00',
+                    quantity: 3,
+                },
+            ],
         });
-        expect(useCartStore.getState().getCartTotal()).toBe(300);
+
+        expect(
+            useCartStore.getState().getCartTotal()
+        ).toBe(300);
     });
 
     test('returns 0 for empty cart', () => {
-        expect(useCartStore.getState().getCartTotal()).toBe(0);
+        expect(
+            useCartStore.getState().getCartTotal()
+        ).toBe(0);
     });
 
     test('handles items without quantity', () => {
         useCartStore.setState({
-            items: [{ id: '1', variant: { price: '100.00' } }],
+            items: [
+                {
+                    id: '1',
+                    variant: { price: '100.00' },
+                },
+            ],
         });
-        expect(useCartStore.getState().getCartTotal()).toBe(0);
+
+        expect(
+            useCartStore.getState().getCartTotal()
+        ).toBe(0);
     });
 
     test('handles items without price', () => {
         useCartStore.setState({
-            items: [{ id: '1', quantity: 2 }],
+            items: [
+                {
+                    id: '1',
+                    quantity: 2,
+                },
+            ],
         });
-        expect(useCartStore.getState().getCartTotal()).toBe(0);
+
+        expect(
+            useCartStore.getState().getCartTotal()
+        ).toBe(0);
     });
 });

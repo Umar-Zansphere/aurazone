@@ -15,69 +15,67 @@
 <body>
     <div class="header">
         <h2>Playwright E2E Test Report: FAILED</h2>
-        <p>Date: 3/30/2026, 8:35:43 AM</p>
+        <p>Date: 1/6/2026, 3:59:14 pm</p>
     </div>
     <div class="content">
         <h3>Execution Log</h3>
         <table>
             <tr><th>Timestamp</th><th>Test Name</th><th>Status</th></tr>
-            <tr><td>8:35:43 AM</td><td>2.2 Add Product with Variants: selected variant is added</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>2.3 Out of Stock Prevention: adding unavailable stock is blocked</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>3.3 Address Validation (Failure): missing required fields show validation feedback</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully</td><td class='fail'>ERROR</td></tr><tr><td>8:35:43 AM</td><td>7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls</td><td class='fail'>ERROR</td></tr>
+            <tr><td>3:59:14 pm</td><td>1.7 Pagination/Infinite Scroll: next page loads without duplicates (or disabled when single page)</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>2.8 Complex Cart Calculation: subtotal matches sum of item totals</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>3.4 Order Summary Verification: subtotal/shipping/total map correctly</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>6.4 Failed Payment Inventory Logic: failed payment does not decrement stock and releases reserve</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.1 Race Condition (Last Item): one checkout succeeds and the other fails out-of-stock</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully</td><td class='fail'>ERROR</td></tr><tr><td>3:59:14 pm</td><td>7.7 Idempotency Execution: rapid double-submit does not create duplicate order calls</td><td class='fail'>ERROR</td></tr>
         </table>
-        <h3>Error Details</h3><pre>Test: 2.2 Add Product with Variants: selected variant is added
-Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoContain[2m([22m[32mexpected[39m[2m) // indexOf[22m
-
-Expected substring: [32m"Classic White"[39m
-Received string:    [31m"Aurazone.·[39m
-[31mSHOP·[39m
-[31m🌟 New Arrivals⭐ Featured👟 All Products·[39m
-[31mBY GENDER·[39m
-[31mMenWomenUnisexKids·[39m
-[31mBY CATEGORY·[39m
-[31mRunningCasualFormalSneakers·[39m
-[31mSUPPORT & POLICIES·[39m
-[31mCancellations & RefundsTerms & ConditionsShipping PolicyPrivacy PolicyContact Us[39m
-[31mContinue Shopping[39m
-[31mYour cart is empty·[39m
-[31mAdd some products to get started·[39m
-[31mBrowse Products"[39m
-
-Test: 2.3 Out of Stock Prevention: adding unavailable stock is blocked
-Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
-
-Locator: getByText(/out of stock/i).first()
-Expected: visible
-Timeout: 15000ms
-Error: element(s) not found
-
+        <h3>Error Details</h3><pre>Test: 1.7 Pagination/Infinite Scroll: next page loads without duplicates (or disabled when single page)
+Error: TimeoutError: locator.isDisabled: Timeout 15000ms exceeded.
 Call log:
-[2m  - Expect "toBeVisible" with timeout 15000ms[22m
-[2m  - waiting for getByText(/out of stock/i).first()[22m
+[2m  - waiting for getByRole('button', { name: /^next$/i })[22m
 
+
+Test: 2.8 Complex Cart Calculation: subtotal matches sum of item totals
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+Received: [31mfalse[39m
 
 Test: 3.1 Guest vs Authenticated Checkout: flow enforces auth mode settings
-Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeEnabled[2m([22m[2m)[22m failed
 
-Locator: locator('a[href^="/product/"]').filter({ hasText: 'Forest Trek' }).first()
-Expected: visible
-Timeout: 15000ms
-Error: element(s) not found
+Locator:  getByRole('button', { name: /^add to cart$/i }).first()
+Expected: enabled
+Received: disabled
+Timeout:  30000ms
 
 Call log:
-[2m  - Expect "toBeVisible" with timeout 15000ms[22m
-[2m  - waiting for locator('a[href^="/product/"]').filter({ hasText: 'Forest Trek' }).first()[22m
+[2m  - Expect "toBeEnabled" with timeout 30000ms[22m
+[2m  - waiting for getByRole('button', { name: /^add to cart$/i }).first()[22m
+[2m    33 × locator resolved to &lt;button disabled class="flex-1 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] py-4 rounded-xl font-bold text-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"&gt;…&lt;/button&gt;[22m
+[2m       - unexpected value "disabled"[22m
 
 
-Test: 3.3 Address Validation (Failure): missing required fields show validation feedback
-Error: TimeoutError: page.waitForURL: Timeout 45000ms exceeded.
-=========================== logs ===========================
-waiting for navigation until "load"
-============================================================
+Test: 3.4 Order Summary Verification: subtotal/shipping/total map correctly
+Error: Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeEnabled[2m([22m[2m)[22m failed
+
+Locator:  getByRole('button', { name: /^add to cart$/i }).first()
+Expected: enabled
+Received: disabled
+Timeout:  30000ms
+
+Call log:
+[2m  - Expect "toBeEnabled" with timeout 30000ms[22m
+[2m  - waiting for getByRole('button', { name: /^add to cart$/i }).first()[22m
+[2m    33 × locator resolved to &lt;button disabled class="flex-1 bg-white text-[#FF6B6B] border-2 border-[#FF6B6B] py-4 rounded-xl font-bold text-lg hover:bg-red-50 transition-colors flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"&gt;…&lt;/button&gt;[22m
+[2m       - unexpected value "disabled"[22m
+
+
+Test: 6.4 Failed Payment Inventory Logic: failed payment does not decrement stock and releases reserve
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+Received: [31mfalse[39m
+
+Test: 7.1 Race Condition (Last Item): one checkout succeeds and the other fails out-of-stock
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+Received: [31mfalse[39m
 
 Test: 7.2 Price Change Mid-Checkout: checkout uses consistent policy after admin price change
-Error: TimeoutError: locator.textContent: Timeout 15000ms exceeded.
-Call log:
-[2m  - waiting for locator('main')[22m
-
+Error: TypeError: Cannot read properties of undefined (reading 'unitPrice')
 
 Test: 7.3 Product Disabled Mid-Checkout: disabled product should be flagged unavailable before order placement
 Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
@@ -86,10 +84,9 @@ Expected pattern: [32m/unavailable|disabled|not found|out of stock/[39m
 Received string:  [31m"cart is empty"[39m
 
 Test: 7.4 Stock Zeroed Mid-Checkout: checkout fails with out-of-stock validation
-Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoMatch[2m([22m[32mexpected[39m[2m)[22m
+Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
 
-Expected pattern: [32m/insufficient|out of stock|inventory/[39m
-Received string:  [31m"cart is empty"[39m
+Received: [31mfalse[39m
 
 Test: 7.6 Punctuation in Address: special chars/emojis/long text are handled gracefully
 Error: Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThan[2m([22m[32mexpected[39m[2m)[22m

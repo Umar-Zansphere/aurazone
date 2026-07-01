@@ -35,7 +35,7 @@ module.exports = defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : 1, // Sequential execution for checkout -> admin flow
-    reporter: [['html', { open: 'never' }], ['list'], ['./custom-reporter.js']],
+    // reporter: [['html', { open: 'never' }], ['list'], ['./custom-reporter.js']],
     timeout: 120_000,
     expect: {
         timeout: 15_000,
@@ -63,4 +63,38 @@ module.exports = defineConfig({
         //   use: { ...devices['Desktop Safari'] },
         // },
     ],
+    reporter: [
+    ['html', { open: 'never' }],
+    ['list'],
+    ['./custom-reporter.js'],
+    ['@reportportal/agent-js-playwright', {
+        endpoint: 'http://localhost:9090/api/v1',
+        apiKey: process.env.RP_API_KEY,
+        project: 'AuraZone',
+        launch: 'AuraZone E2E Tests',
+        description: 'Playwright automation execution',
+        attributes: [
+        {
+            key: 'framework',
+            value: 'playwright'
+        },
+        {
+            key: 'suite',
+            value: 'e2e'
+        },
+        {
+            key: 'app',
+            value: 'aurazone'
+        },
+        {
+            key: 'team',
+            value: 'qa'
+        },
+        {
+            key: 'env',
+            value: 'qa'
+        }
+    ]
+    }]
+],
 });
