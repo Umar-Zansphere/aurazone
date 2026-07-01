@@ -20,6 +20,7 @@ pipeline {
         CUSTOMER_EMAIL='umar.zangroups@gmail.com'
         CUSTOMER_PASSWORD='Umar2468/us!'
 
+        RP_API_KEY=credentials('RP_API_KEY')
         WEBHOOK_SECRET='iuyjRxjEJGZzD+lqXxN8rjUGQS9pMMAlxXrVQNeMch4='
     }
 
