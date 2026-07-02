@@ -35,8 +35,6 @@ pipeline {
             steps {
                 dir('e2e') {
                     bat 'npm install'
-                    bat 'npx playwright install'
-                    bat 'npx playwright install chromium'
                 }
             }
         }
