@@ -34,7 +34,8 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 dir('e2e') {
-                    bat 'npm install'
+                    bat 'npm ci'
+                    bat 'npx playwright install chromium'
                 }
             }
         }
