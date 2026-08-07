@@ -50,19 +50,14 @@ module.exports = defineConfig({
         navigationTimeout: 45_000,
     },
     projects: [
-        {
-            name: 'chromium',
-            use: { ...devices['Desktop Chrome'] },
-        },
-        // {
-        //   name: 'firefox',
-        //   use: { ...devices['Desktop Firefox'] },
-        // },
-        // {
-        //   name: 'webkit',
-        //   use: { ...devices['Desktop Safari'] },
-        // },
-    ],
+  {
+    name: 'chrome',
+    use: {
+      ...devices['Desktop Chrome'],
+      channel: 'chrome',
+    },
+  },
+],
     reporter: [
     ['html', { open: 'never' }],
     ['list'],
