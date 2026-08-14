@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -26,6 +26,25 @@ const parsePositiveInteger = (value, fallback = 1) => {
 const clampToVariantLimit = (quantity) =>
   Math.min(MAX_VARIANT_QUANTITY, Math.max(1, parsePositiveInteger(quantity, 1)));
 
+const getCartItemUnitPrice = (item) =>
+  Number.parseFloat(item?.unitPrice ?? item?.variant?.price ?? item?.price ?? 0);
+
+const normalizeCartItem = (item) => {
+  const normalizedVariant = item?.variant || {};
+  const normalizedProduct = item?.product || normalizedVariant.product || {};
+  const unitPrice = getCartItemUnitPrice(item);
+
+  return {
+    ...item,
+    unitPrice,
+    product: normalizedProduct,
+    variant: {
+      ...normalizedVariant,
+      product: normalizedProduct,
+    },
+  };
+};
+
 function CheckoutPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -38,6 +57,7 @@ function CheckoutPageContent() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('cart');
+  const submitGuardRef = useRef(false);
 
   // Direct checkout params
   const isBuyNow = searchParams.get('buyNow') === 'true';
@@ -96,20 +116,25 @@ function CheckoutPageContent() {
             const singleVariant = productData.variants?.find(v => v.id === buyNowVariantId);
 
             if (singleVariant) {
-              setCart([{
+              setCart([normalizeCartItem({
                 id: 'direct-buy',
                 variantId: singleVariant.id,
                 quantity: buyNowQuantity,
                 unitPrice: singleVariant.price,
+                product: {
+                  id: productData.id,
+                  name: productData.name,
+                  category: productData.category
+                },
                 variant: {
                   ...singleVariant,
                   product: {
                     id: productData.id,
                     name: productData.name,
                     category: productData.category
-                  }
+                  },
                 }
-              }]);
+              })]);
             } else {
               showToast('Product variant not found', 'error');
             }
@@ -117,7 +142,10 @@ function CheckoutPageContent() {
             // Standard cart fetching
             const cartResponse = await cartApi.getCart();
             if (cartResponse) {
-              setCart(cartResponse?.items || []);
+              const nextCart = Array.isArray(cartResponse?.items)
+                ? cartResponse.items.map(normalizeCartItem)
+                : [];
+              setCart(nextCart);
             }
           }
         } catch (err) {
@@ -201,6 +229,10 @@ function CheckoutPageContent() {
   };
 
   const handleCreateOrder = async () => {
+    if (submitGuardRef.current || submitting) {
+      return;
+    }
+
     const adjustedForLimit = await enforceCheckoutQuantityLimit();
     if (adjustedForLimit) {
       return;
@@ -217,6 +249,7 @@ function CheckoutPageContent() {
     }
 
     try {
+      submitGuardRef.current = true;
       setSubmitting(true);
 
       // Step 1: Create order
@@ -241,6 +274,7 @@ function CheckoutPageContent() {
 
       if (!response.success) {
         showToast('Failed to create order', 'error');
+        submitGuardRef.current = false;
         setSubmitting(false);
         return;
       }
@@ -304,11 +338,13 @@ function CheckoutPageContent() {
                 }
               } else {
                 showToast('Payment verification failed', 'error');
+                submitGuardRef.current = false;
                 setSubmitting(false);
               }
             } catch (error) {
               console.error('Payment verification error:', error);
               showToast('Payment verification failed', 'error');
+              submitGuardRef.current = false;
               setSubmitting(false);
             }
           },
@@ -322,6 +358,7 @@ function CheckoutPageContent() {
           modal: {
             ondismiss: () => {
               console.log('Payment modal closed');
+              submitGuardRef.current = false;
               setSubmitting(false);
               showToast('Payment cancelled. Please try again.', 'warning');
             }
@@ -346,11 +383,12 @@ function CheckoutPageContent() {
     } catch (err) {
       showToast('Error creating order', 'error');
       console.error('Error creating order:', err);
+      submitGuardRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const cartTotal = cart.reduce((sum, item) => sum + (parseFloat(item.unitPrice) * item.quantity), 0);
+  const cartTotal = cart.reduce((sum, item) => sum + (getCartItemUnitPrice(item) * item.quantity), 0);
   const totalQuantity = cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
   const shippingFee = SHIPPING_UNIT * totalQuantity;
 
@@ -465,10 +503,10 @@ function CheckoutPageContent() {
 
                     <div className="text-right">
                       <p className="font-bold text-slate-900">
-                        ₹{(parseFloat(item.unitPrice) * item.quantity).toFixed(2)}
+                        ₹{(getCartItemUnitPrice(item) * item.quantity).toFixed(2)}
                       </p>
                       <p className="text-sm text-slate-500">
-                        ₹{parseFloat(item.unitPrice).toFixed(2)} each
+                        ₹{getCartItemUnitPrice(item).toFixed(2)} each
                       </p>
                     </div>
                   </div>

@@ -454,10 +454,18 @@ const ensureCheckoutQuantityLimit = (items = []) => {
 const ensureCheckoutItemsArePurchasable = (items = []) => {
   for (const item of items) {
     const variant = item?.variant;
-    const product = variant?.product;
+    const product = variant?.product || item?.product;
+    const inventoryQuantity = Number(variant?.inventory?.quantity || 0);
+    const reservedQuantity = Number(variant?.inventory?.reserved || 0);
+    const availableQuantity = Math.max(0, inventoryQuantity - reservedQuantity);
+    const requestedQuantity = Number(item?.quantity || 0);
 
     if (!variant || !product || !variant.isAvailable || !product.isActive) {
       throw new Error('One or more items are unavailable. Please refresh your cart and try again.');
+    }
+
+    if (requestedQuantity > availableQuantity) {
+      throw new Error('One or more items are out of stock. Please refresh your cart and try again.');
     }
   }
 };

@@ -398,7 +398,8 @@ const getCartSummary = async (userId = null, sessionId = null) => {
 
   let subtotal = 0;
   const items = cart.items.map(item => {
-    const itemTotal = parseFloat(item.variant.price) * item.quantity;
+    const itemUnitPrice = Number.parseFloat(item.unitPrice ?? item.variant?.price ?? 0);
+    const itemTotal = itemUnitPrice * item.quantity;
     subtotal += itemTotal;
 
     return {
@@ -733,5 +734,4 @@ module.exports = {
   moveToCart,
   clearWishlist
 };
-
 

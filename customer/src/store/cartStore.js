@@ -300,7 +300,7 @@ const useCartStore = create((set, get) => ({
     getCartTotal: () => {
         const items = get().items;
         return items.reduce((total, item) => {
-            const price = parseFloat(item.variant?.price || item.price || 0);
+            const price = parseFloat(item.unitPrice ?? item.variant?.price ?? item.price ?? 0);
             const quantity = item.quantity || 0;
             return total + (price * quantity);
         }, 0);

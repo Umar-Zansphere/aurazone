@@ -47,6 +47,7 @@ function ProductsContent() {
   const [filters, setFilters] = useState(() => getFiltersFromParams(searchParams));
   const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'popular');
   const [currentPage, setCurrentPage] = useState(parseInt(searchParams.get('page') || '1'));
+  const [totalPages, setTotalPages] = useState(1);
 
   // Pagination
   const itemsPerPage = 12;
@@ -79,7 +80,7 @@ function ProductsContent() {
     loadFilterOptions();
     loadProducts();
     loadWishlist();
-  }, [filters, searchTerm, sortBy, currentPage]);
+  }, [loadFilterOptions, loadProducts, loadWishlist]);
 
   const loadFilterOptions = useCallback(async () => {
     try {
@@ -117,9 +118,11 @@ function ProductsContent() {
         data = await productApi.getProducts(params);
       }
 
+      const responsePayload = Array.isArray(data) ? null : (data?.data || data || {});
       let productsData = Array.isArray(data)
         ? data
-        : (data?.data?.products || data?.products || data?.data || []);
+        : (responsePayload?.products || data?.products || responsePayload || []);
+      const nextPagination = responsePayload?.pagination || data?.pagination || null;
 
       // Sort products
       if (sortBy === 'price-low') {
@@ -139,9 +142,11 @@ function ProductsContent() {
       }
 
       setProducts(productsData);
+      setTotalPages(Math.max(1, Number(nextPagination?.pages || 1)));
     } catch (err) {
       console.error('Failed to load products:', err);
       setProducts([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -599,47 +604,43 @@ function ProductsContent() {
                   ))}
                 </div>
 
-                {/* Pagination: only show if products exceed itemsPerPage */}
-                {products.length === itemsPerPage && (
-                  <div className="flex justify-center items-center gap-2 py-8">
-                    <button
-                      onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Previous
-                    </button>
+                <div className="flex justify-center items-center gap-2 py-8">
+                  <button
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
 
-                    <div className="flex items-center gap-1">
-                      {[...Array(Math.ceil(products.length / itemsPerPage) || 1)].map((_, i) => {
-                        const page = i + 1;
-                        if (page === 1 || page === Math.ceil(products.length / itemsPerPage) || (page >= currentPage - 1 && page <= currentPage + 1)) {
-                          return (
-                            <button
-                              key={page}
-                              onClick={() => handlePageChange(page)}
-                              className={`w-10 h-10 rounded-lg font-semibold ${page === currentPage
-                                ? 'bg-orange-600 text-white'
-                                : 'border border-gray-300 hover:bg-gray-50'
-                                }`}
-                            >
-                              {page}
-                            </button>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={products.length < itemsPerPage}
-                      className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                    >
-                      Next
-                    </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      if (page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1)) {
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => handlePageChange(page)}
+                            className={`w-10 h-10 rounded-lg font-semibold ${page === currentPage
+                              ? 'bg-orange-600 text-white'
+                              : 'border border-gray-300 hover:bg-gray-50'
+                              }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      }
+                      return null;
+                    })}
                   </div>
-                )}
+
+                  <button
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage >= totalPages}
+                    className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </>
             )}
           </div>
