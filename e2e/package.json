@@ -17,6 +17,7 @@
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@playwright/test": "^1.58.2"
+    "@playwright/test": "^1.58.2",
+    "@reportportal/agent-js-playwright": "^5.4.0"
   }
 }

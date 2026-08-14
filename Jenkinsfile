@@ -6,7 +6,7 @@ pipeline {
     }
 
     triggers {
-        cron('0 10 * * *')
+        cron('0 11 * * *')
     }
 
     environment {
@@ -20,6 +20,7 @@ pipeline {
         CUSTOMER_EMAIL='umar.zangroups@gmail.com'
         CUSTOMER_PASSWORD='Umar2468/us!'
 
+        RP_API_KEY=credentials('RP_API_KEY')
         WEBHOOK_SECRET='iuyjRxjEJGZzD+lqXxN8rjUGQS9pMMAlxXrVQNeMch4='
     }
 
@@ -34,7 +35,6 @@ pipeline {
             steps {
                 dir('e2e') {
                     bat 'npm install'
-                    bat 'npx playwright install chromium'
                 }
             }
         }

@@ -35,7 +35,7 @@ module.exports = defineConfig({
     forbidOnly: !!process.env.CI,
     retries: process.env.CI ? 2 : 0,
     workers: process.env.CI ? 1 : 1, // Sequential execution for checkout -> admin flow
-    reporter: [['html', { open: 'never' }], ['list'], ['./custom-reporter.js']],
+    // reporter: [['html', { open: 'never' }], ['list'], ['./custom-reporter.js']],
     timeout: 120_000,
     expect: {
         timeout: 15_000,
@@ -50,17 +50,46 @@ module.exports = defineConfig({
         navigationTimeout: 45_000,
     },
     projects: [
+  {
+    name: 'chrome',
+    use: {
+      ...devices['Desktop Chrome'],
+      channel: 'chrome',
+    },
+  },
+],
+    reporter: [
+    ['html', { open: 'never' }],
+    ['list'],
+    ['./custom-reporter.js'],
+    ['@reportportal/agent-js-playwright', {
+        endpoint: 'http://localhost:9090/api/v1',
+        apiKey: process.env.RP_API_KEY,
+        project: 'AuraZone',
+        launch: 'AuraZone E2E Tests',
+        description: 'Playwright automation execution',
+        attributes: [
         {
-            name: 'chromium',
-            use: { ...devices['Desktop Chrome'] },
+            key: 'framework',
+            value: 'playwright'
         },
-        // {
-        //   name: 'firefox',
-        //   use: { ...devices['Desktop Firefox'] },
-        // },
-        // {
-        //   name: 'webkit',
-        //   use: { ...devices['Desktop Safari'] },
-        // },
-    ],
+        {
+            key: 'suite',
+            value: 'e2e'
+        },
+        {
+            key: 'app',
+            value: 'aurazone'
+        },
+        {
+            key: 'team',
+            value: 'qa'
+        },
+        {
+            key: 'env',
+            value: 'qa'
+        }
+    ]
+    }]
+],
 });

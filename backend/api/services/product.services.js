@@ -52,6 +52,24 @@ const buildInStockVariantWhere = (extra = {}) => ({
   ...extra,
 });
 
+const hasAvailableInventory = (variant) =>
+  Math.max(
+    0,
+    Number(variant?.inventory?.quantity || 0) - Number(variant?.inventory?.reserved || 0)
+  ) > 0;
+
+const withAvailableVariants = (product) => ({
+  ...product,
+  variants: Array.isArray(product?.variants)
+    ? product.variants.filter(hasAvailableInventory)
+    : [],
+});
+
+const filterProductsWithAvailableVariants = (products = []) =>
+  products
+    .map(withAvailableVariants)
+    .filter((product) => product.variants.length > 0);
+
 // ======================== CUSTOMER-FACING PRODUCT SERVICES ========================
 
 // Get filter options (brands, categories, genders, colors, sizes)
@@ -141,8 +159,7 @@ const getPopularProducts = async (skip = 0, take = 10) => {
     })
   ]);
   return {
-    
-    products: products,
+    products: filterProductsWithAvailableVariants(products),
     pagination: { total, skip, take, pages: Math.ceil(total / take) }
   };
 };
@@ -514,8 +531,7 @@ const searchProducts = async (filters = {}) => {
     prisma.product.count({ where })
   ]);
 
-  // Filter out products with no matching variants
-  const filteredProducts = products.filter(p => p.variants.length > 0);
+  const filteredProducts = filterProductsWithAvailableVariants(products);
 
   return {
     products: filteredProducts,
@@ -569,7 +585,7 @@ const getProductsList = async (filters = {}) => {
   ]);
 
   return {
-    products: products,
+    products: filterProductsWithAvailableVariants(products),
     pagination: {
       total,
       skip: pagination.skip,
@@ -598,11 +614,13 @@ const getProductDetail = async (productId) => {
     }
   });
 
-  if (!product) {
+  const filteredProduct = product ? withAvailableVariants(product) : null;
+
+  if (!filteredProduct || filteredProduct.variants.length === 0) {
     throw new Error('Product not found');
   }
 
-  return formatProductDetailForResponse(product);
+  return formatProductDetailForResponse(filteredProduct);
 };
 
 // Helper function to format single product detail
