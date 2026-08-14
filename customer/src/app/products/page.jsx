@@ -75,13 +75,6 @@ function ProductsContent() {
     setCurrentPage(parseInt(searchParams.get('page') || '1'));
   }, [searchParams]);
 
-  // Load filters and products
-  useEffect(() => {
-    loadFilterOptions();
-    loadProducts();
-    loadWishlist();
-  }, [loadFilterOptions, loadProducts, loadWishlist]);
-
   const loadFilterOptions = useCallback(async () => {
     try {
       const data = await productApi.getFilterOptions();
@@ -169,6 +162,13 @@ function ProductsContent() {
       console.error('Failed to load wishlist:', err);
     }
   }, []);
+
+  // Load filters and products
+  useEffect(() => {
+    loadFilterOptions();
+    loadProducts();
+    loadWishlist();
+  }, [loadFilterOptions, loadProducts, loadWishlist]);
 
   const updateUrl = useCallback(({
     nextFilters = filters,
