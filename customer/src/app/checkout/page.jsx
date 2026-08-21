@@ -769,12 +769,13 @@ function CheckoutPageContent() {
                   </div>
                 </button>
 
-                <button
-                  data-payment="COD"
-                  onClick={() => setPaymentMethod('COD')}
-                  className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'COD'
-                    ? 'border-orange-500 bg-slate-50 shadow-md'
-                    : 'border-slate-200 hover:border-orange-300 bg-white hover:bg-slate-50'
+                {process.env.NEXT_PUBLIC_ENABLE_COD === 'true' && (
+                  <button
+                    data-payment="COD"
+                    onClick={() => setPaymentMethod('COD')}
+                    className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'COD'
+                      ? 'border-orange-500 bg-slate-50 shadow-md'
+                      : 'border-slate-200 hover:border-orange-300 bg-white hover:bg-slate-50'
                     }`}
                 >
                   <div className="flex gap-3 items-center">
@@ -794,7 +795,8 @@ function CheckoutPageContent() {
                       <p className="text-sm text-slate-600 mt-1">Pay when you receive your order at the door</p>
                     </div>
                   </div>
-                </button>*/}
+                </button>)
+                }
               </div>
             </div>
 
