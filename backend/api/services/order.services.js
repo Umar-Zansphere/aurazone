@@ -340,7 +340,7 @@ const getOrderByTrackingToken = async (trackingToken) => {
     include: {
       items: {
         include: {
-          variant: { include: { product: true } }
+          variant: { include: { product: true, inventory: true } }
         }
       },
       shipments: true,
@@ -423,7 +423,7 @@ const getOrderItems = async (orderId) => {
   const items = await prisma.orderItem.findMany({
     where: { orderId },
     include: {
-      variant: { include: { product: true } }
+      variant: { include: { product: true, inventory: true } }
     }
   });
 
@@ -495,7 +495,7 @@ const createOrderFromCart = async (userId, orderData) => {
 
   const cart = await prisma.cart.findFirst({
     where: { userId, status: 'ACTIVE' },
-    include: { items: { include: { variant: { include: { product: true } } } } },
+    include: { items: { include: { variant: { include: { product: true, inventory: true } } } } },
   });
 
   if (!cart || cart.items.length === 0) {
@@ -541,7 +541,7 @@ const createOrderFromCart = async (userId, orderData) => {
         },
       },
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         payments: true,
         shipments: true,
       },
@@ -723,7 +723,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
 
   const cart = await prisma.cart.findFirst({
     where: { sessionId: session.id, status: 'ACTIVE' },
-    include: { items: { include: { variant: { include: { product: true } } } } },
+    include: { items: { include: { variant: { include: { product: true, inventory: true } } } } },
   });
 
   if (!cart || cart.items.length === 0) {
@@ -761,7 +761,7 @@ const createOrderFromCartAsGuest = async (sessionId, orderData) => {
         },
       },
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         payments: true,
         shipments: true,
       },
@@ -989,7 +989,7 @@ const createDirectOrder = async (userId, orderData) => {
         },
       },
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         payments: true,
         shipments: true,
       },
@@ -1214,7 +1214,7 @@ const createDirectOrderAsGuest = async (sessionId, orderData) => {
         },
       },
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         payments: true,
         shipments: true,
       },
@@ -1379,7 +1379,7 @@ const getCustomerOrders = async (userId, filters = {}) => {
     prisma.order.findMany({
       where,
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         shipments: true,
         payments: true
       },
@@ -1414,7 +1414,7 @@ const getCustomerOrderDetail = async (userId, orderId) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { variant: { include: { product: true, images: true } } } },
+      items: { include: { variant: { include: { product: true, inventory: true, images: true } } } },
       orderAddress: true,
       shipments: true,
       payments: true
@@ -1578,7 +1578,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
 
   const sessionCart = await prisma.cart.findFirst({
     where: { sessionId: session.id, status: 'ACTIVE' },
-    include: { items: { include: { variant: { include: { product: true } } } } },
+    include: { items: { include: { variant: { include: { product: true, inventory: true } } } } },
   });
 
   if (!sessionCart || sessionCart.items.length === 0) {
@@ -1619,7 +1619,7 @@ const createGuestOrder = async (sessionId, addressData, paymentMethod) => {
         },
       },
       include: {
-        items: { include: { variant: { include: { product: true } } } },
+        items: { include: { variant: { include: { product: true, inventory: true } } } },
         payments: true,
         shipments: true,
       },
@@ -1783,7 +1783,7 @@ const getGuestOrderDetail = async (sessionId, orderId) => {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
-      items: { include: { variant: { include: { product: true } } } },
+      items: { include: { variant: { include: { product: true, inventory: true } } } },
       shipments: true,
       payments: true,
       orderAddress: true
