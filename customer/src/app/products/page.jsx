@@ -75,6 +75,8 @@ function ProductsContent() {
     setCurrentPage(parseInt(searchParams.get('page') || '1'));
   }, [searchParams]);
 
+
+
   const loadFilterOptions = useCallback(async () => {
     try {
       const data = await productApi.getFilterOptions();

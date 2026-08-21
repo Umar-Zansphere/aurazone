@@ -381,7 +381,8 @@ function CheckoutPageContent() {
         }
       }
     } catch (err) {
-      showToast('Error creating order', 'error');
+      const errorMsg = err.message || 'Error creating order';
+      showToast(errorMsg, 'error');
       console.error('Error creating order:', err);
       submitGuardRef.current = false;
       setSubmitting(false);
@@ -742,6 +743,7 @@ function CheckoutPageContent() {
 
               <div className="space-y-3">
                 <button
+                  data-payment="RAZORPAY"
                   onClick={() => setPaymentMethod('RAZORPAY')}
                   className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'RAZORPAY'
                     ? 'border-orange-500 bg-slate-50 shadow-md'
@@ -767,11 +769,13 @@ function CheckoutPageContent() {
                   </div>
                 </button>
 
-                {/*<button
-                  onClick={() => setPaymentMethod('COD')}
-                  className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'COD'
-                    ? 'border-orange-500 bg-slate-50 shadow-md'
-                    : 'border-slate-200 hover:border-orange-300 bg-white hover:bg-slate-50'
+                {process.env.NEXT_PUBLIC_ENABLE_COD === 'true' && (
+                  <button
+                    data-payment="COD"
+                    onClick={() => setPaymentMethod('COD')}
+                    className={`w-full p-4 border-2 rounded-xl cursor-pointer transition-all text-left min-h-11 touch-manipulation active:scale-[0.98] ${paymentMethod === 'COD'
+                      ? 'border-orange-500 bg-slate-50 shadow-md'
+                      : 'border-slate-200 hover:border-orange-300 bg-white hover:bg-slate-50'
                     }`}
                 >
                   <div className="flex gap-3 items-center">
@@ -791,7 +795,8 @@ function CheckoutPageContent() {
                       <p className="text-sm text-slate-600 mt-1">Pay when you receive your order at the door</p>
                     </div>
                   </div>
-                </button>*/}
+                </button>)
+                }
               </div>
             </div>
 
