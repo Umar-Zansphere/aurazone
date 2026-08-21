@@ -381,7 +381,8 @@ function CheckoutPageContent() {
         }
       }
     } catch (err) {
-      showToast('Error creating order', 'error');
+      const errorMsg = err.message || 'Error creating order';
+      showToast(errorMsg, 'error');
       console.error('Error creating order:', err);
       submitGuardRef.current = false;
       setSubmitting(false);
