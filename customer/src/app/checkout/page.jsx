@@ -794,7 +794,7 @@ function CheckoutPageContent() {
                       <p className="text-sm text-slate-600 mt-1">Pay when you receive your order at the door</p>
                     </div>
                   </div>
-                </button>
+                </button>*/}
               </div>
             </div>
 
