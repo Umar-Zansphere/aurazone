@@ -17,7 +17,7 @@ pipeline {
         CUSTOMER_PASSWORD='Umar2468/us!'
 
         RP_API_KEY=credentials('RP_API_KEY')
-        RP_ENDPOINT='http://localhost:9090/api/v1'
+        RP_ENDPOINT='http://localhost:9090/'
         RP_PROJECT='AuraZone_selenium'
         RP_LAUNCH='AuraZone Selenium Tests'
         HEADLESS='true'
