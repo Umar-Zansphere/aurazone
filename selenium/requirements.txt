@@ -4,7 +4,7 @@ pytest==8.3.4
 pytest-html==4.1.1
 pytest-reportportal==5.6.9
 pytest-xdist==3.6.1
-requests==2.32.3
+requests==2.34.2
 faker==33.1.0
 python-dotenv==1.0.1
 # psycopg2-binary omitted — DB cleanup is done via Admin API, not raw SQL
