@@ -18,7 +18,7 @@ pipeline {
 
         RP_API_KEY=credentials('RP_API_KEY')
         RP_ENDPOINT='http://localhost:9090/api/v1'
-        RP_PROJECT='AuraZone'
+        RP_PROJECT='AuraZone_selenium'
         RP_LAUNCH='AuraZone Selenium Tests'
         HEADLESS='true'
         WEBHOOK_SECRET='iuyjRxjEJGZzD+lqXxN8rjUGQS9pMMAlxXrVQNeMch4='
