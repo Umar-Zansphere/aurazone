@@ -10,6 +10,7 @@ Fixture hierarchy:
 import logging
 import os
 from pathlib import Path
+import re
 from typing import Generator
 
 import pytest
@@ -46,6 +47,27 @@ def pytest_configure(config: pytest.Config) -> None:
     """Ensure the reports directory exists before tests run."""
     reports_dir = Path(__file__).parent / "reports"
     reports_dir.mkdir(exist_ok=True)
+    (reports_dir / "failures").mkdir(exist_ok=True)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Generator[None, None, None]:
+    """Capture a browser screenshot for failed Selenium tests."""
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when != "call" or not report.failed or "driver" not in item.funcargs:
+        return
+
+    driver = item.funcargs["driver"]
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", item.nodeid).strip("_")
+    screenshot_path = Path(__file__).parent / "reports" / "failures" / f"{safe_name}.png"
+
+    try:
+        driver.save_screenshot(str(screenshot_path))
+        log.info("Failure screenshot saved: %s", screenshot_path)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not save failure screenshot for %s: %s", item.nodeid, exc)
 
 
 # ─── Pre-run Restock ───────────────────────────────────────────────────────────────
