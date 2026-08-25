@@ -56,48 +56,4 @@ pipeline {
             }
         }
     }
-
-    post {
-    always {
-        dir('selenium') {
-            publishHTML([
-                allowMissing: true,
-                alwaysLinkToLastBuild: true,
-                keepAll: true,
-                reportDir: 'reports',
-                reportFiles: 'report.html',
-                reportName: 'Selenium E2E Report'
-            ])
-
-            archiveArtifacts artifacts: 'reports/**/*', allowEmptyArchive: true
-
-            // ZIP using PowerShell (Windows-safe)
-            bat '''
-            powershell -Command "if (Test-Path reports) { Compress-Archive -Path reports\\* -DestinationPath selenium-report.zip -Force }"
-            '''
-        }
-    }
-
-        success {
-            emailext(
-                from: 'umar.zangroups@gmail.com',
-                to: 'umarmohamed444481@gmail.com, zubair@zansphere.com',
-                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: '${FILE,path="selenium/reports/report.html"}',
-                mimeType: 'text/html',
-                attachmentsPattern: 'selenium/reports/report.html,selenium/reports/failures/*.png,selenium/selenium-report.zip'
-            )
-        }
-
-        failure {
-            emailext(
-                from: 'umar.zangroups@gmail.com',
-                to: 'umarmohamed444481@gmail.com, zubair@zansphere.com',
-                subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                body: '${FILE,path="selenium/reports/report.html"}',
-                mimeType: 'text/html',
-                attachmentsPattern: 'selenium/reports/report.html,selenium/reports/failures/*.png,selenium/selenium-report.zip'
-            )
-        }
-    }
 }
