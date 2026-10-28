@@ -41,13 +41,6 @@ const createApp = () => {
 
   app.use('/api', apiRoutes);
 
-  app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    const statusCode = err.statusCode || 500;
-    const message = err.message || 'Something broke!';
-    res.status(statusCode).json({ message });
-  });
-
   app.get('/health', async (req, res) => {
     try {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -63,6 +56,13 @@ const createApp = () => {
 
   app.get('/', (req, res) => {
     res.json({ message: 'Backend running 🟢' });
+  });
+
+  app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Something broke!';
+    res.status(statusCode).json({ message });
   });
 
   return app;

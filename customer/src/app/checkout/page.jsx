@@ -253,7 +253,6 @@ function CheckoutPageContent() {
       setSubmitting(true);
 
       // Step 1: Create order
-      console.log('Creating order...');
       let response;
 
       if (isBuyNow) {
@@ -309,9 +308,7 @@ function CheckoutPageContent() {
           order_id: orderData.razorpayOrderId,
           handler: async (response) => {
             try {
-              console.log('Payment response:', response);
-
-              // Step 3: Verify payment signature
+                // Step 3: Verify payment signature
               const verifyResponse = await paymentApi.verifyPayment(
                 response.razorpay_order_id,
                 response.razorpay_payment_id,
@@ -357,7 +354,6 @@ function CheckoutPageContent() {
           },
           modal: {
             ondismiss: () => {
-              console.log('Payment modal closed');
               submitGuardRef.current = false;
               setSubmitting(false);
               showToast('Payment cancelled. Please try again.', 'warning');

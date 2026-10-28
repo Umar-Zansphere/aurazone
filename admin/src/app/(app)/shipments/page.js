@@ -69,7 +69,6 @@ export default function ShipmentsPage() {
         try {
             const data = await apiFetch(`/admin/shipments/${shipmentId}`);
             setDetail(data);
-            console.log("Loaded shipment detail:", data);
         } catch {
             setDetail(null);
         } finally {

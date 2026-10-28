@@ -61,12 +61,10 @@ function LoginContent() {
         setLoading(true);
         const res = await authApi.login(normalizedEmail, formData.password);
         const data = await res.json();
-        console.log(data);
 
         if (!res.ok) throw new Error(data.message || 'Login failed');
 
         // Authentication state is now managed via cookies set by the backend
-        console.log("User Role after login:", data.user.userRole);
 
         if (data.user.userRole === 'ADMIN') {
           router.push('/admin'); // Go to admin dashboard

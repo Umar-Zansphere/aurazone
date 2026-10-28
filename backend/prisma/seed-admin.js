@@ -18,7 +18,7 @@ const prisma = new PrismaClient({
 async function seedAdmin() {
   // Check if admin already exists
   const existingAdmin = await prisma.user.findUnique({
-    where: { email: 'admin@aurazone.com' },
+    where: { email: 'superadmin@aurazone.shop' },
   });
 
   if (existingAdmin) {

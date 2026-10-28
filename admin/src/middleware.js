@@ -1,7 +1,6 @@
 import { jwtVerify } from "jose";
 import { NextResponse } from "next/server";
 
-console.log("JWT_SECRET =", process.env.JWT_SECRET);
 
 const PUBLIC_PATHS = new Set(["/login", "/unauthorized"]);
 
@@ -35,7 +34,6 @@ const verifyAdminToken = async (token) => {
 
   try {
     const result = await jwtVerify(token, secret);
-    console.log("Token verified successfully:", result);
     const role = result.payload?.role;
     const id = result.payload?.id;
 
@@ -60,7 +58,6 @@ export async function middleware(request) {
   }
 
   const token = request.cookies.get('accessToken')?.value;
-  console.log("Extracted token from cookies:", token);
   const auth = await verifyAdminToken(token);
 
   if (pathname === "/login") {
