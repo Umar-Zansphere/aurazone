@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Influencer Marketing Agreement</title>
+    <style>
+        @page {
+            margin: 2cm;
+            size: A4;
+        }
+        
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            font-size: 11pt;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 20px;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 24pt;
+            color: #2c3e50;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        
+        .header .contract-id {
+            font-size: 10pt;
+            color: #7f8c8d;
+            margin-top: 10px;
+        }
+        
+        .parties {
+            margin: 30px 0;
+            background: #f8f9fa;
+            padding: 20px;
+            border-left: 4px solid #3498db;
+        }
+        
+        .party {
+            margin-bottom: 20px;
+        }
+        
+        .party:last-child {
+            margin-bottom: 0;
+        }
+        
+        .party-label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 12pt;
+            margin-bottom: 5px;
+        }
+        
+        .party-info {
+            margin-left: 20px;
+            line-height: 1.8;
+        }
+        
+        .section {
+            margin: 30px 0;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+        
+        .subsection {
+            margin: 20px 0 20px 20px;
+        }
+        
+        .subsection-title {
+            font-weight: bold;
+            color: #34495e;
+            margin-bottom: 10px;
+        }
+        
+        .clause {
+            margin: 15px 0;
+            text-align: justify;
+        }
+        
+        .numbered-list {
+            counter-reset: item;
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .numbered-list li {
+            counter-increment: item;
+            margin: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        
+        .numbered-list li:before {
+            content: counter(item) ".";
+            position: absolute;
+            left: 0;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .table-container {
+            margin: 20px 0;
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+            font-size: 10pt;
+        }
+        
+        th {
+            background: #34495e;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        td {
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .payment-summary {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        
+        .payment-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 8px 0;
+        }
+        
+        .payment-label {
+            font-weight: bold;
+        }
+        
+        .total-row {
+            border-top: 2px solid #2c3e50;
+            padding-top: 10px;
+            margin-top: 10px;
+            font-size: 12pt;
+            font-weight: bold;
+        }
+        
+        .signature-section {
+            margin-top: 60px;
+            page-break-inside: avoid;
+        }
+        
+        .signature-block {
+            margin: 40px 0;
+            page-break-inside: avoid;
+        }
+        
+        .signature-line {
+            border-top: 2px solid #2c3e50;
+            margin: 40px 0 10px 0;
+            width: 300px;
+        }
+        
+        .signature-label {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .signature-details {
+            margin-top: 5px;
+            font-size: 10pt;
+            color: #7f8c8d;
+        }
+        
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        
+        .important {
+            background: #f8d7da;
+            padding: 15px;
+            border-left: 4px solid #dc3545;
+            margin: 20px 0;
+        }
+        
+        .footer {
+            margin-top: 60px;
+            padding-top: 20px;
+            border-top: 2px solid #ecf0f1;
+            text-align: center;
+            font-size: 9pt;
+            color: #7f8c8d;
+        }
+        
+        @media print {
+            body {
+                padding: 0;
+            }
+            
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Influencer Marketing Agreement</h1>
+        <div class="contract-id">
+            Contract ID: {{CONTRACT_ID}}<br>
+            Deal ID: {{DEAL_ID}}<br>
+            Campaign: {{CAMPAIGN_TITLE}}
+        </div>
+    </div>
+
+    <div class="parties">
+        <div class="party">
+            <div class="party-label">THE BRAND ("Brand" or "Company")</div>
+            <div class="party-info">
+                Name: {{BRAND_NAME}}<br>
+                Business Entity: {{BRAND_ENTITY_TYPE}}<br>
+                Address: {{BRAND_ADDRESS}}<br>
+                Email: {{BRAND_EMAIL}}<br>
+                Phone: {{BRAND_PHONE}}<br>
+                {{#BRAND_GST}}GST Number: {{BRAND_GST}}<br>{{/BRAND_GST}}
+            </div>
+        </div>
+        
+        <div class="party">
+            <div class="party-label">THE INFLUENCER ("Influencer" or "Creator")</div>
+            <div class="party-info">
+                Name: {{INFLUENCER_NAME}}<br>
+                Stage Name/Handle: {{INFLUENCER_HANDLE}}<br>
+                Address: {{INFLUENCER_ADDRESS}}<br>
+                Email: {{INFLUENCER_EMAIL}}<br>
+                Phone: {{INFLUENCER_PHONE}}<br>
+                {{#INFLUENCER_PAN}}PAN: {{INFLUENCER_PAN}}<br>{{/INFLUENCER_PAN}}
+                {{#INFLUENCER_GST}}GST Number: {{INFLUENCER_GST}}<br>{{/INFLUENCER_GST}}
+            </div>
+        </div>
+        
+        {{#HAS_MANAGER}}
+        <div class="party">
+            <div class="party-label">THE MANAGER ("Manager" or "Representative")</div>
+            <div class="party-info">
+                Name: {{MANAGER_NAME}}<br>
+                Company: {{MANAGER_COMPANY}}<br>
+                Email: {{MANAGER_EMAIL}}<br>
+                Phone: {{MANAGER_PHONE}}
+            </div>
+        </div>
+        {{/HAS_MANAGER}}
+    </div>
+
+    <div class="clause">
+        <strong>Effective Date:</strong> {{CONTRACT_DATE}}<br>
+        <strong>Campaign Period:</strong> {{CAMPAIGN_START_DATE}} to {{CAMPAIGN_END_DATE}}
+    </div>
+
+    <div class="clause" style="margin-top: 30px;">
+        <strong>WHEREAS:</strong>
+        <ol style="margin-left: 20px;">
+            <li>The Brand wishes to engage the Influencer to promote its products/services through social media and content creation;</li>
+            <li>The Influencer represents that they have the necessary skills, audience, and platform presence to fulfill the requirements of this Agreement;</li>
+            <li>Both parties wish to set forth the terms and conditions of their collaboration.</li>
+        </ol>
+    </div>
+
+    <div class="clause" style="margin-top: 20px; font-weight: bold;">
+        NOW, THEREFORE, in consideration of the mutual covenants and agreements herein contained, the parties agree as follows:
+    </div>
+
+    <div class="section">
+        <div class="section-title">1. SCOPE OF SERVICES</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">1.1 Campaign Overview</div>
+            <div class="clause">
+                <strong>Campaign Type:</strong> {{CAMPAIGN_TYPE}}<br>
+                <strong>Campaign Objective:</strong> {{CAMPAIGN_OBJECTIVE}}<br>
+                <strong>Target Audience:</strong> {{TARGET_AUDIENCE}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.2 Deliverables</div>
+            <div class="clause">
+                The Influencer agrees to create and publish the following deliverables:
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Deliverable Type</th>
+                            <th>Platform</th>
+                            <th>Quantity</th>
+                            <th>Due Date</th>
+                            <th>Specifications</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {{#DELIVERABLES}}
+                        <tr>
+                            <td>{{TYPE}}</td>
+                            <td>{{PLATFORM}}</td>
+                            <td>{{QUANTITY}}</td>
+                            <td>{{DUE_DATE}}</td>
+                            <td>{{SPECIFICATIONS}}</td>
+                        </tr>
+                        {{/DELIVERABLES}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.3 Content Requirements</div>
+            <div class="clause">
+                {{CONTENT_REQUIREMENTS}}
+            </div>
+            <ol class="numbered-list">
+                <li>All content must align with the Brand's guidelines and messaging</li>
+                <li>Content must comply with FTC guidelines and local advertising regulations</li>
+                <li>All sponsored content must include appropriate disclosure tags (e.g., #ad, #sponsored, #partner)</li>
+                <li>Content must be original and not infringe on any third-party intellectual property rights</li>
+                <li>The Influencer must obtain Brand approval before publishing any deliverable</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">1.4 Brand Guidelines</div>
+            <div class="clause">
+                {{BRAND_GUIDELINES}}
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">2. COMPENSATION AND PAYMENT TERMS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">2.1 Payment Structure</div>
+            <div class="payment-summary">
+                <div class="payment-row">
+                    <span class="payment-label">Base Compensation:</span>
+                    <span>{{CURRENCY}} {{PAYMENT_AMOUNT}}</span>
+                </div>
+                <div class="payment-row">
+                    <span class="payment-label">Platform Fee ({{PLATFORM_FEE_PERCENT}}%):</span>
+                    <span>{{CURRENCY}} {{PLATFORM_FEE_AMOUNT}}</span>
+                </div>
+                {{#HAS_TAX}}
+                <div class="payment-row">
+                    <span class="payment-label">Tax ({{TAX_PERCENT}}%):</span>
+                    <span>{{CURRENCY}} {{TAX_AMOUNT}}</span>
+                </div>
+                {{/HAS_TAX}}
+                <div class="payment-row total-row">
+                    <span class="payment-label">Net Amount to Influencer:</span>
+                    <span>{{CURRENCY}} {{NET_AMOUNT}}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">2.2 Payment Terms</div>
+            <div class="clause">
+                <strong>Payment Method:</strong> {{PAYMENT_TYPE}}<br>
+                {{#ESCROW_REQUIRED}}
+                <strong>Escrow:</strong> Funds will be held in escrow and released upon completion and approval of deliverables.<br>
+                {{/ESCROW_REQUIRED}}
+                <strong>Payment Schedule:</strong> {{PAYMENT_TERMS}}
+            </div>
+            <ol class="numbered-list">
+                <li>Payment shall be made within {{PAYMENT_DAYS}} business days of approval of all deliverables</li>
+                <li>The Influencer must provide valid invoicing details and tax documentation</li>
+                <li>All bank charges and transaction fees shall be borne by the respective party</li>
+                <li>Late payments shall accrue interest at {{LATE_FEE_RATE}}% per month</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">2.3 Additional Compensation</div>
+            <div class="clause">
+                {{#HAS_BONUSES}}
+                Performance-based bonuses may be awarded based on:
+                <ul style="margin-left: 20px;">
+                    {{#BONUS_CRITERIA}}
+                    <li>{{CRITERION}}</li>
+                    {{/BONUS_CRITERIA}}
+                </ul>
+                {{/HAS_BONUSES}}
+                {{^HAS_BONUSES}}
+                No additional compensation beyond the agreed amount is included in this Agreement.
+                {{/HAS_BONUSES}}
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">3. CONTENT APPROVAL AND REVISIONS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">3.1 Approval Process</div>
+            <ol class="numbered-list">
+                <li>The Influencer shall submit all content to the Brand for approval at least {{APPROVAL_DAYS}} business days before the scheduled posting date</li>
+                <li>The Brand shall review and provide feedback within {{REVIEW_DAYS}} business days of submission</li>
+                <li>The Influencer shall not publish any content without express written approval from the Brand</li>
+                <li>Approved content must be published within {{PUBLISH_DAYS}} days of approval unless otherwise agreed</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">3.2 Revisions</div>
+            <div class="clause">
+                The Brand is entitled to request up to {{REVISION_ROUNDS}} rounds of reasonable revisions at no additional cost. Additional revisions beyond this limit may be subject to additional fees as mutually agreed.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">3.3 Rejection</div>
+            <div class="clause">
+                If content is rejected due to material breach of guidelines or quality standards, the Influencer must resubmit acceptable content within {{RESUBMIT_DAYS}} days. Failure to do so may result in termination of this Agreement.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">4. INTELLECTUAL PROPERTY RIGHTS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">4.1 Content Ownership</div>
+            <div class="clause">
+                Upon full payment, the Influencer grants the Brand a {{LICENSE_TYPE}} license to use, reproduce, modify, and distribute the content created under this Agreement for the following purposes: {{LICENSE_PURPOSES}}.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">4.2 Usage Rights</div>
+            <div class="clause">
+                <strong>License Duration:</strong> {{LICENSE_DURATION}}<br>
+                <strong>Permitted Uses:</strong>
+            </div>
+            <ol class="numbered-list">
+                <li>Social media promotion and advertising</li>
+                <li>Website and marketing materials</li>
+                <li>{{#ADDITIONAL_USES}}{{USE}}{{/ADDITIONAL_USES}}</li>
+            </ol>
+            <div class="clause">
+                <strong>Restrictions:</strong> The Brand may not {{LICENSE_RESTRICTIONS}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">4.3 Brand Assets</div>
+            <div class="clause">
+                The Brand grants the Influencer a limited license to use Brand logos, trademarks, and materials solely for the purpose of fulfilling obligations under this Agreement. This license terminates upon completion or termination of this Agreement.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">4.4 Moral Rights</div>
+            <div class="clause">
+                The Influencer waives any moral rights to the extent permitted by law, allowing the Brand to make reasonable modifications to the content without attribution.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">5. REPRESENTATIONS AND WARRANTIES</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">5.1 Influencer Representations</div>
+            <div class="clause">The Influencer represents and warrants that:</div>
+            <ol class="numbered-list">
+                <li>They have the legal capacity and authority to enter into this Agreement</li>
+                <li>All follower counts and engagement metrics provided are accurate and authentic</li>
+                <li>Their audience has been built organically without the use of bots or purchased followers</li>
+                <li>They will not engage in fraudulent activities to inflate engagement metrics</li>
+                <li>All content created will be original and will not infringe on third-party rights</li>
+                <li>They are not bound by any conflicting agreements that would prevent performance under this Agreement</li>
+                <li>They will comply with all applicable laws and platform terms of service</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">5.2 Brand Representations</div>
+            <div class="clause">The Brand represents and warrants that:</div>
+            <ol class="numbered-list">
+                <li>It has the legal right to engage the Influencer for the purposes described</li>
+                <li>All Brand materials provided do not infringe on third-party intellectual property rights</li>
+                <li>Products/services promoted are legal and comply with all applicable regulations</li>
+                <li>All claims about products/services are truthful and substantiated</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">6. EXCLUSIVITY AND CONFLICTS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">6.1 Exclusivity Period</div>
+            <div class="clause">
+                {{#HAS_EXCLUSIVITY}}
+                During the campaign period and for {{EXCLUSIVITY_PERIOD}} days thereafter, the Influencer agrees not to promote competing brands in the following categories: {{RESTRICTED_CATEGORIES}}.
+                {{/HAS_EXCLUSIVITY}}
+                {{^HAS_EXCLUSIVITY}}
+                This Agreement does not include exclusivity provisions. The Influencer may work with other brands subject to the conflict provisions below.
+                {{/HAS_EXCLUSIVITY}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">6.2 Conflict Disclosure</div>
+            <div class="clause">
+                The Influencer must disclose any existing or potential conflicts of interest, including current partnerships with competing brands, prior to execution of this Agreement.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">7. CONFIDENTIALITY</div>
+        
+        <div class="clause">
+            Both parties agree to maintain confidentiality of all non-public information disclosed during the course of this Agreement, including but not limited to:
+        </div>
+        <ol class="numbered-list">
+            <li>Campaign strategies and creative concepts</li>
+            <li>Financial terms and compensation details</li>
+            <li>Performance metrics and analytics (unless publicly available)</li>
+            <li>Proprietary business information</li>
+        </ol>
+        <div class="clause">
+            This obligation survives termination of this Agreement for a period of {{CONFIDENTIALITY_PERIOD}} years.
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">8. FTC COMPLIANCE AND DISCLOSURES</div>
+        
+        <div class="clause">
+            The Influencer agrees to comply with all FTC guidelines and local regulations regarding advertising disclosures:
+        </div>
+        <ol class="numbered-list">
+            <li>All sponsored content must include clear and conspicuous disclosure (e.g., #ad, #sponsored, #partner) at the beginning of posts and in video content</li>
+            <li>Disclosures must be platform-appropriate and easily visible to the audience</li>
+            <li>Stories and temporary content must include disclosure in every frame/clip</li>
+            <li>The Influencer must disclose any material connections with the Brand</li>
+            <li>Claims about products/services must be truthful and substantiated</li>
+        </ol>
+        <div class="important">
+            <strong>IMPORTANT:</strong> Failure to properly disclose sponsored content may result in penalties from regulatory authorities and will be considered a material breach of this Agreement.
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">9. PERFORMANCE METRICS AND REPORTING</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">9.1 Required Metrics</div>
+            <div class="clause">
+                The Influencer agrees to provide the following performance metrics within {{REPORTING_DAYS}} days of content publication:
+            </div>
+            <ol class="numbered-list">
+                <li>Reach and impressions</li>
+                <li>Engagement metrics (likes, comments, shares, saves)</li>
+                <li>Click-through rates (if applicable)</li>
+                <li>Story views and completion rates</li>
+                <li>{{#ADDITIONAL_METRICS}}{{METRIC}}{{/ADDITIONAL_METRICS}}</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">9.2 Performance Expectations</div>
+            <div class="clause">
+                {{#HAS_MIN_PERFORMANCE}}
+                Minimum expected performance: {{MIN_PERFORMANCE_CRITERIA}}
+                {{/HAS_MIN_PERFORMANCE}}
+                While specific performance outcomes cannot be guaranteed, the Influencer agrees to make good faith efforts to maximize reach and engagement.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">10. INDEMNIFICATION</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">10.1 Influencer Indemnification</div>
+            <div class="clause">
+                The Influencer agrees to indemnify, defend, and hold harmless the Brand from any claims, damages, or expenses arising from:
+            </div>
+            <ol class="numbered-list">
+                <li>Breach of representations and warranties</li>
+                <li>Infringement of third-party intellectual property rights</li>
+                <li>Violation of FTC guidelines or advertising regulations</li>
+                <li>Fraudulent engagement or audience metrics</li>
+                <li>Defamatory or unlawful content created by the Influencer</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">10.2 Brand Indemnification</div>
+            <div class="clause">
+                The Brand agrees to indemnify, defend, and hold harmless the Influencer from any claims arising from:
+            </div>
+            <ol class="numbered-list">
+                <li>Defects in products or services promoted</li>
+                <li>Infringement claims related to Brand-provided materials</li>
+                <li>False or misleading claims provided by the Brand</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">11. LIMITATION OF LIABILITY</div>
+        
+        <div class="clause">
+            Neither party shall be liable for indirect, incidental, consequential, or punitive damages arising from this Agreement. The maximum liability of either party shall not exceed the total compensation paid or payable under this Agreement.
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">12. TERM AND TERMINATION</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">12.1 Term</div>
+            <div class="clause">
+                This Agreement commences on {{CONTRACT_DATE}} and continues until {{END_DATE}} or until all deliverables are completed and approved, whichever is later.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">12.2 Termination for Cause</div>
+            <div class="clause">
+                Either party may terminate this Agreement for material breach if the breaching party fails to cure within {{CURE_PERIOD}} days of written notice. Material breaches include:
+            </div>
+            <ol class="numbered-list">
+                <li>Failure to deliver agreed-upon content</li>
+                <li>Publication of content without approval</li>
+                <li>Violation of exclusivity provisions</li>
+                <li>Breach of confidentiality obligations</li>
+                <li>Fraudulent or unethical conduct</li>
+            </ol>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">12.3 Termination Without Cause</div>
+            <div class="clause">
+                {{#ALLOWS_TERMINATION_WITHOUT_CAUSE}}
+                Either party may terminate this Agreement without cause upon {{TERMINATION_NOTICE_DAYS}} days written notice. In such case, the Influencer shall be compensated on a pro-rata basis for work completed and approved.
+                {{/ALLOWS_TERMINATION_WITHOUT_CAUSE}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">12.4 Effect of Termination</div>
+            <div class="clause">
+                Upon termination:
+            </div>
+            <ol class="numbered-list">
+                <li>The Influencer must cease all promotional activities</li>
+                <li>Published content may remain live unless removal is specifically required</li>
+                <li>All confidential information must be returned or destroyed</li>
+                <li>Payment obligations for completed and approved work remain in effect</li>
+                <li>Sections regarding confidentiality, intellectual property, and indemnification survive termination</li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">13. DISPUTE RESOLUTION</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">13.1 Negotiation</div>
+            <div class="clause">
+                In the event of any dispute, the parties agree to first attempt to resolve the matter through good faith negotiation.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">13.2 Mediation</div>
+            <div class="clause">
+                If negotiation fails, the parties agree to submit the dispute to mediation before pursuing arbitration or litigation.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">13.3 Arbitration</div>
+            <div class="clause">
+                {{#HAS_ARBITRATION}}
+                Any unresolved disputes shall be settled by binding arbitration in accordance with {{ARBITRATION_RULES}} in {{ARBITRATION_LOCATION}}. The decision of the arbitrator shall be final and binding.
+                {{/HAS_ARBITRATION}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">13.4 Governing Law</div>
+            <div class="clause">
+                This Agreement shall be governed by and construed in accordance with the laws of {{GOVERNING_LAW_JURISDICTION}}, without regard to its conflict of law provisions.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">14. GENERAL PROVISIONS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">14.1 Independent Contractor</div>
+            <div class="clause">
+                The Influencer is an independent contractor and not an employee of the Brand. Nothing in this Agreement creates a partnership, joint venture, or agency relationship.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.2 Entire Agreement</div>
+            <div class="clause">
+                This Agreement constitutes the entire agreement between the parties and supersedes all prior negotiations, understandings, and agreements.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.3 Amendments</div>
+            <div class="clause">
+                Any amendments to this Agreement must be made in writing and signed by both parties.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.4 Assignment</div>
+            <div class="clause">
+                Neither party may assign this Agreement without the prior written consent of the other party, except that the Brand may assign to a successor or affiliate.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.5 Severability</div>
+            <div class="clause">
+                If any provision of this Agreement is found to be unenforceable, the remaining provisions shall continue in full force and effect.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.6 Waiver</div>
+            <div class="clause">
+                No waiver of any breach of this Agreement shall constitute a waiver of any subsequent breach.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.7 Force Majeure</div>
+            <div class="clause">
+                Neither party shall be liable for failure to perform due to causes beyond their reasonable control, including natural disasters, government actions, pandemics, or platform outages. The affected party must provide prompt notice and make reasonable efforts to resume performance.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.8 Notices</div>
+            <div class="clause">
+                All notices under this Agreement shall be in writing and delivered to the addresses specified above or to such other address as either party may designate in writing. Notices shall be deemed effective upon receipt.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">14.9 Counterparts</div>
+            <div class="clause">
+                This Agreement may be executed in counterparts, including electronic signatures, each of which shall be deemed an original and all of which together shall constitute one agreement.
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">15. SPECIAL PROVISIONS</div>
+        
+        <div class="subsection">
+            <div class="subsection-title">15.1 Content Removal</div>
+            <div class="clause">
+                {{#HAS_CONTENT_REMOVAL}}
+                The Influencer agrees to keep published content live for a minimum period of {{CONTENT_LIVE_PERIOD}} days unless:
+            </div>
+            <ol class="numbered-list">
+                <li>Both parties mutually agree to removal</li>
+                <li>Legal or regulatory requirements mandate removal</li>
+                <li>The content violates platform terms of service</li>
+            </ol>
+            {{/HAS_CONTENT_REMOVAL}}
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">15.2 Platform Changes</div>
+            <div class="clause">
+                If a social media platform makes changes that materially affect the Influencer's ability to fulfill obligations (e.g., account suspension, algorithm changes, feature removal), the parties agree to negotiate in good faith to modify deliverables or compensation as appropriate.
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">15.3 Product/Service Delivery</div>
+            <div class="clause">
+                {{#PRODUCTS_PROVIDED}}
+                The Brand agrees to provide the following products/services to the Influencer:
+                <ul style="margin-left: 20px;">
+                    {{#PRODUCT_LIST}}
+                    <li>{{PRODUCT_ITEM}}</li>
+                    {{/PRODUCT_LIST}}
+                </ul>
+                Products shall be delivered by {{PRODUCT_DELIVERY_DATE}}. The Influencer is responsible for any applicable taxes on product value.
+                {{/PRODUCTS_PROVIDED}}
+            </div>
+        </div>
+
+        <div class="subsection">
+            <div class="subsection-title">15.4 Usage in Portfolio</div>
+            <div class="clause">
+                The Influencer may include the content created under this Agreement in their professional portfolio and case studies, unless otherwise specified: {{PORTFOLIO_RESTRICTIONS}}
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">16. CAMPAIGN-SPECIFIC TERMS</div>
+        
+        <div class="clause">
+            {{CAMPAIGN_SPECIFIC_TERMS}}
+        </div>
+    </div>
+
+    <div class="important" style="margin-top: 40px;">
+        <strong>ACKNOWLEDGMENT:</strong> Both parties acknowledge that they have read, understood, and agree to be bound by all terms and conditions of this Agreement. Each party has had the opportunity to seek independent legal counsel before executing this Agreement.
+    </div>
+
+    <div class="signature-section">
+        <div class="section-title">SIGNATURES</div>
+        
+        <div class="clause" style="margin-bottom: 40px;">
+            IN WITNESS WHEREOF, the parties have executed this Agreement as of the date first written above.
+        </div>
+
+        <div class="signature-block">
+            <div class="signature-label">FOR THE BRAND:</div>
+            <div class="signature-line"></div>
+            <div class="signature-details">
+                Signature: _________________________________<br>
+                Name: {{BRAND_SIGNATORY_NAME}}<br>
+                Title: {{BRAND_SIGNATORY_TITLE}}<br>
+                Date: _________________________________<br>
+                {{#DOCUSIGN}}
+                <br>DocuSign Envelope ID: {{DOCUSIGN_ENVELOPE_ID}}
+                {{/DOCUSIGN}}
+            </div>
+        </div>
+
+        <div class="signature-block">
+            <div class="signature-label">FOR THE INFLUENCER:</div>
+            <div class="signature-line"></div>
+            <div class="signature-details">
+                Signature: _________________________________<br>
+                Name: {{INFLUENCER_NAME}}<br>
+                Date: _________________________________<br>
+            </div>
+        </div>
+
+        {{#HAS_MANAGER}}
+        <div class="signature-block">
+            <div class="signature-label">FOR THE MANAGER (if applicable):</div>
+            <div class="signature-line"></div>
+            <div class="signature-details">
+                Signature: _________________________________<br>
+                Name: {{MANAGER_NAME}}<br>
+                Title: {{MANAGER_TITLE}}<br>
+                Date: _________________________________<br>
+            </div>
+        </div>
+        {{/HAS_MANAGER}}
+    </div>
+
+    <div class="page-break"></div>
+
+    <div class="section">
+        <div class="section-title">SCHEDULE A: DELIVERABLES SPECIFICATION</div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Deliverable ID</th>
+                        <th>Type</th>
+                        <th>Platform</th>
+                        <th>Content Guidelines</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#DETAILED_DELIVERABLES}}
+                    <tr>
+                        <td>{{ID}}</td>
+                        <td>{{TYPE}}</td>
+                        <td>{{PLATFORM}}</td>
+                        <td>{{GUIDELINES}}</td>
+                        <td>{{DUE_DATE}}</td>
+                        <td>{{STATUS}}</td>
+                    </tr>
+                    {{/DETAILED_DELIVERABLES}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">SCHEDULE B: PAYMENT SCHEDULE</div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Milestone</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>Payment Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#PAYMENT_MILESTONES}}
+                    <tr>
+                        <td>{{MILESTONE_NAME}}</td>
+                        <td>{{DESCRIPTION}}</td>
+                        <td>{{CURRENCY}} {{AMOUNT}}</td>
+                        <td>{{DUE_DATE}}</td>
+                    </tr>
+                    {{/PAYMENT_MILESTONES}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title">SCHEDULE C: BRAND GUIDELINES AND ASSETS</div>
+        
+        <div class="clause">
+            <strong>Brand Voice and Tone:</strong> {{BRAND_VOICE}}<br><br>
+            <strong>Hashtags to Use:</strong> {{REQUIRED_HASHTAGS}}<br><br>
+            <strong>Hashtags to Avoid:</strong> {{PROHIBITED_HASHTAGS}}<br><br>
+            <strong>Mentions Required:</strong> {{REQUIRED_MENTIONS}}<br><br>
+            <strong>Key Messages:</strong>
+        </div>
+        <ol class="numbered-list">
+            {{#KEY_MESSAGES}}
+            <li>{{MESSAGE}}</li>
+            {{/KEY_MESSAGES}}
+        </ol>
+        
+        <div class="clause">
+            <strong>Do's:</strong>
+        </div>
+        <ul style="margin-left: 20px;">
+            {{#DOS}}
+            <li>{{DO_ITEM}}</li>
+            {{/DOS}}
+        </ul>
+        
+        <div class="clause">
+            <strong>Don'ts:</strong>
+        </div>
+        <ul style="margin-left: 20px;">
+            {{#DONTS}}
+            <li>{{DONT_ITEM}}</li>
+            {{/DONTS}}
+        </ul>
+    </div>
+
+    <div class="section">
+        <div class="section-title">SCHEDULE D: PERFORMANCE METRICS</div>
+        
+        <div class="clause">
+            <strong>Current Audience Statistics (as of {{STATS_DATE}}):</strong>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Platform</th>
+                        <th>Followers</th>
+                        <th>Avg. Engagement Rate</th>
+                        <th>Avg. Reach</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{#INFLUENCER_STATS}}
+                    <tr>
+                        <td>{{PLATFORM}}</td>
+                        <td>{{FOLLOWERS}}</td>
+                        <td>{{ENGAGEMENT_RATE}}</td>
+                        <td>{{AVG_REACH}}</td>
+                    </tr>
+                    {{/INFLUENCER_STATS}}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="clause" style="margin-top: 20px;">
+            <strong>Expected Campaign Metrics:</strong>
+        </div>
+        <ul style="margin-left: 20px;">
+            {{#EXPECTED_METRICS}}
+            <li>{{METRIC}}: {{TARGET}}</li>
+            {{/EXPECTED_METRICS}}
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>
+            This Agreement is executed electronically and is legally binding.<br>
+            Generated on: {{GENERATION_DATE}}<br>
+            Contract ID: {{CONTRACT_ID}}<br>
+            Platform: {{PLATFORM_NAME}}<br>
+            <br>
+            Page {{PAGE_NUMBER}} of {{TOTAL_PAGES}}
+        </p>
+    </div>
+</body>
+</html>

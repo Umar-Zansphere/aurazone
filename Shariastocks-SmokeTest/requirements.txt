@@ -1,0 +1,6 @@
+selenium
+webdriver-manager
+pytest
+pytest-html
+pytest-metadata
+pytest-reportportal
